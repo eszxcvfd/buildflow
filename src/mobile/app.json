@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "buildflow-mobile",
+    "slug": "buildflow-mobile",
+    "scheme": "buildflow",
+    "platforms": ["ios", "android", "web"],
+    "web": { "bundler": "metro" }
+  }
+}
