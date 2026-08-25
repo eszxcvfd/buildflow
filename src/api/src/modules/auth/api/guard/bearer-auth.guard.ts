@@ -10,12 +10,17 @@ export interface AuthenticatedUser {
   status: string;
 }
 
+export interface AuthenticatedRequest extends Request {
+  user?: AuthenticatedUser;
+  rawToken?: string;
+}
+
 @Injectable()
 export class BearerAuthGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request & { user?: AuthenticatedUser }>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authHeader = request.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -86,6 +91,7 @@ export class BearerAuthGuard implements CanActivate {
       role: session.user.role,
       status: session.user.status,
     };
+    request.rawToken = rawToken;
 
     return true;
   }

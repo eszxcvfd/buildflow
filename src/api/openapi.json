@@ -94,11 +94,34 @@
           }
         ]
       }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "summary": "Logout current session",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Logged out, session revoked"
+          },
+          "401": {
+            "description": "Unauthorized - invalid or missing token"
+          }
+        },
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
     "title": "Buildflow API",
-    "description": "Buildflow API — Worker self-claim slice",
+    "description": "Buildflow API \u2014 Worker self-claim slice",
     "version": "1.0",
     "contact": {}
   },

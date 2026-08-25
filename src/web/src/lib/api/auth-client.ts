@@ -43,6 +43,33 @@ export async function fetchMe(token: string): Promise<LoginResponseDto['user']> 
   return data;
 }
 
+export async function logout(token: string): Promise<void> {
+  const base = getApiBaseUrl();
+  const res = await fetch(`${base}/api/v1/auth/logout`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 204) return;
+  if (!res.ok) {
+    // Try to parse problem details, but 204 has no body
+    let data: ProblemDetailsError | null = null;
+    try {
+      data = (await res.json()) as ProblemDetailsError;
+    } catch {
+      // no body
+    }
+    if (data) throw new ApiError(data.detail ?? data.title ?? 'Logout failed', data);
+    throw new ApiError(`Logout failed: ${res.status}`, {
+      type: 'https://api.buildflow.invalid/problems/logout-failed',
+      title: 'Logout failed',
+      status: res.status,
+      code: 'LOGOUT_FAILED',
+      detail: `Logout failed with status ${res.status}`,
+      traceId: 'unknown',
+    });
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,

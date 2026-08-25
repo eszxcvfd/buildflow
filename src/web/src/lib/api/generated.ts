@@ -22,6 +22,10 @@ export interface paths {
     /** Get current authenticated user */
     get: operations["MeController_me"];
   };
+  "/api/v1/auth/logout": {
+    /** Logout current session */
+    post: operations["AuthController_logout"];
+  };
 }
 
 export type webhooks = Record<string, never>;
@@ -125,6 +129,19 @@ export interface operations {
     responses: {
       /** @description Current user */
       200: {
+        content: never;
+      };
+      /** @description Unauthorized - invalid or missing token */
+      401: {
+        content: never;
+      };
+    };
+  };
+  /** Logout current session */
+  AuthController_logout: {
+    responses: {
+      /** @description Logged out, session revoked */
+      204: {
         content: never;
       };
       /** @description Unauthorized - invalid or missing token */

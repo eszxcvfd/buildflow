@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { LoginUseCase } from './application/use-case/login.use-case';
+import { LogoutUseCase } from './application/use-case/logout.use-case';
 import { USER_REPOSITORY } from './domain/repository/user-repository.port';
 import { SESSION_REPOSITORY } from './domain/repository/session-repository.port';
 import { PrismaUserRepository } from './infrastructure/database/repository/prisma-user.repository';
@@ -14,6 +15,7 @@ import { BearerAuthGuard } from './api/guard/bearer-auth.guard';
   controllers: [AuthController, MeController],
   providers: [
     LoginUseCase,
+    LogoutUseCase,
     BearerAuthGuard,
     { provide: USER_REPOSITORY, useClass: PrismaUserRepository },
     { provide: SESSION_REPOSITORY, useClass: PrismaSessionRepository },

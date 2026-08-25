@@ -1,5 +1,7 @@
 import { fetchStatus, fetchHealthLive, fetchHealthReady } from '@/lib/api/client';
 import type { ApiStatus, HealthLive, HealthReady } from '@/lib/api/client';
+import { LogoutButton } from '@/features/auth';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +19,15 @@ export default async function HomePage() {
 
   return (
     <main>
-      <h1>Buildflow Status</h1>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        <h1 style={{ margin: 0 }}>Buildflow Status</h1>
+        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <Link href="/login" style={{ color: '#111', fontWeight: 600 }}>
+            Sign in
+          </Link>
+          <LogoutButton />
+        </nav>
+      </header>
       {error ? (
         <div role="alert" style={{ color: 'red' }}>
           <p>API unavailable: {error}</p>
