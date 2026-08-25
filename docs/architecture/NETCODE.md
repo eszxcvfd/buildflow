@@ -8,7 +8,7 @@
 - Transport: HTTPS trong môi trường được triển khai; HTTP chỉ dùng local development.
 - Format: JSON UTF-8.
 - Style: REST resource/command endpoints, do NestJS API sở hữu.
-- Description: OpenAPI là artifact kiểm tra và sinh typed client; source contract nằm trong API workspace.
+- Description: OpenAPI là artifact kiểm tra và sinh typed client; source contract nằm trong API workspace. Toolchain đã chốt: `@nestjs/swagger` sinh OpenAPI document từ API workspace; web tiêu thụ qua types sinh bởi `openapi-typescript` — không sửa generated file thủ công.
 - Prefix đề xuất: `/api/v1`; health/readiness có thể nằm ở `/health/*` để không bị coi là business resource.
 - Web/mobile không gọi database, không gọi private Nest provider và không import source từ `src/api`.
 
@@ -72,7 +72,7 @@ Sau public shipment, bất kỳ thay đổi tương thích/ngắt tương thích
 
 ## 5. Auth, headers và observability
 
-Auth mechanism chưa được chốt. Khi chọn bearer/cookie/session hoặc provider cụ thể, phải cập nhật `RUNTIME.md`, API owner và security decision.
+Auth mechanism đã chốt cho v1: **bearer opaque token** lưu hash trong bảng sessions của PostgreSQL, revoke bằng cách xóa dòng; mật khẩu hash bcrypt cost 12 — xem [`ADR-0005`](../adr/0005-opaque-session-tokens.md). Provider bên ngoài và refresh-token policy chưa chốt.
 
 Các metadata kỹ thuật nên chuẩn hóa ở transport adapter:
 
@@ -99,10 +99,12 @@ Các câu hỏi sau cố ý chưa đoán:
 
 - Domain resource và bounded context nào sẽ xuất hiện đầu tiên?
 - REST có đủ cho mọi consumer hay có use case cần GraphQL/streaming?
-- Auth/session, persistence, file upload và rate limit do hệ thống nào sở hữu?
-- OpenAPI generation chạy trong API workspace hay một package artifact riêng?
+- Persistence, file upload và rate limit do hệ thống nào sở hữu?
+
 
 Câu trả lời phải được ghi ở owner document/ADR trước khi trở thành rule.
+
+Đã chốt: auth/session = bearer opaque token trong PostgreSQL (ADR-0005); OpenAPI generation chạy trong API workspace bằng `@nestjs/swagger`, web dùng types từ `openapi-typescript`.
 
 ## References
 

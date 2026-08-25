@@ -14,8 +14,9 @@ Chọn lane theo producer/owner của thay đổi, không theo người thực h
 | `web` | Next route, feature, Server/Client composition, Ark wrapper | typecheck/lint/build; route/component/accessibility proof |
 | `mobile` | React Native screen, Expo route, native capability | typecheck/lint; device/simulator smoke khi có platform behavior |
 | `runtime` | bootstrap, env, health, deploy boundary | startup/readiness/build/graceful-shutdown proof |
+| `data` | Docker Compose, PostgreSQL schema/migration, Redis adapter/policy | Compose config/health; migration/repository integration; TTL/outage proof |
 
-Cross-workspace change dùng `contract` hoặc `runtime` làm coordinating lane và vẫn phải chạy proof của từng consumer bị ảnh hưởng. Chi tiết định tuyến nằm ở [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md).
+Cross-workspace change dùng `contract`, `runtime` hoặc `data` làm coordinating lane và vẫn phải chạy proof của từng consumer bị ảnh hưởng. Chi tiết định tuyến nằm ở [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md).
 
 ## 2. Proof discipline
 
@@ -24,6 +25,7 @@ Cross-workspace change dùng `contract` hoặc `runtime` làm coordinating lane 
 - Ưu tiên outcome-level test tại interface của deep module; không test private implementation/call order trừ khi đó là public contract.
 - Production API/state/lifecycle branch/dependency chỉ tồn tại để phục vụ test là dấu hiệu sai seam; xóa hoặc thiết kế lại.
 - Khi repo chưa có toolchain, proof của documentation chỉ gồm file/link/source consistency; không ghi `npm test`, `build` hay runtime pass.
+- Data proof phải kiểm tra health/readiness, migration boundary, cache TTL/eviction và behavior khi Redis unavailable; không chỉ chứng minh container đã start.
 
 ## 3. Contract hard-cut
 
