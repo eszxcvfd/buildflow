@@ -1,0 +1,5 @@
+-- BuildFlow Prisma baseline migration (ADR-0003).
+-- The data model is intentionally empty in this baseline; business tables
+-- arrive with the slices that own them. This migration exists to establish
+-- the migration history and prove the pipeline against PostgreSQL.
+-- This is an empty migration.

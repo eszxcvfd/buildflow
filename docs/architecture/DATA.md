@@ -1,6 +1,6 @@
 # Data Layer Architecture — Docker, PostgreSQL và Redis
 
-> **Status:** baseline được ghi nhận cho scaffold; chưa có `compose.yaml`, migration, schema hoặc adapter implementation.
+> **Status:** `compose.yaml` đã tồn tại; Prisma bootstrap (version pin chính xác) và migration baseline đã chạy thành công với PostgreSQL của compose; adapter theo context chưa có.
 > **Owner:** data service boundary, persistence/cache policy, Docker Compose và data-runtime proof.
 
 ## 1. Quyết định baseline
@@ -39,7 +39,7 @@ infra/
     └── redis/                       # cache config nếu cần
 ```
 
-`infra/docker/compose.yaml` là target path, hiện chưa tồn tại. Không đặt Docker service implementation vào `src/api/src/domain` hoặc vào client workspace.
+`infra/docker/compose.yaml` đã tồn tại (data services + api/web/mobile). Không đặt Docker service implementation vào `src/api/src/domain` hoặc vào client workspace.
 
 ## 3. PostgreSQL contract
 
@@ -116,7 +116,7 @@ Application use case
 - Migration chạy qua API/data workflow, có thứ tự và proof; không để `docker compose up` tự ý mutate production schema.
 - Local volume có thể xóa; không coi dữ liệu local là fixture canonical.
 - Backup, restore, retention, replication, encryption at rest và disaster recovery chưa được quyết định; không ghi giả định production vào Compose file.
-- Integration test dùng database/schema/project riêng và phải cleanup; không chạy destructive reset trên volume developer mặc định.
+- Integration test dùng database/schema/project riêng và phải cleanup; không chạy destructive reset trên volume developer mặc định. E2E của `src/api` dùng database cô lập `buildflow_e2e` (tạo mới + `prisma migrate deploy` đầu mỗi run, drop sau run; xem `src/api/test/support/test-database.ts`).
 
 ## 8. Proof và change routing
 
@@ -138,7 +138,7 @@ Application use case
 
 Các câu trả lời này không được suy đoán từ scaffold; ghi vào owner document/ADR khi có quyết định.
 
-Đã chốt: ORM/query strategy = **Prisma**, xem [`ADR-0003`](../adr/0003-orm-prisma-postgresql.md).
+Đã chốt: ORM/query strategy = **Prisma**, xem [`ADR-0003`](../adr/0003-orm-prisma-postgresql.md). Version pin: `prisma` + `@prisma/client` = `6.19.3` (exact, không range; nâng cấp hai package cùng version trong cùng thay đổi). Prisma 7 bị loại ở bootstrap vì bỏ `url` khỏi schema (bắt buộc `prisma.config.ts` + driver adapter) và generated code không tương thích toolchain TypeScript 5.4.5/CommonJS hiện tại; chi tiết và bằng chứng tại `.scratch/slice-1-self-claim/issues/01-data-test-infra.md`.
 
 ## References
 
