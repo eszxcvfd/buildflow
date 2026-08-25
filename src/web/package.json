@@ -8,7 +8,9 @@
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "generate:api-types": "openapi-typescript ../api/openapi.json -o src/lib/api/generated.ts && node scripts/ensure-header.js",
+    "openapi:generate": "openapi-typescript ../api/openapi.json -o src/lib/api/generated.ts && node scripts/ensure-header.js"
   },
   "dependencies": {
     "next": "14.2.5",
@@ -21,6 +23,7 @@
     "@types/react-dom": "18.3.0",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.5",
+    "openapi-typescript": "7.13.0",
     "typescript": "5.4.5"
   }
 }

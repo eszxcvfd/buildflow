@@ -1,0 +1,205 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_liveness",
+        "summary": "Liveness probe",
+        "description": "Returns ok if process is alive",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Liveness status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthLiveResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_readiness",
+        "summary": "Readiness probe",
+        "description": "Checks Postgres and Redis connectivity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReadyResponseDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReadyResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "operationId": "StatusController_getStatus",
+        "summary": "Get API status",
+        "description": "Returns service status and version",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "API status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "status"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Buildflow API",
+    "description": "Buildflow modular monolith API",
+    "version": "v1",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "HealthLiveResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok",
+            "description": "Liveness status"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2024-01-01T00:00:00.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "timestamp"
+        ]
+      },
+      "HealthChecksDto": {
+        "type": "object",
+        "properties": {
+          "postgres": {
+            "type": "string",
+            "example": "up",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "description": "Postgres status"
+          },
+          "redis": {
+            "type": "string",
+            "example": "up",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "description": "Redis status"
+          }
+        },
+        "required": [
+          "postgres",
+          "redis"
+        ]
+      },
+      "HealthReadyResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok",
+            "enum": [
+              "ok",
+              "error"
+            ],
+            "description": "Overall readiness"
+          },
+          "checks": {
+            "description": "Dependency checks",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HealthChecksDto"
+              }
+            ]
+          },
+          "details": {
+            "type": "string",
+            "example": "postgres unavailable",
+            "description": "Details when not ready"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ]
+      },
+      "StatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok",
+            "description": "Service status"
+          },
+          "version": {
+            "type": "string",
+            "example": "v1",
+            "description": "API version"
+          },
+          "service": {
+            "type": "string",
+            "example": "buildflow-api",
+            "description": "Service name"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2024-01-01T00:00:00.000Z",
+            "format": "date-time",
+            "description": "Current timestamp ISO 8601 UTC"
+          }
+        },
+        "required": [
+          "status",
+          "version",
+          "service",
+          "timestamp"
+        ]
+      }
+    }
+  }
+}
