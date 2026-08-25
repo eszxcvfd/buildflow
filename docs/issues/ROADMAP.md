@@ -10,8 +10,7 @@ dependencies, and explicit blockers here or in the issue tracker named by the
 repository's setup configuration. Do not infer priority from an unrelated
 document.
 
-<!-- Add verified queue entries here. This setup seed intentionally contains no
-     project-specific issue, priority, or deadline. -->
+1. **Slice 1 — Worker tự nhận Work Order** (spec: [#1](https://github.com/eszxcvfd/buildflow/issues/1), label `ready-for-agent`) — login, Job Board, self-claim với single-winner, My Jobs. Plan conditions tại [`PLANS.md`](../../PLANS.md). Trạng thái: spec đã publish, chưa có ticket breakdown.
 
 ## Routing
 
