@@ -34,9 +34,9 @@ A checked-in plan should state, as applicable:
 
 ## Current plans
 
-### Slice 1 — Worker tự nhận Work Order (spec: #1)
+### Slice 1 — Worker tự nhận Work Order
 
-- **Objective:** vertical slice đầu tiên của luồng điều phối kết hợp — worker login, xem Job Board, self-claim Work Order còn trống (đúng 1 winner khi cạnh tranh), My Jobs chỉ đọc. Spec đầy đủ: [issue #1](https://github.com/eszxcvfd/buildflow/issues/1).
+- **Objective:** vertical slice đầu tiên của luồng điều phối kết hợp — worker login, xem Job Board, self-claim Work Order còn trống (đúng 1 winner khi cạnh tranh), My Jobs chỉ đọc. Spec đầy đủ: [`.scratch/slice-1-self-claim/spec.md`](../.scratch/slice-1-self-claim/spec.md) (local tracker).
 - **Non-goals:** direct assignment, UI tạo Work Order, lịch, checklist, QC, vật tư, thông báo, mobile, admin UI.
 - **Lanes:** `api` (domain/application/controller + Prisma adapter), `contract` (endpoint đầu tiên + OpenAPI + web typed client — coordinating), `web` (login/Job Board/My Jobs), `data` (migration đầu tiên qua Prisma). Proof theo `docs/process/DEVELOPMENT.md`: e2e qua HTTP với PostgreSQL thật (chứa single-winner proof), unit eligibility với fake, web typecheck/lint/build + route smoke.
 - **Quyết định nền:** ADR-0003 (Prisma), ADR-0004 (single-winner bằng conditional UPDATE), ADR-0005 (opaque session token); SRS Q-01..Q-05 đã chốt tại SRS §14.1.1; vocabulary tại `CONTEXT.md`.
