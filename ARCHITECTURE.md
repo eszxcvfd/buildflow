@@ -55,6 +55,17 @@
                              └── HTTPS / JSON / OpenAPI
 ```
 
+### Data layer
+
+```text
+API infrastructure adapters
+  ├── PostgreSQL  → system of record / transactional state
+  └── Redis       → cache / short-lived coordination
+
+Docker Compose packages the local and integration data services.
+```
+
+PostgreSQL là nguồn dữ liệu giao dịch chính. Redis mặc định chỉ là cache/coordination không authoritative; Docker Compose quản lý process, network, healthcheck và local volume theo [`docs/architecture/DATA.md`](docs/architecture/DATA.md).
 API là nơi sở hữu domain và hợp đồng giao tiếp. Web/mobile chỉ sở hữu presentation, state của client và trải nghiệm theo nền tảng; chúng không import code nội bộ của API.
 
 ## 3. Bản đồ workspace
@@ -62,6 +73,7 @@ API là nơi sở hữu domain và hợp đồng giao tiếp. Web/mobile chỉ s
 | Workspace | Vai trò | Entry point mục tiêu | Tài liệu owner |
 | --- | --- | --- | --- |
 | `src/api` | API và domain server | `src/api/src/main.ts` | [`docs/architecture/API.md`](docs/architecture/API.md) |
+| Data layer | PostgreSQL + Redis qua Docker Compose | `infra/docker/compose.yaml` (target) | [`docs/architecture/DATA.md`](docs/architecture/DATA.md) |
 | `src/web` | Web app và web routing | `src/web/src/app/layout.tsx` | [`docs/architecture/WEB.md`](docs/architecture/WEB.md) |
 | `src/mobile` | Mobile client | `src/mobile/app/_layout.tsx` | [`docs/architecture/MOBILE.md`](docs/architecture/MOBILE.md) |
 | Giao tiếp giữa workspace | HTTP/JSON và OpenAPI | API contract | [`docs/architecture/NETCODE.md`](docs/architecture/NETCODE.md) |
@@ -76,6 +88,13 @@ src/
 └── mobile/                 # React Native + Expo
 ```
 
+Infrastructure target:
+
+```text
+infra/
+└── docker/
+    └── compose.yaml        # PostgreSQL + Redis for local/integration
+```
 Cấu hình build, biến môi trường và dependency của từng workspace nằm trong workspace đó; không đặt một `src/` dùng chung cho cả ba nền tảng. Khi cần chia sẻ artifact, chỉ chia sẻ contract/generated artifact có owner rõ ràng, không chia sẻ domain implementation hay UI.
 
 ## 4. Nguyên tắc phụ thuộc
@@ -127,9 +146,11 @@ Web và mobile không gọi database, không đọc event nội bộ của API v
 | Ark UI headless cho web | Chấp nhận cho baseline | Ark UI cung cấp behavior/accessibility; repo sở hữu styling/token. |
 | Mobile React Native + Expo + TypeScript | Đề xuất mạnh | Mobile ít dùng; framework giảm boilerplate native. Xem [`MOBILE.md`](docs/architecture/MOBILE.md). |
 | REST/JSON + OpenAPI | Đề xuất mặc định | Sẽ trở thành contract chính khi endpoint đầu tiên được chấp nhận. |
-| Database/ORM/auth/cloud | Chưa quyết định | Không suy đoán trong scaffold này. |
+| PostgreSQL + Docker Compose | Chấp nhận cho data baseline | PostgreSQL là system of record; Compose là local/integration packaging. |
+| Redis cache/coordination | Chấp nhận có giới hạn | Không authoritative; TTL/eviction mặc định; durable use case cần ADR. |
+| ORM/auth/cloud/production data hosting | Chưa quyết định | Chỉ quyết định khi có requirement và owner tương ứng. |
 
-Các quyết định có trade-off lớn được ghi tại [`docs/adr/0001-workspace-boundaries.md`](docs/adr/0001-workspace-boundaries.md). Nguồn tham khảo framework được ghi tại [`docs/architecture/STACK-REFERENCES.md`](docs/architecture/STACK-REFERENCES.md).
+Các quyết định có trade-off lớn được ghi tại [`docs/adr/0001-workspace-boundaries.md`](docs/adr/0001-workspace-boundaries.md) và [`docs/adr/0002-dockerized-data-layer.md`](docs/adr/0002-dockerized-data-layer.md). Data boundary thuộc [`docs/architecture/DATA.md`](docs/architecture/DATA.md); nguồn tham khảo framework/hạ tầng thuộc [`docs/architecture/STACK-REFERENCES.md`](docs/architecture/STACK-REFERENCES.md).
 
 ## 7. Routing tài liệu
 
@@ -138,6 +159,7 @@ Các quyết định có trade-off lớn được ghi tại [`docs/adr/0001-work
 - Lane và bằng chứng cần có: [`docs/process/DEVELOPMENT.md`](docs/process/DEVELOPMENT.md).
 - Runtime: [`docs/architecture/RUNTIME.md`](docs/architecture/RUNTIME.md).
 - Protocol/contract: [`docs/architecture/NETCODE.md`](docs/architecture/NETCODE.md).
+- Data layer: [`docs/architecture/DATA.md`](docs/architecture/DATA.md).
 
 Nếu code và tài liệu mâu thuẫn, cập nhật tài liệu owner hoặc ghi bounded inference trước khi dùng quy tắc mới. Không tạo routing rule thứ hai trong issue, skill hoặc workspace README.
 
@@ -149,8 +171,9 @@ Việc triển khai tiếp theo nên đi theo thứ tự:
 
 1. Chốt domain language và bounded context thật trong một ADR/CONTEXT khi nghiệp vụ được cung cấp.
 2. Scaffold độc lập `src/api`, `src/web`, `src/mobile`; khóa scripts/typecheck/lint của từng workspace.
-3. Tạo API contract đầu tiên và generated client cho web/mobile.
-4. Xây vertical slice đầu tiên qua cả API → web; chỉ sau đó mở mobile flow tối thiểu.
+3. Scaffold `infra/docker/compose.yaml`, healthcheck và local env cho PostgreSQL/Redis.
+4. Tạo API contract đầu tiên và generated client cho web/mobile.
+5. Xây vertical slice đầu tiên qua API → PostgreSQL/Redis adapter → web; chỉ sau đó mở mobile flow tối thiểu.
 
 ## References
 
@@ -160,3 +183,6 @@ Việc triển khai tiếp theo nên đi theo thứ tự:
 - [Next feature-based template](https://github.com/rufatalv/next-feature-based)
 - [Ark UI](https://ark-ui.com/)
 - [React Native getting started](https://reactnative.dev/docs/getting-started)
+- [Docker Compose documentation](https://docs.docker.com/compose/)
+- [PostgreSQL documentation](https://www.postgresql.org/docs/current/)
+- [Redis documentation](https://redis.io/docs/latest/)

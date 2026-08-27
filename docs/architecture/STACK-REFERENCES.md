@@ -17,7 +17,7 @@
 - `src/api` là modular monolith, không khởi đầu bằng microservices.
 - Mỗi bounded context có module composition root; domain/application không phụ thuộc Nest/ORM/HTTP.
 - Repository và external integration là adapter của port; test dùng fake/in-memory adapter khi seam có biến thiên thật.
-- Chỉ lấy cấu trúc/nguyên tắc từ template; không lấy domain `auth/user`, Mikro-ORM, PostgreSQL, Docker hay GitHub Actions làm yêu cầu của repo.
+- Chỉ lấy cấu trúc/nguyên tắc từ template; không coi domain `auth/user`, Mikro-ORM, PostgreSQL, Docker hay GitHub Actions của template là yêu cầu tự động của repo; data choice của buildflow được ghi riêng bên dưới.
 
 ## 2. Next.js và feature-based web template
 
@@ -66,7 +66,23 @@
 - Native capability, offline sync, push, camera và bare workflow chỉ thêm khi product requirement tạo ra nhu cầu; mỗi lựa chọn khó đảo ngược cần ADR.
 - Chia sẻ generated API contract/model nếu hữu ích; không chia sẻ DOM, CSS hoặc Ark UI component.
 
-## 5. Các kết luận bị giới hạn
+## 5. Docker, PostgreSQL và Redis
+
+### Nguồn nói gì
+
+- [Docker Compose documentation](https://docs.docker.com/compose/) mô tả Compose là công cụ định nghĩa/chạy multi-container application bằng service configuration; Compose hỗ trợ named volumes, networks, healthcheck và environment interpolation.
+- [Docker Compose file reference](https://docs.docker.com/reference/compose-file/) là nguồn để kiểm tra schema Compose khi `infra/docker/compose.yaml` được triển khai.
+- [PostgreSQL `pg_isready`](https://www.postgresql.org/docs/current/app-pg-isready.html) kiểm tra server có đang nhận connection; đây là readiness check, không thay thế migration/integration proof.
+- [PostgreSQL connection parameters](https://www.postgresql.org/docs/current/libpq-connect.html) là nguồn cho host/port/database/user/password connection configuration.
+- [Redis CLI](https://redis.io/docs/latest/develop/tools/cli/) ghi nhận `redis-cli PING`/`PONG` cho connectivity check; [Redis cache configuration](https://redis.io/docs/latest/operate/oss_and_stack/management/config/) mô tả bounded memory/eviction; [Redis persistence](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/) mô tả AOF khi cần durability.
+
+### Áp dụng vào repo
+
+- Docker Compose chỉ đóng gói local/integration data services; target service names là `postgres` và `redis`, có healthcheck và secret/volume boundary rõ.
+- PostgreSQL là system of record với durable local volume; Redis mặc định là TTL-bounded cache/coordination không authoritative và có thể rebuild từ PostgreSQL.
+- Production image version, backup/replication, Redis durable session/queue và managed-vs-container hosting chưa được chốt.
+
+## 6. Các kết luận bị giới hạn
 
 - Nguồn tham khảo không quyết định domain language, database, auth, deployment, package manager hay CI của buildflow.
 - Repo chưa có implementation để chứng minh module dependency, route runtime, bundle behavior hoặc test result.
@@ -80,3 +96,5 @@
 - [Web architecture](WEB.md)
 - [Mobile architecture](MOBILE.md)
 - [Network/API contract](NETCODE.md)
+- [Data layer architecture](DATA.md)
+- [Dockerized data-layer ADR](../adr/0002-dockerized-data-layer.md)

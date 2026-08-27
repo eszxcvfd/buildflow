@@ -51,6 +51,8 @@ src/api/
 │               │   ├── entity/
 │               │   ├── mapper/
 │               │   └── repository/
+│               ├── cache/
+│               │   └── redis/             # Redis cache/coordination adapter
 │               └── integration/         # SDK/HTTP/queue adapters
 └── test/
     ├── unit/
@@ -71,13 +73,21 @@ application ───► domain ◄── infrastructure implements ports
 - **Domain:** entity, value object, domain event và invariant. Không import `@nestjs/*`, ORM, HTTP DTO, database hoặc SDK.
 - **Application:** use case/command/query orchestration. Nó gọi domain và các port; không biết adapter cụ thể.
 - **API/presentation:** controller, guard, pipe, request/response DTO và mapper. Nó chuyển transport thành input của application rồi map output thành contract.
-- **Infrastructure:** adapter triển khai repository/external port; mapping persistence không rò vào domain.
+- **Infrastructure:** adapter triển khai repository/external port; PostgreSQL persistence và Redis cache nằm ở đây; mapping persistence không rò vào domain.
 - **Composition root:** `<context>.module.ts` đăng ký provider, token và adapter bằng DI. Module chỉ export interface/provider thật sự là public surface.
 - **Shared:** chỉ dành cho policy kỹ thuật dùng chung (validation, error mapping, tracing). Không đặt `User`, `Order` hay business rule vào `shared` để né quyết định ownership.
 
 Mỗi module nên là một deep module: public interface nhỏ, implementation được che giấu phía sau. Test đi qua interface của module/use case; không expose private seam chỉ để test.
 
-## 4. Quy tắc NestJS module
+## 4. Data adapters: PostgreSQL và Redis
+
+- PostgreSQL là system of record; mỗi context định nghĩa repository port, còn adapter cụ thể nằm trong `infrastructure/database` và được wiring bằng Nest DI.
+- Redis chỉ là `CachePort`/coordination adapter cho dữ liệu có TTL hoặc có thể rebuild; không dùng Redis để lưu domain truth.
+- API dùng `DATABASE_URL` và `REDIS_URL`/typed config qua adapter; use case không tạo client connection trực tiếp.
+- Cache miss, Redis timeout và Redis outage phải có behavior được test. Với cache-aside, fallback đọc PostgreSQL; không retry vô hạn hoặc biến cache thành transaction store.
+- Docker Compose lifecycle, service name, healthcheck và volume thuộc [`DATA.md`](DATA.md); API sở hữu migration/schema và adapter contract.
+
+## 5. Quy tắc NestJS module
 
 Một Nest module có thể khai báo `imports`, `controllers`, `providers` và `exports`. Áp dụng các quy tắc sau:
 
@@ -89,7 +99,7 @@ Một Nest module có thể khai báo `imports`, `controllers`, `providers` và 
 6. Cross-context synchronous call phải đi qua public application interface. Nếu quan hệ là eventual, dùng domain/integration event sau khi có nhu cầu thật; không tự thêm broker từ đầu.
 7. Mọi external dependency phải có adapter production và test substitute hợp lý trước khi tạo seam công khai.
 
-## 5. Luồng HTTP
+## 6. Luồng HTTP
 
 ```text
 request
@@ -115,7 +125,7 @@ Controller không được:
 
 Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpoint đầu tiên được chốt, OpenAPI phải được sinh/kiểm tra từ API owner và consumer phải cập nhật cùng contract change.
 
-## 6. Domain và application conventions
+## 7. Domain và application conventions
 
 - Tên use case là động từ nghiệp vụ (`CreateX`, `RegisterY`), không phải tên CRUD chung chung nếu domain có ngôn ngữ chính xác hơn.
 - Entity bảo vệ invariant bằng method có ý nghĩa; không public mutable field để controller tự sửa state.
@@ -125,7 +135,7 @@ Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpo
 - DTO transport và domain type là hai interface khác nhau; mapper là seam, không dùng `as` để bỏ qua mapping.
 - Không đưa `any`, ORM decorator hoặc Nest decorator vào domain.
 
-## 7. Test và proof
+## 8. Test và proof
 
 | Phạm vi | Kiểm tra | Adapter |
 | --- | --- | --- |
@@ -134,9 +144,9 @@ Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpo
 | Infrastructure | mapping, query, serialization, external failure | test database/test server khi cần |
 | E2E | HTTP status, validation, auth, response contract | boot Nest app với test config |
 
-Test phải bảo vệ observable outcome qua interface. Không giữ production API/state chỉ để test gọi private implementation. Khi có contract hard cut, audit producer, consumer, generated artifact, fixture và snapshot cùng lúc.
+Test phải bảo vệ observable outcome qua interface. Không giữ production API/state chỉ để test gọi private implementation. Khi có contract hard cut, audit producer, consumer, generated artifact, fixture và snapshot cùng lúc. Data integration test phải có PostgreSQL readiness/migration proof và Redis TTL/cache-miss/outage proof khi adapter bị ảnh hưởng.
 
-## 8. Cross-cutting tối thiểu
+## 9. Cross-cutting tối thiểu
 
 Các concern sau được bootstrap một lần ở composition root, nhưng policy chi tiết vẫn thuộc owner thích hợp:
 
@@ -148,9 +158,9 @@ Các concern sau được bootstrap một lần ở composition root, nhưng pol
 - API versioning và OpenAPI;
 - authentication/authorization khi domain requirement được chốt.
 
-Không chọn database, ORM, queue hoặc auth provider trong tài liệu này vì repo chưa có ràng buộc nghiệp vụ/hạ tầng.
+PostgreSQL và Redis được chọn cho data baseline; chi tiết Docker/Compose, persistence, TTL/eviction, migration và production topology thuộc [`DATA.md`](DATA.md). ORM, auth provider và production hosting chưa được chốt.
 
-## 9. Checklist thêm module
+## 10. Checklist thêm module
 
 - [ ] Context/feature và owner đã được gọi tên bằng domain language.
 - [ ] Invariant nằm ở domain, không nằm ở controller.
@@ -160,6 +170,7 @@ Không chọn database, ORM, queue hoặc auth provider trong tài liệu này v
 - [ ] DTO, mapper, validation và OpenAPI được cập nhật.
 - [ ] Unit/application/integration/e2e proof được chọn theo thay đổi.
 - [ ] Nếu endpoint thay đổi, đã route qua [`WORK-ROUTING.md`](../../WORK-ROUTING.md).
+- [ ] Nếu data adapter/schema/cache policy thay đổi, đã cập nhật [`DATA.md`](DATA.md), migration/TTL proof và ADR khi cần.
 
 ## References
 
@@ -169,3 +180,5 @@ Không chọn database, ORM, queue hoặc auth provider trong tài liệu này v
 - [NestJS testing](https://docs.nestjs.com/fundamentals/testing)
 - [nestjs-ddd-devops template](https://github.com/andrea-acampora/nestjs-ddd-devops)
 - [System architecture and routing](../../ARCHITECTURE.md)
+- [Data layer architecture](DATA.md)
+- [Dockerized data-layer ADR](../adr/0002-dockerized-data-layer.md)

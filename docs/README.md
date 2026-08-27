@@ -15,6 +15,7 @@
 | Web routes, features and Ark UI | [`architecture/WEB.md`](architecture/WEB.md) |
 | Mobile React Native/Expo proposal | [`architecture/MOBILE.md`](architecture/MOBILE.md) |
 | Runtime lifecycle and environment boundaries | [`architecture/RUNTIME.md`](architecture/RUNTIME.md) |
+| Data layer: Docker, PostgreSQL and Redis | [`architecture/DATA.md`](architecture/DATA.md) |
 | HTTP/JSON/OpenAPI and compatibility admission | [`architecture/NETCODE.md`](architecture/NETCODE.md) |
 | Server resources and cook/package boundaries | [`architecture/CONTENT.md`](architecture/CONTENT.md) |
 | Framework/template source notes | [`architecture/STACK-REFERENCES.md`](architecture/STACK-REFERENCES.md) |
@@ -30,6 +31,7 @@ Open the smallest current document set needed:
 - mobile: `architecture/MOBILE.md`;
 - contract: `architecture/NETCODE.md`;
 - lifecycle/deploy: `architecture/RUNTIME.md`;
+- data layer: `architecture/DATA.md`;
 - design decision khó đảo ngược: `adr/` và [`../PLANS.md`](../PLANS.md) nếu thuộc điều kiện plan.
 
 Khi tài liệu owner im lặng hoặc stale, cập nhật owner trước khi dựa vào rule mới. Không tạo routing note cạnh tranh trong workspace, issue hoặc skill.
