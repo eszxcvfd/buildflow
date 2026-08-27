@@ -4,6 +4,7 @@
   "private": true,
   "description": "Buildflow API - minimal NestJS service",
   "scripts": {
+    "db:migrate": "node scripts/migrate.js",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node src/main.ts",
