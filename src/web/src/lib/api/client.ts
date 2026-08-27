@@ -17,8 +17,11 @@ export interface HealthReady {
 }
 
 function getApiBaseUrl(): string {
-  // Inside docker network use service name; fallback to env or localhost for local dev
-  return process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  // WEB.md server/client boundary: API_INTERNAL_URL is server-only
+  if (typeof window === 'undefined') {
+    return process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+  }
+  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 }
 
 export async function fetchStatus(): Promise<ApiStatus> {

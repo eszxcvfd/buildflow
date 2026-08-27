@@ -17,6 +17,14 @@ export default async function HomePage() {
 
   return (
     <main>
+      <nav style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
+        <a href="/login" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
+          Đăng nhập
+        </a>
+        <a href="/dashboard" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
+          Dashboard
+        </a>
+      </nav>
       <h1>Buildflow Status</h1>
       {error ? (
         <div role="alert" style={{ color: 'red' }}>
