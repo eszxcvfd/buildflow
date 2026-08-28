@@ -12,12 +12,14 @@ import { ChangeUserStatusUseCase } from './application/use-case/change-user-stat
 import { ListUsersUseCase, GetUserUseCase } from './application/use-case/list-users.use-case';
 import { PgUserRepository } from './infrastructure/database/pg-user.repository';
 import { PgAuditRepository } from './infrastructure/database/pg-audit.repository';
+import { PgTransactionManager } from './infrastructure/database/pg-transaction.manager';
 import { BcryptHasherService } from './infrastructure/security/bcrypt-hasher.service';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
 import { USER_REPOSITORY } from './domain/repository/user-repository.port';
 import { HASHER_PORT } from './application/port/hasher.port';
 import { TOKEN_PORT } from './application/port/token.port';
 import { AUDIT_PORT } from './application/port/audit.port';
+import { TRANSACTION_PORT } from './application/port/transaction.port';
 import { TOKEN_REVOCATION_PORT } from './application/port/token-revocation.port';
 import { InMemoryTokenRevocationService } from './infrastructure/security/in-memory-token-revocation.service';
 import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
@@ -40,6 +42,7 @@ import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
     { provide: HASHER_PORT, useClass: BcryptHasherService },
     { provide: TOKEN_PORT, useClass: JwtTokenService },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
+    { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: TOKEN_REVOCATION_PORT, useClass: InMemoryTokenRevocationService },
   ],
   exports: [JwtAuthGuard, JwtTokenService, USER_REPOSITORY, TOKEN_PORT],

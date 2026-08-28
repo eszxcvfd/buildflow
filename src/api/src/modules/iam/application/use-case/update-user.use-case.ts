@@ -1,6 +1,8 @@
 import { Inject, Injectable, NotFoundException, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { PoolClient } from 'pg';
 import { USER_REPOSITORY, UserRepositoryPort } from '../../domain/repository/user-repository.port';
 import { AUDIT_PORT, AuditPort } from '../port/audit.port';
+import { TRANSACTION_PORT, TransactionPort } from '../port/transaction.port';
 import { UserEntity } from '../../domain/entity/user.entity';
 
 function isUniqueViolationError(e: unknown): boolean {
@@ -51,6 +53,7 @@ export class UpdateUserUseCase {
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepo: UserRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
+    @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
   ) {}
 
   async execute(input: UpdateUserInput): Promise<UpdateUserOutput> {
@@ -79,52 +82,64 @@ export class UpdateUserUseCase {
       }
     }
 
-    try {
-      user.updateAdmin(
-        {
-          email: input.email,
-          fullName: input.fullName,
-          phone: input.phone,
-          avatarUrl: input.avatarUrl,
-          employeeCode: input.employeeCode,
-          userType: input.userType,
-          contractorId: input.contractorId,
-        },
-        new Date(),
-      );
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Dữ liệu không hợp lệ';
-      throw new BadRequestException(msg);
-    }
-
-    try {
-      await this.userRepo.save(user);
-    } catch (e) {
-      if (e instanceof ConflictException) throw e;
-      if (isUniqueViolationError(e)) {
-        throw new ConflictException(mapUniqueViolation(e));
+    await this.tx.withTransaction(async (client: PoolClient) => {
+      // Domain mutation inside transaction so snapshot at BEGIN captures original state for rollback
+      try {
+        user.updateAdmin(
+          {
+            email: input.email,
+            fullName: input.fullName,
+            phone: input.phone,
+            avatarUrl: input.avatarUrl,
+            employeeCode: input.employeeCode,
+            userType: input.userType,
+            contractorId: input.contractorId,
+          },
+          new Date(),
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Dữ liệu không hợp lệ';
+        throw new BadRequestException(msg);
       }
-      throw e;
-    }
 
-    const after = user.toPublicProfile();
+      const after = user.toPublicProfile();
 
-    try {
-      await this.audit.log({
-        actorUserId: input.actorUserId,
-        action: 'IAM_USER_UPDATED',
-        entityType: 'USER',
-        entityId: input.targetUserId,
-        beforeData: before,
-        afterData: after,
-        result: 'SUCCESS',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
-    } catch (e) {
-      if (e instanceof ConflictException || e instanceof BadRequestException) throw e;
-      throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
-    }
+      try {
+        if (this.userRepo.saveWithClient) {
+          await this.userRepo.saveWithClient(client, user);
+        } else {
+          await this.userRepo.save(user);
+        }
+      } catch (e) {
+        if (e instanceof ConflictException) throw e;
+        if (isUniqueViolationError(e)) {
+          throw new ConflictException(mapUniqueViolation(e));
+        }
+        throw e;
+      }
+
+      try {
+        const payload = {
+          actorUserId: input.actorUserId,
+          action: 'IAM_USER_UPDATED',
+          entityType: 'USER',
+          entityId: input.targetUserId,
+          beforeData: before,
+          afterData: after,
+          result: 'SUCCESS' as const,
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        };
+        if (this.audit.logWithClient) {
+          await this.audit.logWithClient(client, payload);
+        } else {
+          await this.audit.log(payload);
+        }
+      } catch (e) {
+        if (e instanceof ConflictException || e instanceof BadRequestException) throw e;
+        throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
+      }
+    });
 
     return { entity: user };
   }

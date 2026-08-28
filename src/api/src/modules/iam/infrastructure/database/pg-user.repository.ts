@@ -1,5 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { UserEntity } from '../../domain/entity/user.entity';
 import { UserRepositoryPort } from '../../domain/repository/user-repository.port';
 import { loadConfig } from '../../../../config/configuration';
@@ -109,10 +109,10 @@ export class PgUserRepository implements UserRepositoryPort {
     return mapRowToEntity(result.rows[0]);
   }
 
-  async create(user: UserEntity): Promise<void> {
+  private async createOnExecutor(executor: Pool | PoolClient, user: UserEntity): Promise<void> {
     const p = user.getProps();
     try {
-      await this.pool().query(
+      await executor.query(
         `INSERT INTO public.users
        (id, email, password_hash, full_name, phone, avatar_url, employee_code,
         user_type, contractor_id, status, failed_login_count, locked_until,
@@ -142,6 +142,14 @@ export class PgUserRepository implements UserRepositoryPort {
     }
   }
 
+  async create(user: UserEntity): Promise<void> {
+    await this.createOnExecutor(this.pool(), user);
+  }
+
+  async createWithClient(client: PoolClient, user: UserEntity): Promise<void> {
+    await this.createOnExecutor(client, user);
+  }
+
   async findAll(params?: { status?: string; limit?: number; offset?: number }): Promise<UserEntity[]> {
     const limit = Math.min(Math.max(params?.limit ?? 20, 1), 100);
     const offset = Math.max(params?.offset ?? 0, 0);
@@ -164,10 +172,10 @@ export class PgUserRepository implements UserRepositoryPort {
     return result.rows.map((r: Record<string, unknown>) => mapRowToEntity(r));
   }
 
-  async save(user: UserEntity): Promise<void> {
+  private async saveOnExecutor(executor: Pool | PoolClient, user: UserEntity): Promise<void> {
     const p = user.getProps();
     try {
-      await this.pool().query(
+      await executor.query(
         `UPDATE public.users
        SET email = $1,
            full_name = $2,
@@ -202,6 +210,14 @@ export class PgUserRepository implements UserRepositoryPort {
       if (isUniqueViolation(e)) throw toConflictFromUnique(e);
       throw e;
     }
+  }
+
+  async save(user: UserEntity): Promise<void> {
+    await this.saveOnExecutor(this.pool(), user);
+  }
+
+  async saveWithClient(client: PoolClient, user: UserEntity): Promise<void> {
+    await this.saveOnExecutor(client, user);
   }
 
   async findActiveRolesByUserId(userId: string): Promise<Array<{ id: string; code: string; name: string }>> {

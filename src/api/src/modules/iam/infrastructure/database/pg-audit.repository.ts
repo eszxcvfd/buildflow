@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { AuditPort } from '../../application/port/audit.port';
 import { loadConfig } from '../../../../config/configuration';
 
@@ -17,19 +17,22 @@ export class PgAuditRepository implements AuditPort {
     return getPool();
   }
 
-  async log(params: {
-    actorUserId?: string | null;
-    action: string;
-    entityType: string;
-    entityId?: string | null;
-    beforeData?: unknown;
-    afterData?: unknown;
-    result: 'SUCCESS' | 'FAILED';
-    ipAddress?: string | null;
-    userAgent?: string | null;
-    correlationId?: string | null;
-  }): Promise<void> {
-    await this.pool().query(
+  private async logOnExecutor(
+    executor: Pool | PoolClient,
+    params: {
+      actorUserId?: string | null;
+      action: string;
+      entityType: string;
+      entityId?: string | null;
+      beforeData?: unknown;
+      afterData?: unknown;
+      result: 'SUCCESS' | 'FAILED';
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      correlationId?: string | null;
+    },
+  ): Promise<void> {
+    await executor.query(
       `INSERT INTO public.audit_logs
          (actor_user_id, action, entity_type, entity_id, before_data, after_data, result, ip_address, user_agent, correlation_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -46,5 +49,38 @@ export class PgAuditRepository implements AuditPort {
         params.correlationId ?? null,
       ],
     );
+  }
+
+  async log(params: {
+    actorUserId?: string | null;
+    action: string;
+    entityType: string;
+    entityId?: string | null;
+    beforeData?: unknown;
+    afterData?: unknown;
+    result: 'SUCCESS' | 'FAILED';
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    correlationId?: string | null;
+  }): Promise<void> {
+    await this.logOnExecutor(this.pool(), params);
+  }
+
+  async logWithClient(
+    client: PoolClient,
+    params: {
+      actorUserId?: string | null;
+      action: string;
+      entityType: string;
+      entityId?: string | null;
+      beforeData?: unknown;
+      afterData?: unknown;
+      result: 'SUCCESS' | 'FAILED';
+      ipAddress?: string | null;
+      userAgent?: string | null;
+      correlationId?: string | null;
+    },
+  ): Promise<void> {
+    await this.logOnExecutor(client, params);
   }
 }

@@ -1,8 +1,10 @@
 import { Inject, Injectable, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { PoolClient } from 'pg';
 import { USER_REPOSITORY, UserRepositoryPort } from '../../domain/repository/user-repository.port';
 import { AUDIT_PORT, AuditPort } from '../port/audit.port';
 import { HASHER_PORT, HasherPort } from '../port/hasher.port';
+import { TRANSACTION_PORT, TransactionPort } from '../port/transaction.port';
 import { UserEntity } from '../../domain/entity/user.entity';
 
 function isUniqueViolationError(e: unknown): boolean {
@@ -61,6 +63,7 @@ export class CreateUserUseCase {
     @Inject(USER_REPOSITORY) private readonly userRepo: UserRepositoryPort,
     @Inject(HASHER_PORT) private readonly hasher: HasherPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
+    @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
   ) {}
 
   async execute(input: CreateUserInput): Promise<CreateUserOutput> {
@@ -133,34 +136,43 @@ export class CreateUserUseCase {
       throw new BadRequestException('Mật khẩu tối thiểu 8 ký tự');
     }
 
-    try {
-      await this.userRepo.create(entity);
-    } catch (e) {
-      if (e instanceof ConflictException) throw e;
-      if (isUniqueViolationError(e)) {
-        throw new ConflictException(mapUniqueViolation(e));
+    // Atomic mutation + audit in shared DB transaction per P1 fix: both commit or both rollback
+    await this.tx.withTransaction(async (client: PoolClient) => {
+      try {
+        if (this.userRepo.createWithClient) {
+          await this.userRepo.createWithClient(client, entity);
+        } else {
+          await this.userRepo.create(entity);
+        }
+      } catch (e) {
+        if (e instanceof ConflictException) throw e;
+        if (isUniqueViolationError(e)) {
+          throw new ConflictException(mapUniqueViolation(e));
+        }
+        throw e;
       }
-      throw e;
-    }
 
-    // Audit IAM_USER_CREATED per IAM-SRS-008 — audit failure must fail the mutation (AC: status change must persist actor+timestamp)
-    try {
-      await this.audit.log({
-        actorUserId: input.actorUserId,
-        action: 'IAM_USER_CREATED',
-        entityType: 'USER',
-        entityId: id,
-        afterData: entity.toPublicProfile(),
-        result: 'SUCCESS',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
-    } catch (e) {
-      // Propagate audit failure so client knows mutation is not fully committed; in a real transaction this would rollback.
-      // We throw 500 to signal audit persistence failure instead of silently succeeding.
-      if (e instanceof ConflictException || e instanceof BadRequestException) throw e;
-      throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
-    }
+      try {
+        const payload = {
+          actorUserId: input.actorUserId,
+          action: 'IAM_USER_CREATED',
+          entityType: 'USER',
+          entityId: id,
+          afterData: entity.toPublicProfile(),
+          result: 'SUCCESS' as const,
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        };
+        if (this.audit.logWithClient) {
+          await this.audit.logWithClient(client, payload);
+        } else {
+          await this.audit.log(payload);
+        }
+      } catch (e) {
+        if (e instanceof ConflictException || e instanceof BadRequestException) throw e;
+        throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
+      }
+    });
 
     return { entity };
   }
