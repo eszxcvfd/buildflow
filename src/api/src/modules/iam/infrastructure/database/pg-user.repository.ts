@@ -1,8 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Pool } from 'pg';
 import { UserEntity } from '../../domain/entity/user.entity';
 import { UserRepositoryPort } from '../../domain/repository/user-repository.port';
 import { loadConfig } from '../../../../config/configuration';
+
+function isUniqueViolation(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const err = e as Record<string, unknown>;
+  if (err['code'] === '23505') return true;
+  const constraint = String(err['constraint'] ?? '');
+  if (/ux_users/i.test(constraint)) return true;
+  const msg = String((err['message'] as string) ?? '');
+  if (/duplicate key|unique constraint|23505/i.test(msg)) return true;
+  return false;
+}
+
+function toConflictFromUnique(e: unknown): ConflictException {
+  const err = e as Record<string, unknown>;
+  const constraint = String(err['constraint'] ?? '');
+  const detail = String((err['detail'] as string) ?? '');
+  if (/ux_users_email_lower/i.test(constraint)) return new ConflictException('Email đã tồn tại');
+  if (/ux_users_phone/i.test(constraint)) return new ConflictException('Số điện thoại đã tồn tại');
+  if (/ux_users_employee_code/i.test(constraint)) return new ConflictException('Mã nhân viên đã tồn tại');
+  if (/employee_code/i.test(detail)) return new ConflictException('Mã nhân viên đã tồn tại');
+  if (/phone/i.test(detail)) return new ConflictException('Số điện thoại đã tồn tại');
+  return new ConflictException('Email đã tồn tại');
+}
 
 function getPool(): Pool {
   const config = loadConfig();
@@ -74,16 +97,42 @@ export class PgUserRepository implements UserRepositoryPort {
 
   async save(user: UserEntity): Promise<void> {
     const p = user.getProps();
-    await this.pool().query(
-      `UPDATE public.users
-       SET status = $1,
-           failed_login_count = $2,
-           locked_until = $3,
-           last_login_at = $4,
-           updated_at = $5
-       WHERE id = $6`,
-      [p.status, p.failedLoginCount, p.lockedUntil ?? null, p.lastLoginAt ?? null, p.updatedAt, p.id],
-    );
+    try {
+      await this.pool().query(
+        `UPDATE public.users
+       SET email = $1,
+           full_name = $2,
+           phone = $3,
+           avatar_url = $4,
+           employee_code = $5,
+           user_type = $6,
+           contractor_id = $7,
+           status = $8,
+           failed_login_count = $9,
+           locked_until = $10,
+           last_login_at = $11,
+           updated_at = $12
+       WHERE id = $13`,
+        [
+          p.email,
+          p.fullName,
+          p.phone ?? null,
+          p.avatarUrl ?? null,
+          p.employeeCode ?? null,
+          p.userType,
+          p.contractorId ?? null,
+          p.status,
+          p.failedLoginCount,
+          p.lockedUntil ?? null,
+          p.lastLoginAt ?? null,
+          p.updatedAt,
+          p.id,
+        ],
+      );
+    } catch (e) {
+      if (isUniqueViolation(e)) throw toConflictFromUnique(e);
+      throw e;
+    }
   }
 
   async findActiveRolesByUserId(userId: string): Promise<Array<{ id: string; code: string; name: string }>> {

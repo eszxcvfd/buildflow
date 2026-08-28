@@ -101,6 +101,84 @@ export class UserEntity {
     this.props.updatedAt = now;
   }
 
+  updateProfile(input: { fullName?: string; phone?: string | null; avatarUrl?: string | null }, now?: Date): void {
+    const updatedAt = now ?? new Date();
+    if (input.fullName !== undefined) {
+      const trimmed = input.fullName.trim();
+      if (trimmed.length === 0) {
+        throw new Error("Họ tên không được để trống");
+      }
+      if (trimmed.length > 150) {
+        throw new Error("Họ tên tối đa 150 ký tự");
+      }
+      this.props.fullName = trimmed;
+    }
+    if (input.phone !== undefined) {
+      if (input.phone === null || input.phone === "") {
+        this.props.phone = null;
+      } else {
+        const normalized = input.phone.trim();
+        // Allow +84 or 0 prefix, 7-15 digits, may contain spaces/dashes stripped
+        const digitsOnly = normalized.replace(/[\s-]/g, "");
+        if (!/^\+?[0-9]{7,15}$/.test(digitsOnly)) {
+          throw new Error("Số điện thoại không hợp lệ");
+        }
+        if (normalized.length > 20) {
+          throw new Error("Số điện thoại tối đa 20 ký tự");
+        }
+        this.props.phone = normalized;
+      }
+    }
+    if (input.avatarUrl !== undefined) {
+      if (input.avatarUrl === null || input.avatarUrl === "") {
+        this.props.avatarUrl = null;
+      } else {
+        const url = input.avatarUrl.trim();
+        if (url.length > 500) {
+          throw new Error("Avatar URL tối đa 500 ký tự");
+        }
+        try {
+          const parsed = new URL(url);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            throw new Error("Avatar URL phải là http/https");
+          }
+        } catch {
+          throw new Error("Avatar URL không hợp lệ");
+        }
+        this.props.avatarUrl = url;
+      }
+    }
+    this.props.updatedAt = updatedAt;
+  }
+
+  toPublicProfile(): {
+    id: string;
+    email: string;
+    fullName: string;
+    phone: string | null;
+    avatarUrl: string | null;
+    employeeCode: string | null;
+    userType: UserType;
+    contractorId: string | null;
+    status: UserStatus;
+    createdAt: Date;
+    updatedAt: Date;
+  } {
+    return {
+      id: this.props.id,
+      email: this.props.email,
+      fullName: this.props.fullName,
+      phone: (this.props.phone as string | null) ?? null,
+      avatarUrl: (this.props.avatarUrl as string | null) ?? null,
+      employeeCode: (this.props.employeeCode as string | null) ?? null,
+      userType: this.props.userType,
+      contractorId: (this.props.contractorId as string | null) ?? null,
+      status: this.props.status,
+      createdAt: this.props.createdAt,
+      updatedAt: this.props.updatedAt,
+    };
+  }
+
   getProps(): UserProps {
     return { ...this.props };
   }
