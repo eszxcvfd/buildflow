@@ -95,6 +95,75 @@ export class PgUserRepository implements UserRepositoryPort {
     return mapRowToEntity(result.rows[0]);
   }
 
+  async findByEmployeeCode(employeeCode: string): Promise<UserEntity | null> {
+    const result = await this.pool().query(
+      `SELECT id, email, password_hash, full_name, phone, avatar_url, employee_code,
+              user_type, contractor_id, status, failed_login_count, locked_until,
+              last_login_at, created_at, updated_at
+       FROM public.users
+       WHERE employee_code = $1
+       LIMIT 1`,
+      [employeeCode],
+    );
+    if (result.rows.length === 0) return null;
+    return mapRowToEntity(result.rows[0]);
+  }
+
+  async create(user: UserEntity): Promise<void> {
+    const p = user.getProps();
+    try {
+      await this.pool().query(
+        `INSERT INTO public.users
+       (id, email, password_hash, full_name, phone, avatar_url, employee_code,
+        user_type, contractor_id, status, failed_login_count, locked_until,
+        last_login_at, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [
+          p.id,
+          p.email,
+          p.passwordHash,
+          p.fullName,
+          p.phone ?? null,
+          p.avatarUrl ?? null,
+          p.employeeCode ?? null,
+          p.userType,
+          p.contractorId ?? null,
+          p.status,
+          p.failedLoginCount,
+          p.lockedUntil ?? null,
+          p.lastLoginAt ?? null,
+          p.createdAt,
+          p.updatedAt,
+        ],
+      );
+    } catch (e) {
+      if (isUniqueViolation(e)) throw toConflictFromUnique(e);
+      throw e;
+    }
+  }
+
+  async findAll(params?: { status?: string; limit?: number; offset?: number }): Promise<UserEntity[]> {
+    const limit = Math.min(Math.max(params?.limit ?? 20, 1), 100);
+    const offset = Math.max(params?.offset ?? 0, 0);
+    let query = `SELECT id, email, password_hash, full_name, phone, avatar_url, employee_code,
+              user_type, contractor_id, status, failed_login_count, locked_until,
+              last_login_at, created_at, updated_at
+       FROM public.users`;
+    const values: unknown[] = [];
+    const conditions: string[] = [];
+    if (params?.status) {
+      conditions.push(`status = $${values.length + 1}`);
+      values.push(params.status);
+    }
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    query += ` ORDER BY created_at DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    values.push(limit, offset);
+    const result = await this.pool().query(query, values);
+    return result.rows.map((r: Record<string, unknown>) => mapRowToEntity(r));
+  }
+
   async save(user: UserEntity): Promise<void> {
     const p = user.getProps();
     try {

@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AuthController } from './api/rest/controller/auth.controller';
 import { ProfileController } from './api/rest/controller/profile.controller';
+import { AdminController } from './api/rest/controller/admin.controller';
 import { LoginUseCase } from './application/use-case/login.use-case';
 import { LogoutUseCase } from './application/use-case/logout.use-case';
 import { GetProfileUseCase } from './application/use-case/get-profile.use-case';
 import { UpdateProfileUseCase } from './application/use-case/update-profile.use-case';
+import { CreateUserUseCase } from './application/use-case/create-user.use-case';
+import { UpdateUserUseCase } from './application/use-case/update-user.use-case';
+import { ChangeUserStatusUseCase } from './application/use-case/change-user-status.use-case';
+import { ListUsersUseCase, GetUserUseCase } from './application/use-case/list-users.use-case';
 import { PgUserRepository } from './infrastructure/database/pg-user.repository';
 import { PgAuditRepository } from './infrastructure/database/pg-audit.repository';
 import { BcryptHasherService } from './infrastructure/security/bcrypt-hasher.service';
@@ -18,12 +23,17 @@ import { InMemoryTokenRevocationService } from './infrastructure/security/in-mem
 import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
 
 @Module({
-  controllers: [AuthController, ProfileController],
+  controllers: [AuthController, ProfileController, AdminController],
   providers: [
     LoginUseCase,
     LogoutUseCase,
     GetProfileUseCase,
     UpdateProfileUseCase,
+    CreateUserUseCase,
+    UpdateUserUseCase,
+    ChangeUserStatusUseCase,
+    ListUsersUseCase,
+    GetUserUseCase,
     JwtTokenService,
     JwtAuthGuard,
     { provide: USER_REPOSITORY, useClass: PgUserRepository },

@@ -46,15 +46,18 @@ export class LogoutUseCase {
 
     await this.revocation.revoke(jti, expiresAt);
 
-    await this.audit.log({
-      actorUserId: payload.sub,
-      action: 'AUTH_LOGOUT',
-      entityType: 'USER',
-      entityId: payload.sub,
-      afterData: { jti, expiresAt: expiresAt.toISOString() },
-      result: 'SUCCESS',
-      ipAddress: input.ipAddress ?? null,
-      userAgent: input.userAgent ?? null,
-    });
+    try {
+      await this.audit.log({
+        actorUserId: payload.sub,
+        action: 'AUTH_LOGOUT',
+        entityType: 'USER',
+        entityId: payload.sub,
+        afterData: { jti, expiresAt: expiresAt.toISOString() },
+        result: 'SUCCESS',
+        ipAddress: input.ipAddress ?? null,
+        userAgent: input.userAgent ?? null,
+      });
+    } catch (_e) { void _e; }
+
   }
 }

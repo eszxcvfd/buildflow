@@ -106,47 +106,169 @@ export class UserEntity {
     if (input.fullName !== undefined) {
       const trimmed = input.fullName.trim();
       if (trimmed.length === 0) {
-        throw new Error("Họ tên không được để trống");
+        throw new Error('Họ tên không được để trống');
       }
       if (trimmed.length > 150) {
-        throw new Error("Họ tên tối đa 150 ký tự");
+        throw new Error('Họ tên tối đa 150 ký tự');
       }
       this.props.fullName = trimmed;
     }
     if (input.phone !== undefined) {
-      if (input.phone === null || input.phone === "") {
+      if (input.phone === null || input.phone === '') {
         this.props.phone = null;
       } else {
         const normalized = input.phone.trim();
         // Allow +84 or 0 prefix, 7-15 digits, may contain spaces/dashes stripped
-        const digitsOnly = normalized.replace(/[\s-]/g, "");
+        const digitsOnly = normalized.replace(/[\s-]/g, '');
         if (!/^\+?[0-9]{7,15}$/.test(digitsOnly)) {
-          throw new Error("Số điện thoại không hợp lệ");
+          throw new Error('Số điện thoại không hợp lệ');
         }
         if (normalized.length > 20) {
-          throw new Error("Số điện thoại tối đa 20 ký tự");
+          throw new Error('Số điện thoại tối đa 20 ký tự');
         }
         this.props.phone = normalized;
       }
     }
     if (input.avatarUrl !== undefined) {
-      if (input.avatarUrl === null || input.avatarUrl === "") {
+      if (input.avatarUrl === null || input.avatarUrl === '') {
         this.props.avatarUrl = null;
       } else {
         const url = input.avatarUrl.trim();
         if (url.length > 500) {
-          throw new Error("Avatar URL tối đa 500 ký tự");
+          throw new Error('Avatar URL tối đa 500 ký tự');
         }
         try {
           const parsed = new URL(url);
-          if (!["http:", "https:"].includes(parsed.protocol)) {
-            throw new Error("Avatar URL phải là http/https");
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new Error('Avatar URL phải là http/https');
           }
         } catch {
-          throw new Error("Avatar URL không hợp lệ");
+          throw new Error('Avatar URL không hợp lệ');
         }
         this.props.avatarUrl = url;
       }
+    }
+    this.props.updatedAt = updatedAt;
+  }
+
+  updateAdmin(input: {
+    email?: string;
+    fullName?: string;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    employeeCode?: string | null;
+    userType?: UserType;
+    contractorId?: string | null;
+  }, now?: Date): void {
+    const updatedAt = now ?? new Date();
+    if (input.email !== undefined) {
+      const trimmed = input.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        throw new Error('Email không hợp lệ');
+      }
+      if (trimmed.length > 255) {
+        throw new Error('Email tối đa 255 ký tự');
+      }
+      this.props.email = trimmed;
+    }
+    if (input.fullName !== undefined) {
+      const trimmed = input.fullName.trim();
+      if (trimmed.length === 0) {
+        throw new Error('Họ tên không được để trống');
+      }
+      if (trimmed.length > 150) {
+        throw new Error('Họ tên tối đa 150 ký tự');
+      }
+      this.props.fullName = trimmed;
+    }
+    if (input.phone !== undefined) {
+      if (input.phone === null || input.phone === '') {
+        this.props.phone = null;
+      } else {
+        const normalized = input.phone.trim();
+        const digitsOnly = normalized.replace(/[\s-]/g, '');
+        if (!/^\+?[0-9]{7,15}$/.test(digitsOnly)) {
+          throw new Error('Số điện thoại không hợp lệ');
+        }
+        if (normalized.length > 20) {
+          throw new Error('Số điện thoại tối đa 20 ký tự');
+        }
+        this.props.phone = normalized;
+      }
+    }
+    if (input.avatarUrl !== undefined) {
+      if (input.avatarUrl === null || input.avatarUrl === '') {
+        this.props.avatarUrl = null;
+      } else {
+        const url = input.avatarUrl.trim();
+        if (url.length > 500) {
+          throw new Error('Avatar URL tối đa 500 ký tự');
+        }
+        try {
+          const parsed = new URL(url);
+          if (!['http:', 'https:'].includes(parsed.protocol)) {
+            throw new Error('Avatar URL phải là http/https');
+          }
+        } catch {
+          throw new Error('Avatar URL không hợp lệ');
+        }
+        this.props.avatarUrl = url;
+      }
+    }
+    if (input.employeeCode !== undefined) {
+      if (input.employeeCode === null || input.employeeCode === '') {
+        this.props.employeeCode = null;
+      } else {
+        const trimmed = input.employeeCode.trim();
+        if (trimmed.length > 50) {
+          throw new Error('Mã nhân viên tối đa 50 ký tự');
+        }
+        this.props.employeeCode = trimmed;
+      }
+    }
+    if (input.userType !== undefined) {
+      if (!['STAFF', 'WORKER'].includes(input.userType)) {
+        throw new Error('Loại tài khoản không hợp lệ');
+      }
+      this.props.userType = input.userType;
+    }
+    if (input.contractorId !== undefined) {
+      if (input.contractorId === null || input.contractorId === '') {
+        this.props.contractorId = null;
+      } else {
+        const trimmed = String(input.contractorId).trim();
+        // basic uuid check
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+          throw new Error('Contractor ID không hợp lệ');
+        }
+        this.props.contractorId = trimmed;
+      }
+    }
+    this.props.updatedAt = updatedAt;
+  }
+
+  changeStatus(newStatus: UserStatus, now?: Date): void {
+    const updatedAt = now ?? new Date();
+    if (!['ACTIVE', 'LOCKED', 'INACTIVE'].includes(newStatus)) {
+      throw new Error('Trạng thái không hợp lệ');
+    }
+    if (this.props.status === newStatus) {
+      throw new Error(`Tài khoản đã ở trạng thái ${newStatus}`);
+    }
+    // Transition handling
+    if (newStatus === 'ACTIVE') {
+      // unlock or reactivate: clear lock fields
+      this.props.status = 'ACTIVE';
+      this.props.lockedUntil = null;
+      this.props.failedLoginCount = 0;
+    } else if (newStatus === 'LOCKED') {
+      // manual lock: no expiry, keep failed count but set LOCKED
+      this.props.status = 'LOCKED';
+      this.props.lockedUntil = null;
+    } else if (newStatus === 'INACTIVE') {
+      // deactivate: clear lock expiry, keep status INACTIVE
+      this.props.status = 'INACTIVE';
+      this.props.lockedUntil = null;
     }
     this.props.updatedAt = updatedAt;
   }
