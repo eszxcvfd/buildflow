@@ -48,31 +48,35 @@ export class LoginUseCase {
 
     // Generic error to avoid disclosing existence
     if (!user) {
-      await this.audit.log({
-        actorUserId: null,
-        action: 'AUTH_LOGIN_FAILED',
-        entityType: 'USER',
-        entityId: null,
-        afterData: { email: normalizedEmail, reason: 'user_not_found' },
-        result: 'FAILED',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
+      try {
+        await this.audit.log({
+          actorUserId: null,
+          action: 'AUTH_LOGIN_FAILED',
+          entityType: 'USER',
+          entityId: null,
+          afterData: { email: normalizedEmail, reason: 'user_not_found' },
+          result: 'FAILED',
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        });
+      } catch (_e) { void _e; }
       throw new UnauthorizedException(GENERIC_INVALID_MSG);
     }
 
     // Check inactive / locked status per SRS
     if (user.isInactive()) {
-      await this.audit.log({
-        actorUserId: user.id,
-        action: 'AUTH_LOGIN_FAILED',
-        entityType: 'USER',
-        entityId: user.id,
-        afterData: { reason: 'inactive' },
-        result: 'FAILED',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
+      try {
+        await this.audit.log({
+          actorUserId: user.id,
+          action: 'AUTH_LOGIN_FAILED',
+          entityType: 'USER',
+          entityId: user.id,
+          afterData: { reason: 'inactive' },
+          result: 'FAILED',
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        });
+      } catch (_e) { void _e; }
       throw new ForbiddenException(INACTIVE_MSG);
     }
 
@@ -83,16 +87,18 @@ export class LoginUseCase {
     }
 
     if (user.isCurrentlyLocked(now)) {
-      await this.audit.log({
-        actorUserId: user.id,
-        action: 'AUTH_LOGIN_FAILED',
-        entityType: 'USER',
-        entityId: user.id,
-        afterData: { reason: 'locked', lockedUntil: user.lockedUntil },
-        result: 'FAILED',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
+      try {
+        await this.audit.log({
+          actorUserId: user.id,
+          action: 'AUTH_LOGIN_FAILED',
+          entityType: 'USER',
+          entityId: user.id,
+          afterData: { reason: 'locked', lockedUntil: user.lockedUntil },
+          result: 'FAILED',
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        });
+      } catch (_e) { void _e; }
       throw new ForbiddenException(LOCKED_MSG);
     }
 
@@ -101,21 +107,23 @@ export class LoginUseCase {
     if (!passwordValid) {
       const { locked } = user.recordFailedAttempt(now, config.loginMaxFailedAttempts, config.loginLockDurationMinutes);
       await this.userRepo.save(user);
-      await this.audit.log({
-        actorUserId: user.id,
-        action: 'AUTH_LOGIN_FAILED',
-        entityType: 'USER',
-        entityId: user.id,
-        afterData: {
-          reason: 'invalid_password',
-          failedLoginCount: user.failedLoginCount,
-          locked,
-          lockedUntil: user.lockedUntil ?? null,
-        },
-        result: 'FAILED',
-        ipAddress: input.ipAddress ?? null,
-        userAgent: input.userAgent ?? null,
-      });
+      try {
+        await this.audit.log({
+          actorUserId: user.id,
+          action: 'AUTH_LOGIN_FAILED',
+          entityType: 'USER',
+          entityId: user.id,
+          afterData: {
+            reason: 'invalid_password',
+            failedLoginCount: user.failedLoginCount,
+            locked,
+            lockedUntil: user.lockedUntil ?? null,
+          },
+          result: 'FAILED',
+          ipAddress: input.ipAddress ?? null,
+          userAgent: input.userAgent ?? null,
+        });
+      } catch (_e) { void _e; }
       // If just got locked, return locked message per alternate flow
       if (locked) {
         throw new ForbiddenException(LOCKED_MSG);
@@ -138,16 +146,19 @@ export class LoginUseCase {
       projectIds,
     });
 
-    await this.audit.log({
-      actorUserId: user.id,
-      action: 'AUTH_LOGIN_SUCCESS',
-      entityType: 'USER',
-      entityId: user.id,
-      afterData: { email: user.email, roles: roleCodes },
-      result: 'SUCCESS',
-      ipAddress: input.ipAddress ?? null,
-      userAgent: input.userAgent ?? null,
-    });
+    try {
+      await this.audit.log({
+        actorUserId: user.id,
+        action: 'AUTH_LOGIN_SUCCESS',
+        entityType: 'USER',
+        entityId: user.id,
+        afterData: { email: user.email, roles: roleCodes },
+        result: 'SUCCESS',
+        ipAddress: input.ipAddress ?? null,
+        userAgent: input.userAgent ?? null,
+      });
+    } catch (_e) { void _e; }
+
 
     return {
       accessToken: token,
