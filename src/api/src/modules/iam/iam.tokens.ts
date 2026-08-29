@@ -1,5 +1,8 @@
 export { USER_REPOSITORY } from './domain/repository/user-repository.port';
 export { ROLE_REPOSITORY } from './domain/repository/role-repository.port';
+export { PROJECT_REPOSITORY } from './domain/repository/project-repository.port';
+export { PROJECT_MEMBERSHIP_REPOSITORY } from './domain/repository/project-membership-repository.port';
+export { AUDIT_LOG_REPOSITORY } from './domain/repository/audit-log-repository.port';
 export { HASHER_PORT } from './application/port/hasher.port';
 export { TOKEN_PORT } from './application/port/token.port';
 export { AUDIT_PORT } from './application/port/audit.port';
