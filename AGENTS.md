@@ -21,3 +21,12 @@ Use the default canonical triage labels. See `docs/agents/triage-labels.md`.
 ### Domain docs
 
 This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Canonical BuildFlow foundation
+
+- For every product, design, code, schema, test or delivery task, read `docs/foundation/README.md` immediately after `WORK-ROUTING.md`.
+- `docs/foundation/` and root `CONTEXT.md` are the current product/design authority.
+- Root `BRD.md`, `SRS.md`, `DBD.md` and `ARCHITECTURE.md` are entry points only.
+- Files marked legacy or unreconciled must not be used as business or architecture truth.
+- Never infer answers for entries in `docs/foundation/OPEN-DECISIONS.md`.
+- Before implementing a module, complete the just-in-time module design and satisfy the documented Definition of Ready.
