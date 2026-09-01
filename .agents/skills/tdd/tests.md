@@ -1,7 +1,5 @@
 # Good and Bad Tests
 
-> For repository-facing work, consult the shared [`Work Routing`](../../WORK-ROUTING.md) reference before using this document.
-
 ## Good Tests
 
 **Integration-style**: Test through real interfaces, not mocks of internal parts.

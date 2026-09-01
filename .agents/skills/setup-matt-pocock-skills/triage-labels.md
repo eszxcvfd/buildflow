@@ -1,7 +1,5 @@
 # Triage Labels
 
-> Setup seed: consume this configuration after checking the target repository's Work Routing documents; it does not define a competing project-routing rule.
-
 The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |

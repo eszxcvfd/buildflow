@@ -1,7 +1,5 @@
 # When to Mock
 
-> For repository-facing work, consult the shared [`Work Routing`](../../WORK-ROUTING.md) reference before using this document.
-
 Mock at **system boundaries** only:
 
 - External APIs (payment, email, etc.)
