@@ -12,15 +12,15 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues and are managed with `gh`. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues and are managed with `gh`.
 
 ### Triage labels
 
-Use the default canonical triage labels. See `docs/agents/triage-labels.md`.
+Use the repository's canonical GitHub triage labels.
 
 ### Domain docs
 
-This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+This is a single-context repository using root `CONTEXT.md`. Create `docs/adr/` lazily only for an accepted decision that genuinely requires an ADR.
 
 ### Canonical BuildFlow foundation
 

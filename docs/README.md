@@ -10,6 +10,4 @@ Start at [foundation/README.md](foundation/README.md).
 - Governance: [foundation/OPEN-DECISIONS.md](foundation/OPEN-DECISIONS.md), [foundation/TRACEABILITY.md](foundation/TRACEABILITY.md), [foundation/CHANGE-CONTROL.md](foundation/CHANGE-CONTROL.md)
 - Delivery: [foundation/DELIVERY-ROADMAP.md](foundation/DELIVERY-ROADMAP.md), [foundation/GIT-WORKFLOW.md](foundation/GIT-WORKFLOW.md), [foundation/TEST-STRATEGY.md](foundation/TEST-STRATEGY.md)
 
-## Legacy documents
-
-Existing files under `docs/architecture/`, `docs/process/` and `docs/issues/` came from the previous scaffold. Do not use them as current product or architecture authority until each file is explicitly reconciled against the foundation and marked Approved.
+All unreconciled scaffold documentation has been removed. New module, architecture, process and ADR documents are created just in time from the foundation templates and approved decisions.
