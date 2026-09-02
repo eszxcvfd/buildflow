@@ -14,6 +14,12 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
+    "test:integration": {
+      "cache": false,
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL"],
+      "outputs": []
+    },
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]

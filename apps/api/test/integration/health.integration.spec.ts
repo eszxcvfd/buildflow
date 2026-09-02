@@ -38,10 +38,12 @@ describe('NestJS → Prisma → PostgreSQL (integration)', () => {
     await moduleRef?.close();
   });
 
-  itIfPg('GET /api/v1/health → { status: "ok", database: "up" }', async () => {
+  itIfPg('GET /api/v1/health returns status:ok and database:up', async () => {
     if (!app) return;
     const res = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
-    expect(res.body).toEqual({ status: 'ok', database: 'up' });
+    expect(res.body.status).toBe('ok');
+    expect(res.body.database).toBe('up');
+    expect(typeof res.body.uptime).toBe('number');
   });
 
   itIfPg('Prisma SELECT 1 returns one row', async () => {
