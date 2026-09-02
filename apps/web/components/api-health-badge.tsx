@@ -2,7 +2,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+if (!configuredApiUrl) {
+  throw new Error(
+    'NEXT_PUBLIC_API_URL is required. Copy apps/web/.env.example to apps/web/.env.local.',
+  );
+}
+
+const apiUrl = configuredApiUrl.replace(/\/$/, '');
 
 async function fetchHealth(): Promise<unknown> {
   const res = await fetch(`${apiUrl}/health`, { cache: 'no-store' });

@@ -30,3 +30,9 @@ This is a single-context repository using root `CONTEXT.md`. Create `docs/archit
 - Files marked legacy or unreconciled must not be used as business or architecture truth.
 - Never infer answers for entries in `docs/foundation/OPEN-DECISIONS.md`.
 - Before implementing a module, complete the just-in-time module design and satisfy the documented Definition of Ready.
+
+### Environment contract
+
+- Keep runtime values in the owning workspace's ignored `.env` file and track a safe `.env.example` beside it.
+- Add, rename, or remove an environment variable in code, its validator, `.env.example`, relevant documentation, and CI/deployment configuration in the same change.
+- Keep examples free of real credentials. An app reads only its own environment file; shared libraries do not read application environment variables.

@@ -15,13 +15,18 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Module } from '@nestjs/common';
 import { HealthController } from '../src/health/health.controller';
 import { AppController } from '../src/app.controller';
+import { PrismaService } from '../src/database/prisma.service';
+import { API_GLOBAL_PREFIX } from '../src/config/api.constants';
 
-@Module({ controllers: [AppController, HealthController] })
+@Module({
+  controllers: [AppController, HealthController],
+  providers: [{ provide: PrismaService, useValue: {} }],
+})
 class OpenapiOnlyModule {}
 
 async function main(): Promise<void> {
   const app = await NestFactory.create(OpenapiOnlyModule, { logger: false });
-  const prefix = (process.env.API_GLOBAL_PREFIX ?? '/api/v1').replace(/^\//, '');
+  const prefix = API_GLOBAL_PREFIX.replace(/^\//, '');
   app.setGlobalPrefix(prefix);
 
   const config = new DocumentBuilder()

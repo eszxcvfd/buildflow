@@ -34,7 +34,15 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://buildflow:buildflow@localhost:5432/buildflow
-      API_GLOBAL_PREFIX: /api/v1
+      HOST: 0.0.0.0
+      PORT: 3000
+      CORS_ORIGINS: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
+      EXPO_PUBLIC_API_URL: http://localhost:3000/api/v1
+      MINIO_ENDPOINT: ""
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ""
+      MINIO_SECRET_KEY: ""
       NODE_ENV: test
 
     steps:

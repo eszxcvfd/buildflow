@@ -1,23 +1,879 @@
-// BuildFlow — Prisma schema baseline.
-//
-// This schema is intentionally empty of business entities. It exists only
-// to prove the Prisma → PostgreSQL 18 toolchain end to end. Business
-// tables will be added module by module through approved Prisma migrations.
-//
-// In Prisma 7 the datasource connection URL is provided by
-// `prisma.config.ts` (Migrate) and the `PrismaClient` adapter at runtime
-// (application). The schema here only declares the database provider and
-// generator.
-//
-// See:
-//   - docs/architecture/adr/ADR-007-postgresql-database.md
-//   - docs/architecture/adr/ADR-008-prisma-migrations.md
-
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model assignments {
+  id                                           String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                String                     @db.Uuid
+  assignee_type                                String                     @db.VarChar(10)
+  worker_id                                    String?                    @db.Uuid
+  crew_id                                      String?                    @db.Uuid
+  responsible_user_id                          String                     @db.Uuid
+  source                                       String                     @db.VarChar(25)
+  status                                       String                     @default("ACTIVE") @db.VarChar(25)
+  requires_acceptance                          Boolean                    @default(false)
+  assigned_by                                  String?                    @db.Uuid
+  assigned_at                                  DateTime                   @default(now()) @db.Timestamptz(6)
+  responded_by                                 String?                    @db.Uuid
+  responded_at                                 DateTime?                  @db.Timestamptz(6)
+  response_reason                              String?                    @db.VarChar(500)
+  ended_at                                     DateTime?                  @db.Timestamptz(6)
+  end_reason                                   String?                    @db.VarChar(500)
+  created_at                                   DateTime                   @default(now()) @db.Timestamptz(6)
+  users_assignments_assigned_byTousers         users?                     @relation("assignments_assigned_byTousers", fields: [assigned_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  crews                                        crews?                     @relation(fields: [crew_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_assignments_responded_byTousers        users?                     @relation("assignments_responded_byTousers", fields: [responded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_assignments_responsible_user_idTousers users                      @relation("assignments_responsible_user_idTousers", fields: [responsible_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                  work_orders                @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_assignments_worker_idTousers           users?                     @relation("assignments_worker_idTousers", fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_state_history                     work_order_state_history[]
+
+  @@unique([work_order_id], map: "ux_assignments_current", where: raw("((status)::text = 'ACTIVE'::text)"))
+  @@index([crew_id, status], map: "ix_assignments_crew_status")
+  @@index([responsible_user_id, status], map: "ix_assignments_responsible")
+  @@index([worker_id, status], map: "ix_assignments_worker_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model attachments {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id      String       @db.Uuid
+  work_order_id   String?      @db.Uuid
+  owner_type      String       @db.VarChar(40)
+  owner_id        String       @db.Uuid
+  attachment_type String       @db.VarChar(30)
+  uploaded_by     String       @db.Uuid
+  file_name       String       @db.VarChar(255)
+  storage_key     String       @unique(map: "ux_attachments_storage_key") @db.VarChar(500)
+  mime_type       String       @db.VarChar(100)
+  size_bytes      BigInt
+  caption         String?      @db.VarChar(500)
+  created_at      DateTime     @default(now()) @db.Timestamptz(6)
+  projects        projects     @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users           users        @relation(fields: [uploaded_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders     work_orders? @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([project_id, work_order_id], map: "ix_attachments_context")
+  @@index([owner_type, owner_id], map: "ix_attachments_owner")
+  @@index([uploaded_by, created_at], map: "ix_attachments_uploaded")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model audit_logs {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_user_id  String?  @db.Uuid
+  action         String   @db.VarChar(80)
+  entity_type    String   @db.VarChar(50)
+  entity_id      String?  @db.Uuid
+  before_data    Json?
+  after_data     Json?
+  reason         String?  @db.VarChar(1000)
+  result         String   @default("SUCCESS") @db.VarChar(15)
+  ip_address     String?  @db.Inet
+  user_agent     String?  @db.VarChar(500)
+  correlation_id String?  @db.Uuid
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  users          users?   @relation(fields: [actor_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([action, created_at], map: "ix_audit_action")
+  @@index([actor_user_id, created_at], map: "ix_audit_actor")
+  @@index([correlation_id], map: "ix_audit_correlation")
+  @@index([entity_type, entity_id, created_at], map: "ix_audit_entity")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model checklist_instance_items {
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  checklist_instance_id    String                    @db.Uuid
+  source_template_item_id  String?                   @db.Uuid
+  sequence_no              Int                       @db.SmallInt
+  title_snapshot           String                    @db.VarChar(250)
+  answer_type_snapshot     String                    @db.VarChar(20)
+  is_required_snapshot     Boolean
+  is_blocking_snapshot     Boolean
+  requires_photo_snapshot  Boolean
+  answer_text              String?
+  answer_number            Decimal?                  @db.Decimal(12, 3)
+  answer_boolean           Boolean?
+  result                   String?                   @db.VarChar(15)
+  note                     String?                   @db.VarChar(1000)
+  answered_by              String?                   @db.Uuid
+  answered_at              DateTime?                 @db.Timestamptz(6)
+  updated_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  users                    users?                    @relation(fields: [answered_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checklist_instances      checklist_instances       @relation(fields: [checklist_instance_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checklist_template_items checklist_template_items? @relation(fields: [source_template_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  corrective_actions       corrective_actions[]
+
+  @@unique([checklist_instance_id, sequence_no], map: "ux_checklist_instance_item_seq")
+  @@index([checklist_instance_id, result], map: "ix_checklist_instance_item_result")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model checklist_instances {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id            String                     @db.Uuid
+  template_id              String                     @db.Uuid
+  checkpoint_id            String?                    @db.Uuid
+  purpose                  String                     @db.VarChar(20)
+  instance_no              Int                        @default(1) @db.SmallInt
+  status                   String                     @default("PENDING") @db.VarChar(20)
+  assigned_user_id         String?                    @db.Uuid
+  started_at               DateTime?                  @db.Timestamptz(6)
+  completed_at             DateTime?                  @db.Timestamptz(6)
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  checklist_instance_items checklist_instance_items[]
+  users                    users?                     @relation(fields: [assigned_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_checkpoints   inspection_checkpoints?    @relation(fields: [checkpoint_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checklist_templates      checklist_templates        @relation(fields: [template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders              work_orders                @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspections              inspections[]
+
+  @@index([checkpoint_id], map: "ix_checklist_instances_checkpoint")
+  @@index([work_order_id, purpose, status], map: "ix_checklist_instances_work")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model checklist_template_items {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  template_id              String                     @db.Uuid
+  sequence_no              Int                        @db.SmallInt
+  title                    String                     @db.VarChar(250)
+  description              String?                    @db.VarChar(500)
+  answer_type              String                     @db.VarChar(20)
+  is_required              Boolean                    @default(true)
+  is_blocking              Boolean                    @default(false)
+  requires_photo           Boolean                    @default(false)
+  min_value                Decimal?                   @db.Decimal(12, 3)
+  max_value                Decimal?                   @db.Decimal(12, 3)
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  checklist_instance_items checklist_instance_items[]
+  checklist_templates      checklist_templates        @relation(fields: [template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([template_id, sequence_no], map: "ux_checklist_item_sequence")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model checklist_templates {
+  id                              String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                            String                            @db.VarChar(50)
+  name                            String                            @db.VarChar(150)
+  work_type_id                    String?                           @db.Uuid
+  purpose                         String                            @db.VarChar(20)
+  version                         Int                               @default(1)
+  status                          String                            @default("DRAFT") @db.VarChar(15)
+  description                     String?                           @db.VarChar(500)
+  created_by                      String                            @db.Uuid
+  published_at                    DateTime?                         @db.Timestamptz(6)
+  created_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  checklist_instances             checklist_instances[]
+  checklist_template_items        checklist_template_items[]
+  users                           users                             @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_types                      work_types?                       @relation(fields: [work_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_checkpoint_templates inspection_checkpoint_templates[]
+  inspection_checkpoints          inspection_checkpoints[]
+
+  @@unique([code, version], map: "ux_checklist_template_version")
+  @@index([work_type_id, purpose, status], map: "ix_checklist_template_scope")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model contractors {
+  id                                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                   String   @unique(map: "ux_contractors_code") @db.VarChar(50)
+  name                                   String   @db.VarChar(200)
+  contact_name                           String?  @db.VarChar(150)
+  phone                                  String?  @db.VarChar(20)
+  email                                  String?  @db.VarChar(255)
+  status                                 String   @default("ACTIVE") @db.VarChar(20)
+  note                                   String?  @db.VarChar(1000)
+  created_by                             String   @db.Uuid
+  created_at                             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                             DateTime @default(now()) @db.Timestamptz(6)
+  users_contractors_created_byTousers    users    @relation("contractors_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  crews                                  crews[]
+  users_users_contractor_idTocontractors users[]  @relation("users_contractor_idTocontractors")
+
+  @@index([status, name], map: "ix_contractors_status_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model corrective_actions {
+  id                                               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  inspection_id                                    String                    @db.Uuid
+  checklist_instance_item_id                       String?                   @db.Uuid
+  work_order_id                                    String                    @db.Uuid
+  assignee_type                                    String                    @db.VarChar(10)
+  assigned_user_id                                 String?                   @db.Uuid
+  assigned_crew_id                                 String?                   @db.Uuid
+  title                                            String                    @db.VarChar(250)
+  description                                      String
+  severity                                         String                    @default("MEDIUM") @db.VarChar(10)
+  is_mandatory                                     Boolean                   @default(true)
+  due_at                                           DateTime?                 @db.Timestamptz(6)
+  status                                           String                    @default("OPEN") @db.VarChar(20)
+  submitted_at                                     DateTime?                 @db.Timestamptz(6)
+  verified_at                                      DateTime?                 @db.Timestamptz(6)
+  verified_by                                      String?                   @db.Uuid
+  resolution_note                                  String?
+  created_at                                       DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at                                       DateTime                  @default(now()) @db.Timestamptz(6)
+  crews                                            crews?                    @relation(fields: [assigned_crew_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_corrective_actions_assigned_user_idTousers users?                    @relation("corrective_actions_assigned_user_idTousers", fields: [assigned_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  checklist_instance_items                         checklist_instance_items? @relation(fields: [checklist_instance_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspections                                      inspections               @relation(fields: [inspection_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_corrective_actions_verified_byTousers      users?                    @relation("corrective_actions_verified_byTousers", fields: [verified_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                      work_orders               @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([assigned_crew_id, status, due_at], map: "ix_corrective_crew_status")
+  @@index([inspection_id], map: "ix_corrective_inspection")
+  @@index([assigned_user_id, status, due_at], map: "ix_corrective_user_status")
+  @@index([work_order_id, status], map: "ix_corrective_work_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model crew_members {
+  id                                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  crew_id                            String    @db.Uuid
+  user_id                            String    @db.Uuid
+  member_role                        String    @default("MEMBER") @db.VarChar(20)
+  effective_from                     DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  effective_to                       DateTime? @db.Date
+  is_active                          Boolean   @default(true)
+  added_by                           String    @db.Uuid
+  created_at                         DateTime  @default(now()) @db.Timestamptz(6)
+  users_crew_members_added_byTousers users     @relation("crew_members_added_byTousers", fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  crews                              crews     @relation(fields: [crew_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_crew_members_user_idTousers  users     @relation("crew_members_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([crew_id], map: "ux_crew_one_active_lead", where: raw("(is_active AND ((member_role)::text = 'LEAD'::text))"))
+  @@unique([crew_id, user_id], map: "ux_crew_member_active", where: raw("is_active"))
+  @@index([user_id, is_active], map: "ix_crew_members_user_active")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model crews {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String                @unique(map: "ux_crews_code") @db.VarChar(50)
+  name                String                @db.VarChar(120)
+  contractor_id       String?               @db.Uuid
+  description         String?               @db.VarChar(500)
+  status              String                @default("ACTIVE") @db.VarChar(20)
+  created_by          String                @db.Uuid
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  assignments         assignments[]
+  corrective_actions  corrective_actions[]
+  crew_members        crew_members[]
+  contractors         contractors?          @relation(fields: [contractor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users               users                 @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resource_trades     resource_trades[]
+  work_order_blockers work_order_blockers[]
+
+  @@index([contractor_id], map: "ix_crews_contractor")
+  @@index([status, name], map: "ix_crews_status_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspection_checkpoint_templates {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_type_id           String                   @db.Uuid
+  code                   String                   @db.VarChar(50)
+  name                   String                   @db.VarChar(150)
+  checkpoint_type        String                   @db.VarChar(20)
+  sequence_no            Int                      @db.SmallInt
+  stage_label            String?                  @db.VarChar(150)
+  is_blocking            Boolean                  @default(false)
+  checklist_template_id  String?                  @db.Uuid
+  required_role_id       String?                  @db.Uuid
+  is_active              Boolean                  @default(true)
+  created_by             String                   @db.Uuid
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  checklist_templates    checklist_templates?     @relation(fields: [checklist_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                  users                    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roles                  roles?                   @relation(fields: [required_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_types             work_types               @relation(fields: [work_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_checkpoints inspection_checkpoints[]
+
+  @@unique([work_type_id, code], map: "ux_checkpoint_tpl_code")
+  @@index([work_type_id, is_active, sequence_no], map: "ix_checkpoint_tpl_order")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspection_checkpoints {
+  id                                               String                           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                    String                           @db.Uuid
+  source_template_id                               String?                          @db.Uuid
+  checkpoint_type                                  String                           @db.VarChar(20)
+  sequence_no                                      Int                              @db.SmallInt
+  stage_label                                      String?                          @db.VarChar(150)
+  is_blocking                                      Boolean                          @default(false)
+  checklist_template_id                            String?                          @db.Uuid
+  required_role_id                                 String?                          @db.Uuid
+  status                                           String                           @default("PENDING") @db.VarChar(25)
+  requested_by                                     String?                          @db.Uuid
+  requested_at                                     DateTime?                        @db.Timestamptz(6)
+  released_by                                      String?                          @db.Uuid
+  released_at                                      DateTime?                        @db.Timestamptz(6)
+  witness_notified_at                              DateTime?                        @db.Timestamptz(6)
+  witness_attendance                               String?                          @db.VarChar(20)
+  note                                             String?                          @db.VarChar(1000)
+  created_at                                       DateTime                         @default(now()) @db.Timestamptz(6)
+  updated_at                                       DateTime                         @default(now()) @db.Timestamptz(6)
+  checklist_instances                              checklist_instances[]
+  checklist_templates                              checklist_templates?             @relation(fields: [checklist_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_inspection_checkpoints_released_byTousers  users?                           @relation("inspection_checkpoints_released_byTousers", fields: [released_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_inspection_checkpoints_requested_byTousers users?                           @relation("inspection_checkpoints_requested_byTousers", fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roles                                            roles?                           @relation(fields: [required_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_checkpoint_templates                  inspection_checkpoint_templates? @relation(fields: [source_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                      work_orders                      @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspections                                      inspections[]
+  readiness_check_items                            readiness_check_items[]
+
+  @@unique([work_order_id, sequence_no], map: "ux_inspection_checkpoints_work_sequence")
+  @@index([required_role_id, status], map: "ix_checkpoints_required_role")
+  @@index([checkpoint_type, status], map: "ix_checkpoints_type_status")
+  @@index([work_order_id, status, sequence_no], map: "ix_checkpoints_work_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model inspections {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  checkpoint_id          String                 @db.Uuid
+  work_order_id          String                 @db.Uuid
+  checklist_instance_id  String?                @db.Uuid
+  inspector_id           String                 @db.Uuid
+  round_number           Int                    @default(1) @db.SmallInt
+  status                 String                 @default("PENDING") @db.VarChar(25)
+  summary                String?
+  started_at             DateTime?              @db.Timestamptz(6)
+  completed_at           DateTime?              @db.Timestamptz(6)
+  created_at             DateTime               @default(now()) @db.Timestamptz(6)
+  corrective_actions     corrective_actions[]
+  checklist_instances    checklist_instances?   @relation(fields: [checklist_instance_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  inspection_checkpoints inspection_checkpoints @relation(fields: [checkpoint_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                  users                  @relation(fields: [inspector_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders            work_orders            @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([checkpoint_id, round_number], map: "ux_inspections_checkpoint_round")
+  @@index([inspector_id, status], map: "ix_inspections_inspector_status")
+  @@index([work_order_id, status], map: "ix_inspections_work_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model material_supplement_requests {
+  id                                                        String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  request_code                                              String                @unique(map: "ux_material_supplement_code") @db.VarChar(50)
+  work_order_id                                             String                @db.Uuid
+  work_order_material_id                                    String?               @db.Uuid
+  material_id                                               String                @db.Uuid
+  requested_quantity                                        Decimal               @db.Decimal(12, 3)
+  reason                                                    String                @db.VarChar(1000)
+  is_blocking                                               Boolean               @default(false)
+  blocker_id                                                String?               @db.Uuid
+  status                                                    String                @default("REQUESTED") @db.VarChar(20)
+  requested_by                                              String                @db.Uuid
+  requested_at                                              DateTime              @default(now()) @db.Timestamptz(6)
+  acknowledged_by                                           String?               @db.Uuid
+  acknowledged_at                                           DateTime?             @db.Timestamptz(6)
+  fulfilled_by                                              String?               @db.Uuid
+  fulfilled_at                                              DateTime?             @db.Timestamptz(6)
+  cancelled_by                                              String?               @db.Uuid
+  cancelled_at                                              DateTime?             @db.Timestamptz(6)
+  cancel_reason                                             String?               @db.VarChar(500)
+  updated_at                                                DateTime              @default(now()) @db.Timestamptz(6)
+  users_material_supplement_requests_acknowledged_byTousers users?                @relation("material_supplement_requests_acknowledged_byTousers", fields: [acknowledged_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_blockers                                       work_order_blockers?  @relation(fields: [blocker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_material_supplement_requests_cancelled_byTousers    users?                @relation("material_supplement_requests_cancelled_byTousers", fields: [cancelled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_material_supplement_requests_fulfilled_byTousers    users?                @relation("material_supplement_requests_fulfilled_byTousers", fields: [fulfilled_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  materials                                                 materials             @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_material_supplement_requests_requested_byTousers    users                 @relation("material_supplement_requests_requested_byTousers", fields: [requested_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                               work_orders           @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_materials                                      work_order_materials? @relation(fields: [work_order_material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([material_id, status], map: "ix_material_supplement_material")
+  @@index([work_order_id, status], map: "ix_material_supplement_work_status")
+}
+
+model materials {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                         String                         @unique(map: "ux_materials_code") @db.VarChar(50)
+  name                         String                         @db.VarChar(200)
+  category                     String?                        @db.VarChar(100)
+  unit                         String                         @db.VarChar(30)
+  description                  String?                        @db.VarChar(500)
+  is_active                    Boolean                        @default(true)
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  material_supplement_requests material_supplement_requests[]
+  work_order_materials         work_order_materials[]
+
+  @@index([is_active, category, name], map: "ix_materials_active_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model notifications {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipient_user_id String    @db.Uuid
+  notification_type String    @db.VarChar(50)
+  title             String    @db.VarChar(200)
+  content           String    @db.VarChar(1000)
+  entity_type       String?   @db.VarChar(40)
+  entity_id         String?   @db.Uuid
+  is_read           Boolean   @default(false)
+  read_at           DateTime? @db.Timestamptz(6)
+  dedup_key         String?   @unique(map: "ux_notifications_dedup", where: raw("(dedup_key IS NOT NULL)")) @db.VarChar(160)
+  expires_at        DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  users             users     @relation(fields: [recipient_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([recipient_user_id, is_read, created_at(sort: Desc)], map: "ix_notifications_unread")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model project_areas {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id    String        @db.Uuid
+  code          String        @db.VarChar(50)
+  name          String        @db.VarChar(150)
+  description   String?       @db.VarChar(500)
+  display_order Int           @default(0) @db.SmallInt
+  is_active     Boolean       @default(true)
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @default(now()) @db.Timestamptz(6)
+  projects      projects      @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders   work_orders[]
+
+  @@unique([project_id, code], map: "ux_project_areas_project_code")
+  @@index([project_id, is_active, display_order], map: "ix_project_areas_active")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model project_members {
+  id                                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id                            String    @db.Uuid
+  user_id                               String    @db.Uuid
+  project_role                          String    @db.VarChar(30)
+  joined_at                             DateTime  @default(now()) @db.Timestamptz(6)
+  left_at                               DateTime? @db.Timestamptz(6)
+  is_active                             Boolean   @default(true)
+  added_by                              String    @db.Uuid
+  users_project_members_added_byTousers users     @relation("project_members_added_byTousers", fields: [added_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projects                              projects  @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_project_members_user_idTousers  users     @relation("project_members_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([project_id, user_id], map: "ux_project_members_active", where: raw("is_active"))
+  @@index([user_id, is_active], map: "ix_project_members_user_active")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model projects {
+  id                               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                             String            @unique(map: "ux_projects_code") @db.VarChar(50)
+  name                             String            @db.VarChar(200)
+  description                      String?
+  address                          String            @db.VarChar(500)
+  timezone                         String            @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  planned_start_date               DateTime          @db.Date
+  planned_end_date                 DateTime          @db.Date
+  actual_end_date                  DateTime?         @db.Date
+  manager_id                       String            @db.Uuid
+  status                           String            @default("DRAFT") @db.VarChar(20)
+  created_by                       String            @db.Uuid
+  created_at                       DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime          @default(now()) @db.Timestamptz(6)
+  attachments                      attachments[]
+  project_areas                    project_areas[]
+  project_members                  project_members[]
+  users_projects_created_byTousers users             @relation("projects_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_projects_manager_idTousers users             @relation("projects_manager_idTousers", fields: [manager_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                      work_orders[]
+
+  @@index([manager_id], map: "ix_projects_manager")
+  @@index([status, planned_start_date, planned_end_date], map: "ix_projects_status_dates")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model readiness_check_items {
+  id                          String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  readiness_check_id          String                      @db.Uuid
+  category                    String                      @db.VarChar(30)
+  result                      String                      @db.VarChar(25)
+  is_blocking                 Boolean                     @default(false)
+  dependency_id               String?                     @db.Uuid
+  work_order_material_id      String?                     @db.Uuid
+  checkpoint_id               String?                     @db.Uuid
+  note                        String?                     @db.VarChar(1000)
+  created_at                  DateTime                    @default(now()) @db.Timestamptz(6)
+  inspection_checkpoints      inspection_checkpoints?     @relation(fields: [checkpoint_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_dependencies     work_order_dependencies?    @relation(fields: [dependency_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_readiness_checks work_order_readiness_checks @relation(fields: [readiness_check_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_materials        work_order_materials?       @relation(fields: [work_order_material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_order_blockers         work_order_blockers[]
+
+  @@index([readiness_check_id, is_blocking, result], map: "ix_readiness_items_blocking")
+  @@index([readiness_check_id, category], map: "ix_readiness_items_check")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model resource_trades {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resource_type  String    @db.VarChar(10)
+  user_id        String?   @db.Uuid
+  crew_id        String?   @db.Uuid
+  trade_id       String    @db.Uuid
+  skill_level    Int       @default(1) @db.SmallInt
+  effective_from DateTime  @default(dbgenerated("CURRENT_DATE")) @db.Date
+  effective_to   DateTime? @db.Date
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  crews          crews?    @relation(fields: [crew_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "resource_trades_crew_fk")
+  trades         trades    @relation(fields: [trade_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users          users?    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([crew_id, trade_id], map: "ux_resource_trades_crew_active", where: raw("(is_active AND (crew_id IS NOT NULL))"))
+  @@unique([user_id, trade_id], map: "ux_resource_trades_user_active", where: raw("(is_active AND (user_id IS NOT NULL))"))
+  @@index([trade_id, is_active], map: "ix_resource_trades_trade_active")
+}
+
+model roles {
+  id                              String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                            String                            @unique(map: "ux_roles_code") @db.VarChar(50)
+  name                            String                            @db.VarChar(100)
+  description                     String?                           @db.VarChar(500)
+  is_system                       Boolean                           @default(true)
+  is_active                       Boolean                           @default(true)
+  created_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  inspection_checkpoint_templates inspection_checkpoint_templates[]
+  inspection_checkpoints          inspection_checkpoints[]
+  user_roles                      user_roles[]
+
+  @@index([is_active], map: "ix_roles_active")
+}
+
+model trades {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique(map: "ux_trades_code") @db.VarChar(50)
+  name            String            @db.VarChar(120)
+  description     String?           @db.VarChar(500)
+  is_active       Boolean           @default(true)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  resource_trades resource_trades[]
+  work_orders     work_orders[]
+  work_types      work_types[]
+
+  @@index([is_active, name], map: "ix_trades_active_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_roles {
+  id                                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                             String    @db.Uuid
+  role_id                             String    @db.Uuid
+  assigned_by                         String?   @db.Uuid
+  assigned_at                         DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_by                          String?   @db.Uuid
+  revoked_at                          DateTime? @db.Timestamptz(6)
+  is_active                           Boolean   @default(true)
+  users_user_roles_assigned_byTousers users?    @relation("user_roles_assigned_byTousers", fields: [assigned_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_user_roles_revoked_byTousers  users?    @relation("user_roles_revoked_byTousers", fields: [revoked_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  roles                               roles     @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_user_roles_user_idTousers     users     @relation("user_roles_user_idTousers", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([user_id, role_id], map: "ux_user_roles_active", where: raw("is_active"))
+  @@index([role_id, is_active], map: "ix_user_roles_role_active")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  id                                                                               String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                                                            String                            @db.VarChar(255)
+  password_hash                                                                    String                            @db.VarChar(255)
+  full_name                                                                        String                            @db.VarChar(150)
+  phone                                                                            String?                           @unique(map: "ux_users_phone", where: raw("(phone IS NOT NULL)")) @db.VarChar(20)
+  avatar_url                                                                       String?                           @db.VarChar(500)
+  employee_code                                                                    String?                           @unique(map: "ux_users_employee_code", where: raw("(employee_code IS NOT NULL)")) @db.VarChar(50)
+  user_type                                                                        String                            @default("STAFF") @db.VarChar(20)
+  contractor_id                                                                    String?                           @db.Uuid
+  status                                                                           String                            @default("ACTIVE") @db.VarChar(20)
+  failed_login_count                                                               Int                               @default(0) @db.SmallInt
+  locked_until                                                                     DateTime?                         @db.Timestamptz(6)
+  last_login_at                                                                    DateTime?                         @db.Timestamptz(6)
+  created_by                                                                       String?                           @db.Uuid
+  created_at                                                                       DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at                                                                       DateTime                          @default(now()) @db.Timestamptz(6)
+  assignments_assignments_assigned_byTousers                                       assignments[]                     @relation("assignments_assigned_byTousers")
+  assignments_assignments_responded_byTousers                                      assignments[]                     @relation("assignments_responded_byTousers")
+  assignments_assignments_responsible_user_idTousers                               assignments[]                     @relation("assignments_responsible_user_idTousers")
+  assignments_assignments_worker_idTousers                                         assignments[]                     @relation("assignments_worker_idTousers")
+  attachments                                                                      attachments[]
+  audit_logs                                                                       audit_logs[]
+  checklist_instance_items                                                         checklist_instance_items[]
+  checklist_instances                                                              checklist_instances[]
+  checklist_templates                                                              checklist_templates[]
+  contractors_contractors_created_byTousers                                        contractors[]                     @relation("contractors_created_byTousers")
+  corrective_actions_corrective_actions_assigned_user_idTousers                    corrective_actions[]              @relation("corrective_actions_assigned_user_idTousers")
+  corrective_actions_corrective_actions_verified_byTousers                         corrective_actions[]              @relation("corrective_actions_verified_byTousers")
+  crew_members_crew_members_added_byTousers                                        crew_members[]                    @relation("crew_members_added_byTousers")
+  crew_members_crew_members_user_idTousers                                         crew_members[]                    @relation("crew_members_user_idTousers")
+  crews                                                                            crews[]
+  inspection_checkpoint_templates                                                  inspection_checkpoint_templates[]
+  inspection_checkpoints_inspection_checkpoints_released_byTousers                 inspection_checkpoints[]          @relation("inspection_checkpoints_released_byTousers")
+  inspection_checkpoints_inspection_checkpoints_requested_byTousers                inspection_checkpoints[]          @relation("inspection_checkpoints_requested_byTousers")
+  inspections                                                                      inspections[]
+  material_supplement_requests_material_supplement_requests_acknowledged_byTousers material_supplement_requests[]    @relation("material_supplement_requests_acknowledged_byTousers")
+  material_supplement_requests_material_supplement_requests_cancelled_byTousers    material_supplement_requests[]    @relation("material_supplement_requests_cancelled_byTousers")
+  material_supplement_requests_material_supplement_requests_fulfilled_byTousers    material_supplement_requests[]    @relation("material_supplement_requests_fulfilled_byTousers")
+  material_supplement_requests_material_supplement_requests_requested_byTousers    material_supplement_requests[]    @relation("material_supplement_requests_requested_byTousers")
+  notifications                                                                    notifications[]
+  project_members_project_members_added_byTousers                                  project_members[]                 @relation("project_members_added_byTousers")
+  project_members_project_members_user_idTousers                                   project_members[]                 @relation("project_members_user_idTousers")
+  projects_projects_created_byTousers                                              projects[]                        @relation("projects_created_byTousers")
+  projects_projects_manager_idTousers                                              projects[]                        @relation("projects_manager_idTousers")
+  resource_trades                                                                  resource_trades[]
+  user_roles_user_roles_assigned_byTousers                                         user_roles[]                      @relation("user_roles_assigned_byTousers")
+  user_roles_user_roles_revoked_byTousers                                          user_roles[]                      @relation("user_roles_revoked_byTousers")
+  user_roles_user_roles_user_idTousers                                             user_roles[]                      @relation("user_roles_user_idTousers")
+  contractors_users_contractor_idTocontractors                                     contractors?                      @relation("users_contractor_idTocontractors", fields: [contractor_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "users_contractor_fk")
+  users                                                                            users?                            @relation("usersTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_users                                                                      users[]                           @relation("usersTousers")
+  work_order_blockers_work_order_blockers_reported_byTousers                       work_order_blockers[]             @relation("work_order_blockers_reported_byTousers")
+  work_order_blockers_work_order_blockers_resolved_byTousers                       work_order_blockers[]             @relation("work_order_blockers_resolved_byTousers")
+  work_order_blockers_work_order_blockers_responsible_user_idTousers               work_order_blockers[]             @relation("work_order_blockers_responsible_user_idTousers")
+  work_order_dependencies                                                          work_order_dependencies[]
+  work_order_materials_work_order_materials_created_byTousers                      work_order_materials[]            @relation("work_order_materials_created_byTousers")
+  work_order_materials_work_order_materials_last_checked_byTousers                 work_order_materials[]            @relation("work_order_materials_last_checked_byTousers")
+  work_order_readiness_checks_work_order_readiness_checks_checked_byTousers        work_order_readiness_checks[]     @relation("work_order_readiness_checks_checked_byTousers")
+  work_order_readiness_checks_work_order_readiness_checks_overridden_byTousers     work_order_readiness_checks[]     @relation("work_order_readiness_checks_overridden_byTousers")
+  work_order_state_history                                                         work_order_state_history[]
+  work_order_updates                                                               work_order_updates[]
+  work_orders                                                                      work_orders[]
+
+  @@index([contractor_id], map: "ix_users_contractor")
+  @@index([status, user_type], map: "ix_users_status_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_blockers {
+  id                                                   String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                        String                         @db.Uuid
+  readiness_item_id                                    String?                        @db.Uuid
+  blocker_type                                         String                         @db.VarChar(30)
+  impact_level                                         String                         @default("MEDIUM") @db.VarChar(10)
+  is_blocking                                          Boolean                        @default(true)
+  description                                          String
+  reported_by                                          String                         @db.Uuid
+  responsible_party_type                               String                         @db.VarChar(15)
+  responsible_user_id                                  String?                        @db.Uuid
+  responsible_crew_id                                  String?                        @db.Uuid
+  responsible_note                                     String?                        @db.VarChar(250)
+  status                                               String                         @default("OPEN") @db.VarChar(20)
+  opened_at                                            DateTime                       @default(now()) @db.Timestamptz(6)
+  acknowledged_at                                      DateTime?                      @db.Timestamptz(6)
+  resolving_at                                         DateTime?                      @db.Timestamptz(6)
+  resolved_at                                          DateTime?                      @db.Timestamptz(6)
+  resolved_by                                          String?                        @db.Uuid
+  resolution_note                                      String?
+  created_at                                           DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                                           DateTime                       @default(now()) @db.Timestamptz(6)
+  material_supplement_requests                         material_supplement_requests[]
+  readiness_check_items                                readiness_check_items?         @relation(fields: [readiness_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_work_order_blockers_reported_byTousers         users                          @relation("work_order_blockers_reported_byTousers", fields: [reported_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_work_order_blockers_resolved_byTousers         users?                         @relation("work_order_blockers_resolved_byTousers", fields: [resolved_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  crews                                                crews?                         @relation(fields: [responsible_crew_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_work_order_blockers_responsible_user_idTousers users?                         @relation("work_order_blockers_responsible_user_idTousers", fields: [responsible_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                          work_orders                    @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([opened_at], map: "ix_blockers_opened")
+  @@index([responsible_user_id, status], map: "ix_blockers_responsible_user")
+  @@index([blocker_type, status], map: "ix_blockers_type_status")
+  @@index([work_order_id, status], map: "ix_blockers_work_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_dependencies {
+  id                                                                         String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                                              String                  @db.Uuid
+  predecessor_work_order_id                                                  String                  @db.Uuid
+  dependency_type                                                            String                  @default("FINISH_TO_START") @db.VarChar(20)
+  is_blocking                                                                Boolean                 @default(true)
+  created_by                                                                 String                  @db.Uuid
+  created_at                                                                 DateTime                @default(now()) @db.Timestamptz(6)
+  readiness_check_items                                                      readiness_check_items[]
+  users                                                                      users                   @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders_work_order_dependencies_predecessor_work_order_idTowork_orders work_orders             @relation("work_order_dependencies_predecessor_work_order_idTowork_orders", fields: [predecessor_work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders_work_order_dependencies_work_order_idTowork_orders             work_orders             @relation("work_order_dependencies_work_order_idTowork_orders", fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([work_order_id, predecessor_work_order_id], map: "ux_wo_dependencies_pair")
+  @@index([predecessor_work_order_id], map: "ix_wo_dependencies_predecessor")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_materials {
+  id                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                     String                         @db.Uuid
+  material_id                                       String                         @db.Uuid
+  planned_quantity                                  Decimal                        @db.Decimal(12, 3)
+  available_quantity                                Decimal?                       @db.Decimal(12, 3)
+  readiness_status                                  String                         @default("NOT_CHECKED") @db.VarChar(20)
+  last_checked_by                                   String?                        @db.Uuid
+  last_checked_at                                   DateTime?                      @db.Timestamptz(6)
+  note                                              String?                        @db.VarChar(500)
+  created_by                                        String                         @db.Uuid
+  created_at                                        DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                                        DateTime                       @default(now()) @db.Timestamptz(6)
+  material_supplement_requests                      material_supplement_requests[]
+  readiness_check_items                             readiness_check_items[]
+  users_work_order_materials_created_byTousers      users                          @relation("work_order_materials_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_work_order_materials_last_checked_byTousers users?                         @relation("work_order_materials_last_checked_byTousers", fields: [last_checked_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  materials                                         materials                      @relation(fields: [material_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                       work_orders                    @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([work_order_id, material_id], map: "ux_wo_materials_pair")
+  @@index([work_order_id, readiness_status], map: "ix_wo_materials_readiness")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_readiness_checks {
+  id                                                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id                                          String                  @db.Uuid
+  attempt_no                                             Int                     @default(1) @db.SmallInt
+  overall_status                                         String                  @db.VarChar(30)
+  checked_by                                             String                  @db.Uuid
+  checked_at                                             DateTime                @default(now()) @db.Timestamptz(6)
+  note                                                   String?                 @db.VarChar(1000)
+  overridden_by                                          String?                 @db.Uuid
+  override_reason                                        String?                 @db.VarChar(1000)
+  created_at                                             DateTime                @default(now()) @db.Timestamptz(6)
+  readiness_check_items                                  readiness_check_items[]
+  users_work_order_readiness_checks_checked_byTousers    users                   @relation("work_order_readiness_checks_checked_byTousers", fields: [checked_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_work_order_readiness_checks_overridden_byTousers users?                  @relation("work_order_readiness_checks_overridden_byTousers", fields: [overridden_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders                                            work_orders             @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([work_order_id, attempt_no], map: "ux_readiness_attempt")
+  @@index([work_order_id, overall_status, checked_at], map: "ix_readiness_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_state_history {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id  String       @db.Uuid
+  from_status    String?      @db.VarChar(20)
+  to_status      String       @db.VarChar(20)
+  changed_by     String?      @db.Uuid
+  assignment_id  String?      @db.Uuid
+  reason         String?      @db.VarChar(500)
+  changed_at     DateTime     @default(now()) @db.Timestamptz(6)
+  correlation_id String?      @db.Uuid
+  assignments    assignments? @relation(fields: [assignment_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users          users?       @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders    work_orders  @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([changed_by, changed_at], map: "ix_wo_history_actor")
+  @@index([work_order_id, changed_at], map: "ix_wo_history_time")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_order_updates {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  work_order_id     String      @db.Uuid
+  update_type       String      @db.VarChar(30)
+  progress_percent  Int?        @db.SmallInt
+  content           String?
+  occurred_at       DateTime    @default(now()) @db.Timestamptz(6)
+  created_by        String      @db.Uuid
+  client_request_id String?     @unique(map: "ux_wo_updates_client_request", where: raw("(client_request_id IS NOT NULL)")) @db.Uuid
+  created_at        DateTime    @default(now()) @db.Timestamptz(6)
+  users             users       @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_orders       work_orders @relation(fields: [work_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([work_order_id, occurred_at], map: "ix_wo_updates_time")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_orders {
+  id                                                                                     String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                                                                   String                         @unique(map: "ux_work_orders_code") @db.VarChar(50)
+  project_id                                                                             String                         @db.Uuid
+  area_id                                                                                String?                        @db.Uuid
+  work_type_id                                                                           String                         @db.Uuid
+  required_trade_id                                                                      String?                        @db.Uuid
+  title                                                                                  String                         @db.VarChar(200)
+  description                                                                            String?
+  instructions                                                                           String?
+  priority                                                                               String                         @default("NORMAL") @db.VarChar(10)
+  status                                                                                 String                         @default("DRAFT") @db.VarChar(20)
+  planned_start_at                                                                       DateTime?                      @db.Timestamptz(6)
+  planned_end_at                                                                         DateTime?                      @db.Timestamptz(6)
+  due_at                                                                                 DateTime?                      @db.Timestamptz(6)
+  actual_start_at                                                                        DateTime?                      @db.Timestamptz(6)
+  work_done_at                                                                           DateTime?                      @db.Timestamptz(6)
+  closed_at                                                                              DateTime?                      @db.Timestamptz(6)
+  progress_percent                                                                       Int                            @default(0) @db.SmallInt
+  job_board_open                                                                         Boolean                        @default(false)
+  job_board_open_from                                                                    DateTime?                      @db.Timestamptz(6)
+  job_board_open_until                                                                   DateTime?                      @db.Timestamptz(6)
+  planned_headcount                                                                      Int?                           @db.SmallInt
+  cancel_reason                                                                          String?                        @db.VarChar(500)
+  created_by                                                                             String                         @db.Uuid
+  version                                                                                Int                            @default(1)
+  created_at                                                                             DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                                                                             DateTime                       @default(now()) @db.Timestamptz(6)
+  assignments                                                                            assignments[]
+  attachments                                                                            attachments[]
+  checklist_instances                                                                    checklist_instances[]
+  corrective_actions                                                                     corrective_actions[]
+  inspection_checkpoints                                                                 inspection_checkpoints[]
+  inspections                                                                            inspections[]
+  material_supplement_requests                                                           material_supplement_requests[]
+  work_order_blockers                                                                    work_order_blockers[]
+  work_order_dependencies_work_order_dependencies_predecessor_work_order_idTowork_orders work_order_dependencies[]      @relation("work_order_dependencies_predecessor_work_order_idTowork_orders")
+  work_order_dependencies_work_order_dependencies_work_order_idTowork_orders             work_order_dependencies[]      @relation("work_order_dependencies_work_order_idTowork_orders")
+  work_order_materials                                                                   work_order_materials[]
+  work_order_readiness_checks                                                            work_order_readiness_checks[]
+  work_order_state_history                                                               work_order_state_history[]
+  work_order_updates                                                                     work_order_updates[]
+  project_areas                                                                          project_areas?                 @relation(fields: [area_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                                                                  users                          @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projects                                                                               projects                       @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  trades                                                                                 trades?                        @relation(fields: [required_trade_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  work_types                                                                             work_types                     @relation(fields: [work_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([job_board_open, status, job_board_open_from, job_board_open_until], map: "ix_work_orders_job_board")
+  @@index([project_id, status], map: "ix_work_orders_project_status")
+  @@index([planned_start_at, planned_end_at], map: "ix_work_orders_schedule")
+  @@index([work_type_id, status], map: "ix_work_orders_type_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model work_types {
+  id                              String                            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                            String                            @unique(map: "ux_work_types_code") @db.VarChar(50)
+  name                            String                            @db.VarChar(150)
+  description                     String?                           @db.VarChar(500)
+  required_trade_id               String?                           @db.Uuid
+  default_duration_minutes        Int?
+  default_priority                String                            @default("NORMAL") @db.VarChar(10)
+  is_active                       Boolean                           @default(true)
+  created_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime                          @default(now()) @db.Timestamptz(6)
+  checklist_templates             checklist_templates[]
+  inspection_checkpoint_templates inspection_checkpoint_templates[]
+  work_orders                     work_orders[]
+  trades                          trades?                           @relation(fields: [required_trade_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([required_trade_id, is_active], map: "ix_work_types_trade_active")
 }

@@ -22,6 +22,19 @@
     },
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "NODE_ENV",
+        "HOST",
+        "PORT",
+        "CORS_ORIGINS",
+        "DATABASE_URL",
+        "MINIO_ENDPOINT",
+        "MINIO_PORT",
+        "MINIO_ACCESS_KEY",
+        "MINIO_SECRET_KEY",
+        "NEXT_PUBLIC_API_URL",
+        "EXPO_PUBLIC_API_URL"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "generate": {

@@ -7,7 +7,7 @@ Reconciled with approved change record [CR-001](changes/CR-001-business-policy-d
 | Layer | Purpose | Tooling (ADR-012) |
 | --- | --- | --- |
 | Domain/application unit | State transitions, eligibility (schedule interval overlap check), dependency/readiness gate, blocker duration, Crew Lead authority and quality gate | Jest |
-| Database Integration | Database constraints (unique account/active assignment, partial indexes), transaction atomicity, idempotency, and audit/notification persistence | Supertest + Real PostgreSQL 18 container (Docker / Testcontainers) |
+| Database Integration | Database constraints (unique account/active assignment, partial indexes), transaction atomicity, idempotency, and audit/notification persistence | Supertest + real PostgreSQL 18.x; native or container locally, isolated container in CI |
 | Contract | Backend contracts consumed by Web and Mobile, OpenAPI specification, generated TypeScript client compilation | OpenAPI + TypeScript compiler |
 | Component/UI | Action availability, loading/error/empty states, keyboard/accessibility, Mobile Android 10+ layouts and retry feedback | Web: React Testing Library (Jest/Vitest); Mobile: React Native Testing Library (Jest) |
 | End-to-end | Complete Plan-to-Close acceptance workflow across Web and Mobile | Web: Playwright; Mobile: Maestro / Expo tooling (Android 10+) |

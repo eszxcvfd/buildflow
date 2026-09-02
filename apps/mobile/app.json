@@ -6,16 +6,22 @@
     "orientation": "portrait",
     "scheme": "buildflow",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "android": {
       "package": "com.buildflow.mobile",
-      "edgeToEdgeEnabled": true,
-      "minSdkVersion": 29,
       "permissions": []
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 29
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

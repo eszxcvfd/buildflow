@@ -26,4 +26,17 @@ Use [`../templates/MODULE-DESIGN-TEMPLATE.md`](../templates/MODULE-DESIGN-TEMPLA
 
 ## Scope
 
-This directory currently contains only the convention. Detailed module designs are **out of scope** until Phase 1 just-in-time analysis begins. Do not create designs for `Identity & Access`, `Workforce`, `Project Setup`, `Work Management`, `Field Execution`, `Quality Control`, or `Notification & Insight` until the repository foundation has passed its completion gate.
+The foundation completion gate has passed through CR-001 and accepted
+ADR-001..015. The following approved designs authorize the 34-table database
+baseline only; API, UI and application-service details remain just-in-time
+work.
+
+| Module | Design |
+| --- | --- |
+| Identity & Access | [identity-access/design.md](identity-access/design.md) |
+| Workforce | [workforce/design.md](workforce/design.md) |
+| Project Setup | [project-setup/design.md](project-setup/design.md) |
+| Work Management | [work-management/design.md](work-management/design.md) |
+| Field Execution | [field-execution/design.md](field-execution/design.md) |
+| Quality Control | [quality-control/design.md](quality-control/design.md) |
+| Notification & Insight | [notification-insight/design.md](notification-insight/design.md) |

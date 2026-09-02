@@ -1,11 +1,9 @@
 /**
  * Integration proof: NestJS → Prisma → real PostgreSQL 18.
  *
- * Requires a reachable PostgreSQL via DATABASE_URL. In CI this is provided by
- * a `postgres:18` service container (see .github/workflows/). When
- * DATABASE_URL is not set, the test is skipped entirely and AppModule is
- * never imported, so local contributors without a running database are not
- * blocked by Nest's environment validation.
+ * Requires a reachable PostgreSQL via DATABASE_URL. Jest loads apps/api/.env
+ * locally; CI provides the variable for its PostgreSQL service container. If
+ * DATABASE_URL is absent, the test is skipped and AppModule is never imported.
  *
  * Per ADR-012, database tests must hit a real PostgreSQL instance — never a
  * mock or in-memory substitute.

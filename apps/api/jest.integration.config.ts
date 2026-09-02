@@ -8,6 +8,7 @@ const config: Config = {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
   moduleFileExtensions: ['ts', 'js', 'json'],
+  setupFiles: ['dotenv/config'],
   testTimeout: 30_000,
 };
 

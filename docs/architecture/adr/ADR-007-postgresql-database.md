@@ -30,6 +30,11 @@ We adopt **PostgreSQL 18.x** as the single shared physical database for the Buil
    - `timestamptz` stored in UTC.
    - Partial unique indexes (e.g., ensuring exactly one `ACTIVE` assignment per Work Order).
    - Foreign key integrity, check constraints, and append-only audit tables.
+6. **Environment-independent Connection**: Application code connects through
+   `DATABASE_URL` and does not depend on how PostgreSQL is provisioned. Local
+   developers may use PostgreSQL 18.x installed directly on the host or the
+   optional Docker Compose service. CI and deployment topology remain governed
+   by ADR-012, ADR-013, and ADR-014.
 
 ## Alternatives considered
 
@@ -44,15 +49,21 @@ We adopt **PostgreSQL 18.x** as the single shared physical database for the Buil
 - Strong ACID guarantees for critical operations (one-winner self-accept, assignment creation, Hold Point releases, Quality Close gate).
 - High query performance and rich indexing (B-Tree, partial indexes, GIN for JSONB when needed).
 - Simple backup, restore, and single-instance Docker deployment.
+- Flexible local onboarding without changing application code or migrations.
 
 ### Negative / trade-offs
 
 - Team must maintain code-level discipline to preserve logical module boundaries despite sharing a physical database.
+- Native local installations place PostgreSQL version, service, and credential
+  management on the developer; containerized local installations require
+  Docker and must avoid host-port conflicts.
 
 ## Constraints
 
 - PostgreSQL 18.x is the required database engine.
 - Direct table mutation across module boundaries is forbidden.
+- Every environment must apply the repository's version-controlled Prisma
+  migrations, regardless of whether PostgreSQL is native or containerized.
 
 ## Related requirements / documents
 

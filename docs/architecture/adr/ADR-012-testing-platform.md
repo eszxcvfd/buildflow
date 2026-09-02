@@ -18,7 +18,10 @@ We establish a comprehensive, multi-layer automated testing platform with mandat
 #### 1. Backend (`apps/api`)
 - **Unit Testing**: **Jest** for isolated domain entity invariants, value object validation, and pure application business logic.
 - **API Integration Testing**: **Supertest** + **Jest** executing HTTP requests against NestJS modules.
-- **Database Integration Testing**: Executed against a **real PostgreSQL container** (via Docker / Testcontainers).
+- **Database Integration Testing**: Executed against a **real PostgreSQL 18.x instance**.
+  - CI uses a Docker service container or Testcontainers for repeatable isolation.
+  - Local developers may use either PostgreSQL installed directly on the host
+    or a container, selected through `DATABASE_URL`.
   - *Mandatory Rule*: Concurrency tests (20-way self-accept per `NFR-PERF-003`), database partial unique index enforcement, transaction atomicity, and schedule interval overlap checks **must be verified against real PostgreSQL**, never with in-memory or mocked repositories.
 
 #### 2. Web Frontend (`apps/web`)
@@ -48,7 +51,9 @@ We establish a comprehensive, multi-layer automated testing platform with mandat
 
 ### Negative / trade-offs
 
-- Integration tests require a running PostgreSQL instance in CI (provided via GitHub Actions service container).
+- Integration tests require a running PostgreSQL 18.x instance; CI provides an
+  isolated service container while each developer may choose native or
+  containerized PostgreSQL locally.
 
 ## Constraints
 

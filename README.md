@@ -45,21 +45,66 @@ packages/
 ├── eslint-config/  Shared ESLint presets
 └── tsconfig/     Shared TSConfig presets
 
-infra/            Local docker compose (PostgreSQL 18 + MinIO)
+infra/            Optional local Docker Compose (PostgreSQL 18 + MinIO)
 docs/             Foundation + architecture + ADRs
 ```
 
 ## Local workflow
 
-Requirements: **Node.js 24 LTS** (see `.node-version`), **pnpm 11+**, **Docker**.
+Shared requirements: **Node.js 24 LTS** (see `.node-version`), **pnpm 11+**,
+and a reachable **PostgreSQL 18.x** instance. PostgreSQL may be installed
+directly on the developer machine or run with Docker. Docker is required only
+when a developer chooses the containerized PostgreSQL/MinIO workflow.
+
+Install dependencies and create each runtime environment file:
 
 ```sh
 pnpm install
-docker compose -f infra/compose.yaml up -d    # PostgreSQL 18 + MinIO
-pnpm dev                                     # run all apps in parallel
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env.local
+cp apps/mobile/.env.example apps/mobile/.env.local
 ```
 
-Target experience: one install, one `docker compose up`, one `pnpm dev`.
+For Expo Go on a physical device, replace `EXPO_PUBLIC_API_URL` in
+`apps/mobile/.env.local` with this computer's LAN IPv4. Both devices must use
+the same network. Application `.env` files are local and ignored by Git; when
+the environment contract changes, update the adjacent `.env.example`.
+
+Set `DATABASE_URL` in `apps/api/.env` for the selected database:
+
+- **Native PostgreSQL:** start the local PostgreSQL 18.x service, create the
+  database/user, and use its host, port, database, and credentials.
+- **Docker PostgreSQL:** copy `infra/.env.example` to `infra/.env`, then run:
+
+  ```sh
+  docker compose --env-file infra/.env -f infra/compose.yaml up -d postgres
+  ```
+
+The default Docker settings match the example API connection string. Apply
+existing migrations and generate Prisma Client:
+
+```sh
+pnpm --filter @buildflow/api prisma:migrate:deploy
+pnpm --filter @buildflow/api prisma:generate
+```
+
+Run the applications in separate terminals:
+
+```sh
+pnpm --filter @buildflow/api start:dev
+pnpm --filter @buildflow/web dev
+pnpm --filter @buildflow/mobile dev
+```
+
+MinIO is independent of the PostgreSQL choice and can be started when
+attachment work needs it:
+
+```sh
+docker compose --env-file infra/.env -f infra/compose.yaml up -d minio
+```
+
+See [`infra/README.md`](infra/README.md) for port-conflict guidance and the
+complete container workflow.
 
 | Task | Command |
 | --- | --- |

@@ -6,15 +6,21 @@ Governed by approved change record [CR-001](changes/CR-001-business-policy-decis
 
 | Module | Tables |
 | --- | --- |
-| Identity & Access | `users`, `roles`, `user_roles`, `project_members`, `sessions` |
+| Identity & Access | `users`, `roles`, `user_roles` |
 | Workforce | `contractors`, `trades`, `resource_trades`, `crews`, `crew_members` |
-| Project Setup | `projects`, `project_areas`, `work_types`, `work_order_dependencies` |
+| Project Setup | `projects`, `project_areas`, `project_members`, `work_types`, `work_order_dependencies` |
 | Work Management | `work_orders`, `assignments`, `work_order_state_history` |
 | Field Execution | `work_order_updates`, `work_order_readiness_checks`, `readiness_check_items`, `work_order_blockers`, `materials`, `work_order_materials`, `material_supplement_requests` |
 | Quality Control | `checklist_templates`, `checklist_template_items`, `checklist_instances`, `checklist_instance_items`, `inspection_checkpoint_templates`, `inspection_checkpoints`, `inspections`, `corrective_actions` |
 | Notification & Insight | `attachments`, `notifications`, `audit_logs` |
 
-The physical database baseline comprises 34 business and support tables plus technical session/audit tables. Framework tables (such as refresh token sessions and migration history) are managed via Prisma 7.x. Redis is explicitly deferred from V1 (ADR-011); all session state and business data reside in PostgreSQL.
+The physical database baseline comprises exactly 34 tables: 26 business tables
+and 8 system-support tables. Technical tables such as refresh-token sessions
+and Prisma migration history are additional implementation tables and are not
+counted in the 34-table DBD baseline. `project_members` is produced by Project
+Setup and consumed by Identity & Access for project-scoped authorization.
+Redis is explicitly deferred from V1 (ADR-011); all session state and business
+data reside in PostgreSQL.
 
 ## Global conventions
 

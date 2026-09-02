@@ -8,7 +8,7 @@ This directory is the canonical documentation entry point for BuildFlow.
 - Channels: Web for administration, coordination, management and QC; Mobile for field workers, crew leads and QC.
 - Business baseline: BRD-CWM-QC-002 V2.0, 54 business requirements (44 Must, 10 Should).
 - Software baseline: SRS-CWM-QC-002 V2.1, 82 functional requirements (70 Must, 12 Should).
-- Data baseline: DBD-CWM-QC-002 V2.1, proposed 34-table physical schema (26 business tables, 8 support tables).
+- Data baseline: DBD-CWM-QC-002 V2.1, 34-table physical schema (26 business tables, 8 support tables) implemented through the reviewed Prisma baseline migration.
 - Business change records: [CR-001](changes/CR-001-business-policy-decisions.md) formally approved and reconciled business policy decisions `Q-01` through `Q-15`.
 - Technical baseline: [../architecture/adr/README.md](../architecture/adr/README.md) governs approved architecture and platform choices (`ADR-001` through `ADR-015`).
 - Status: Historical provenance drafts are normalized into this foundation; approved change records and ADRs are the authoritative baseline for all resolved decisions.

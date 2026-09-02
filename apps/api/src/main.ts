@@ -5,14 +5,19 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import type { AppConfig } from './config/configuration';
+import { API_GLOBAL_PREFIX } from './config/api.constants';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const logger = new Logger('Bootstrap');
 
   const config = app.get<ConfigService<AppConfig>>(ConfigService);
-  const prefix = config.get('apiPrefix', { infer: true }) ?? '/api/v1';
+  const prefix = API_GLOBAL_PREFIX;
   app.setGlobalPrefix(prefix.replace(/^\//, ''));
+  app.enableCors({
+    origin: config.getOrThrow('corsOrigins', { infer: true }),
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
@@ -30,9 +35,10 @@ async function bootstrap(): Promise<void> {
     SwaggerModule.setup(`${prefix.replace(/^\//, '')}/_docs`, app, document);
   }
 
-  const port = config.get('port', { infer: true }) ?? 3000;
-  await app.listen(port);
-  logger.log(`BuildFlow API listening on http://localhost:${port}${prefix}`);
+  const port = config.getOrThrow('port', { infer: true });
+  const host = config.getOrThrow('host', { infer: true });
+  await app.listen(port, host);
+  logger.log(`BuildFlow API listening on http://${host}:${port}${prefix}`);
 }
 
 bootstrap().catch((err: unknown) => {

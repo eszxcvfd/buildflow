@@ -5,20 +5,19 @@
  */
 import { z } from 'zod';
 
-const numString = (def: number) =>
-  z
-    .string()
-    .optional()
-    .transform((v) => (v === undefined || v === '' ? def : Number(v)))
-    .pipe(z.number().int().positive());
+const numString = z
+  .string()
+  .transform(Number)
+  .pipe(z.number().int().positive());
 
 export const configValidationSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: numString(3000),
-  API_GLOBAL_PREFIX: z.string().default('/api/v1'),
+  NODE_ENV: z.enum(['development', 'test', 'production']),
+  HOST: z.string().min(1),
+  PORT: numString,
+  CORS_ORIGINS: z.string().min(1),
   DATABASE_URL: z.string().url(),
   MINIO_ENDPOINT: z.string().optional().default(''),
-  MINIO_PORT: numString(9000),
+  MINIO_PORT: numString,
   MINIO_ACCESS_KEY: z.string().optional().default(''),
   MINIO_SECRET_KEY: z.string().optional().default(''),
 });
