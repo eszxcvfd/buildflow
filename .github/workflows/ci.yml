@@ -1,0 +1,108 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - codex/buildflow-foundation
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Foundation checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: buildflow
+          POSTGRES_PASSWORD: buildflow
+          POSTGRES_DB: buildflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U buildflow -d buildflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://buildflow:buildflow@localhost:5432/buildflow
+      API_GLOBAL_PREFIX: /api/v1
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: API integration (real PostgreSQL)
+        run: pnpm --filter @buildflow/api prisma:generate && pnpm --filter @buildflow/api test:integration
+
+      - name: API contract + client build
+        run: pnpm --filter @buildflow/api prisma:generate && pnpm --filter @buildflow/api openapi:export && pnpm --filter @buildflow/api-client generate && pnpm --filter @buildflow/api build
+
+      - name: API client generation consistency
+        run: |
+          set -euo pipefail
+          pnpm --filter @buildflow/api openapi:export
+          pnpm --filter @buildflow/api-client generate
+          if git status --porcelain | grep -E '^.. packages/api-client/src/generated/' ; then
+            echo "Detected drift in generated API client."
+            git status
+            git diff -- packages/api-client/src/generated/ || true
+            exit 1
+          fi
+
+      - name: Web build
+        run: pnpm --filter @buildflow/web build
+
+      - name: Mobile validate
+        run: pnpm --filter @buildflow/mobile typecheck
+
+  docker-compose-validate:
+    name: docker compose config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose file
+        run: |
+          docker compose -f infra/compose.yaml config > /dev/null
+        env:
+          POSTGRES_USER: buildflow
+          POSTGRES_PASSWORD: buildflow
+          POSTGRES_DB: buildflow
+          MINIO_ROOT_USER: buildflow
+          MINIO_ROOT_PASSWORD: buildflow
