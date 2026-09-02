@@ -1,6 +1,6 @@
 # Functional Requirements Catalog
 
-Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains available in [sources/SRS-v2.1.md](sources/SRS-v2.1.md).
+Canonical normalized index of SRS-CWM-QC-002 V2.1, formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md). Full historical wording remains available in [sources/SRS-v2.1.md](sources/SRS-v2.1.md).
 
 ## Coverage
 
@@ -53,17 +53,17 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Quản trị viên
 - Channel: Web
-- Requirement: Quản trị viên phải gán vai trò đã được phê duyệt; hệ thống phải kiểm tra quyền xem và thao tác ở phía Backend.
+- Requirement: Quản trị viên phải gán vai trò đã được phê duyệt (bao gồm `Project Manager` và `Coordinator` là hai vai trò độc lập; một người dùng có thể giữ cả hai vai trò); hệ thống phải kiểm tra quyền xem và thao tác ở phía Backend.
 - Truy vết BRD: IAM-05 | Quy tắc: BR-19 | Use Case: UC-01
-- Ẩn nút trên UI không thay thế kiểm tra quyền; thay đổi quyền có hiệu lực theo chính sách phiên và được audit.
+- Ẩn nút trên UI không thay thế kiểm tra quyền; thay đổi quyền có hiệu lực theo chính sách phiên và được audit (Q-01 / CR-001).
 
 ### IAM-SRS-006 — Giới hạn dữ liệu theo dự án (Must)
 
 - Actor: Hệ thống
 - Channel: System
-- Requirement: Hệ thống phải giới hạn dữ liệu nghiệp vụ theo vai trò và danh sách dự án mà người dùng tham gia.
+- Requirement: Hệ thống phải giới hạn dữ liệu nghiệp vụ theo vai trò (Project Manager quản trị/thiết lập dự án, Coordinator lập kế hoạch/điều phối công việc) và danh sách dự án mà người dùng tham gia.
 - Truy vết BRD: IAM-05 | Quy tắc: BR-19 | Use Case: UC-01
-- Sửa ID/URL không cho phép truy cập dự án ngoài phạm vi; ngoại lệ quản trị phải được xác định và audit.
+- Sửa ID/URL không cho phép truy cập dự án ngoài phạm vi; ngoại lệ quản trị phải được xác định và audit (Q-01 / CR-001).
 
 ### IAM-SRS-007 — Đổi và đặt lại mật khẩu (Should)
 
@@ -80,9 +80,6 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 - Requirement: Hệ thống phải ghi đăng nhập thành công/thất bại, đăng xuất, khóa/mở khóa, ngừng hoạt động và thay đổi vai trò.
 - Truy vết BRD: IAM-04, RPT-04 | Quy tắc: BR-18 | Use Case: UC-01, UC-09
 - Nhật ký có actor, thời điểm, hành động và kết quả; không ghi mật khẩu, mã đặt lại hoặc token bí mật.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
 
 ## ORG
 
@@ -146,7 +143,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Điều phối viên/Quản trị viên
 - Channel: Web
-- Requirement: Mỗi Crew đang hoạt động dùng cho assignment phải có đúng một Crew Lead hiệu lực tại một thời điểm.
+- Requirement: Mỗi Crew đang hoạt động dùng cho assignment phải có đúng một Crew Lead hiệu lực tại một thời điểm. Thao tác xác nhận Work Done tại thời điểm thực hiện lệnh tuân theo Crew Lead hiện hành; Crew Lead tại thời điểm phân công được lưu lại thành snapshot lịch sử phục vụ audit (Q-06 / CR-001).
 - Truy vết BRD: ORG-03 | Quy tắc: BR-06, BR-07 | Use Case: UC-02, UC-03
 - Crew Lead phải là thành viên Crew và đang hoạt động; thay đổi Lead giữ lịch sử và không tự sửa actor của thao tác đã phát sinh.
 
@@ -154,12 +151,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Hệ thống
 - Channel: System
-- Requirement: Hệ thống phải cung cấp trạng thái hoạt động, skill, crew membership, Crew Lead và dữ liệu liên quan cho bước phân công/tự nhận.
+- Requirement: Hệ thống phải cung cấp trạng thái hoạt động, skill, crew membership, Crew Lead và khoảng thời gian lịch trình để kiểm tra không chồng lấn thời gian cho bước phân công/tự nhận.
 - Truy vết BRD: ORG-05 | Quy tắc: BR-04, BR-06 | Use Case: UC-03, UC-04
-- Các kiểm tra mới dùng dữ liệu hiện hành; assignment đã phát sinh vẫn giữ snapshot/lịch sử cần thiết.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
+- Các kiểm tra mới dùng dữ liệu hiện hành; assignment đã phát sinh vẫn giữ snapshot/lịch sử cần thiết (Q-03, Q-04 / CR-001).
 
 ## PRJ
 
@@ -199,7 +193,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Quản lý dự án
 - Channel: Web
-- Requirement: Quản lý dự án phải thêm/loại quản lý, điều phối viên, QC và người dùng liên quan vào dự án.
+- Requirement: Quản lý dự án phải thêm/loại quản lý dự án, điều phối viên, QC và người dùng liên quan vào dự án (hỗ trợ phân biệt độc lập vai trò Project Manager và Coordinator - Q-01 / CR-001).
 - Truy vết BRD: PRJ-04 | Quy tắc: BR-19 | Use Case: UC-02
 - Người bị loại không truy cập dữ liệu mới nhưng hành động lịch sử vẫn giữ.
 
@@ -207,9 +201,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Hệ thống
 - Channel: System
-- Requirement: Hệ thống phải dùng vai trò và quan hệ thành viên dự án để giới hạn danh sách, chi tiết và thao tác.
+- Requirement: Hệ thống phải dùng vai trò và quan hệ thành viên dự án để giới hạn danh sách, chi tiết và thao tác theo đúng phân quyền của Project Manager và Coordinator.
 - Truy vết BRD: PRJ-04, IAM-05 | Quy tắc: BR-19 | Use Case: UC-01, UC-02
-- Không thể vượt quyền bằng sửa tham số; ngoại lệ quản trị được audit.
+- Không thể vượt quyền bằng sửa tham số; ngoại lệ quản trị được audit (Q-01 / CR-001).
 
 ### PRJ-SRS-007 — Quản lý vòng đời dữ liệu nền (Must)
 
@@ -239,12 +233,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Điều phối viên
 - Channel: Web
-- Requirement: Điều phối viên phải có thể xác định một hoặc nhiều Work Order tiền nhiệm khi công việc phụ thuộc kết quả của công việc khác.
+- Requirement: Điều phối viên phải có thể xác định một hoặc nhiều Work Order tiền nhiệm bắt buộc (mandatory/hard dependency). V1 chỉ hỗ trợ hard dependency; nếu dependency chưa thỏa thì Work Order phụ thuộc không được Start (Q-07 / CR-001).
 - Truy vết BRD: PRJ-05 | Quy tắc: BR-08 | Use Case: UC-03, UC-05
 - Không tạo vòng lặp dependency trực tiếp; dependency bắt buộc được dùng trong readiness; thay đổi giữ audit.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
 
 ## JOB
 
@@ -302,13 +293,13 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 - Channel: Mobile
 - Requirement: Worker phải có thể chọn Nhận việc và được xác nhận ngay khi WO còn trống và mọi điều kiện eligibility đều đạt.
 - Truy vết BRD: JOB-04 | Quy tắc: BR-01, BR-02 | Use Case: UC-04
-- Không có bước quản lý phê duyệt lại; assignment ghi nguồn SELF_ACCEPT và WO xuất hiện trong My Jobs/lịch.
+- Không có bước quản lý phê duyệt lại; assignment ghi nguồn SELF_ACCEPT, chuyển ACTIVE ngay và WO xuất hiện trong My Jobs/lịch (Q-02 / CR-001).
 
 ### JOB-SRS-008 — Kiểm tra eligibility (Must)
 
 - Actor: Hệ thống
 - Channel: System
-- Requirement: Hệ thống phải kiểm tra Worker đang hoạt động, đúng skill, thuộc phạm vi dự án, không xung đột lịch và không vi phạm giới hạn cấu hình.
+- Requirement: Hệ thống phải kiểm tra Worker đang hoạt động, đúng skill, thuộc phạm vi dự án, không bị trùng/chồng lấn khoảng thời gian thực hiện (scheduled time interval overlap) với các assignment đang active. Trùng lịch là hard block trong V1, không có override (Q-03, Q-04 / CR-001).
 - Truy vết BRD: JOB-05 | Quy tắc: BR-04 | Use Case: UC-03, UC-04
 - Mỗi điều kiện không đạt trả lý do cụ thể; không để lại assignment/bản ghi chờ không hợp lệ.
 
@@ -324,7 +315,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Điều phối viên
 - Channel: Web
-- Requirement: Điều phối viên phải phân công Work Order cho một Worker hoặc Crew phù hợp.
+- Requirement: Điều phối viên phải phân công Work Order cho một Worker hoặc Crew phù hợp. Sau khi kiểm tra eligibility thành công, phân công trực tiếp tạo assignment ACTIVE ngay trong V1 mà không qua bước tiếp nhận trung gian (Q-02 / CR-001).
 - Truy vết BRD: JOB-06 | Quy tắc: BR-01, BR-03, BR-04, BR-06 | Use Case: UC-03
 - Phân công dùng cùng nguyên tắc trạng thái/skill/lịch; assignment ghi nguồn DIRECT; Crew phải active và có Crew Lead active.
 
@@ -334,7 +325,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 - Channel: System
 - Requirement: Hệ thống phải xác định người có quyền xác nhận ở cấp Work Order theo loại assignment.
 - Truy vết BRD: JOB-07 | Quy tắc: BR-06, BR-07 | Use Case: UC-03, UC-05
-- Assignment cá nhân: assigned Worker chịu trách nhiệm. Assignment Crew: Crew Lead hiệu lực chịu trách nhiệm; member khác chỉ cập nhật phần được cấp quyền.
+- Assignment cá nhân: assigned Worker chịu trách nhiệm. Assignment Crew: Crew Lead hiệu lực tại thời điểm thực hiện lệnh chịu trách nhiệm; thành viên khác (non-Lead) chỉ cập nhật progress, ghi chú, ảnh, blocker và rectification được giao, không được Submit Work Done (Q-05, Q-06 / CR-001).
 
 ### JOB-SRS-012 — Tái phân công và thu hồi (Must)
 
@@ -348,7 +339,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Worker
 - Channel: Mobile
-- Requirement: Nếu chính sách dự án yêu cầu xác nhận, Worker/Crew Lead nên có thể tiếp nhận hoặc từ chối assignment trực tiếp kèm lý do.
+- Requirement: Nếu chính sách dự án mở rộng yêu cầu xác nhận, Worker/Crew Lead nên có thể tiếp nhận hoặc từ chối assignment trực tiếp kèm lý do (Tính năng thuộc Should backlog, không bật trong V1 baseline - Q-02 / CR-001).
 - Truy vết BRD: JOB-09 | Use Case: UC-03
 - Từ chối đưa WO về cần điều phối; không áp dụng cho self-accept đã có hiệu lực ngay.
 
@@ -380,7 +371,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Worker/Crew Lead
 - Channel: Mobile
-- Requirement: Trước khi Start, người chịu trách nhiệm phải xem/ghi nhận điều kiện sẵn sàng gồm dependency, mặt bằng/access, nguồn lực, vật tư, thông tin thi công, checklist và checkpoint bắt buộc.
+- Requirement: Trước khi Start, người chịu trách nhiệm phải xem/ghi nhận điều kiện sẵn sàng gồm dependency bắt buộc, mặt bằng/access, nguồn lực, vật tư, thông tin thi công, checklist và checkpoint bắt buộc (Q-08 / CR-001).
 - Truy vết BRD: JOB-12 | Quy tắc: BR-08, BR-09 | Use Case: UC-05
 - Hệ thống tự kiểm tra điều kiện có dữ liệu; mục do hiện trường xác nhận lưu actor, thời điểm và bằng chứng khi cần.
 
@@ -390,23 +381,23 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 - Channel: System/Mobile
 - Requirement: Hệ thống phải ghi nhận READY, READY_WITH_CONSTRAINT hoặc NOT_READY và quyết định khả năng Start theo các điều kiện blocking.
 - Truy vết BRD: JOB-12 | Quy tắc: BR-09, BR-10 | Use Case: UC-05
-- NOT_READY không cho Start; READY cho Start; READY_WITH_CONSTRAINT cho Start khi không có blocker chặn và phải giữ constraint liên quan.
+- Nếu có bất kỳ blocking readiness item nào không đạt thì kết quả là `NOT_READY` và Start bị cấm; không có cơ chế override blocking readiness trong V1. `READY_WITH_CONSTRAINT` chỉ cho phép Start khi tất cả constraint còn lại đều non-blocking (Q-08 / CR-001).
 
 ### JOB-SRS-019 — Ghi nhận Blocker/Constraint (Must)
 
-- Actor: Worker/Crew Lead
+- Actor: Worker/Crew Lead/Crew Member
 - Channel: Mobile
-- Requirement: Người thực hiện phải có thể tạo blocker trước hoặc trong khi thi công, chọn loại nguyên nhân, mô tả, mức ảnh hưởng và đính kèm bằng chứng.
+- Requirement: Người thực hiện phải có thể tạo blocker trước hoặc trong khi thi công, chọn loại nguyên nhân, mô tả, người/bên chịu trách nhiệm bắt buộc (Responsible Party), mức ảnh hưởng và đính kèm bằng chứng (Q-09 / CR-001).
 - Truy vết BRD: JOB-13 | Quy tắc: BR-10, BR-11 | Use Case: UC-06
-- Blocker gắn đúng WO, actor, thời điểm; loại nguyên nhân tối thiểu gồm dependency, access, material, information, manpower, equipment, weather, safety và other.
+- Blocker gắn đúng WO, actor, thời điểm; trường Responsible Party là bắt buộc; vòng đời blocker độc lập với execution state của Work Order; không tạo state tên `Blocked`.
 
 ### JOB-SRS-020 — Theo dõi và giải quyết Blocker (Must)
 
-- Actor: Điều phối viên/Quản lý/Người báo
+- Actor: Điều phối viên/Quản lý dự án/Worker/Crew Lead
 - Channel: Web/Mobile
-- Requirement: Người có quyền phải xem blocker đang mở, tiếp nhận, cập nhật xử lý và xác nhận resolved.
+- Requirement: Người có quyền phải xem blocker đang mở, tiếp nhận, cập nhật xử lý và xác nhận resolved kèm thông tin kiểm toán.
 - Truy vết BRD: JOB-13 | Quy tắc: BR-10, BR-11 | Use Case: UC-06
-- Giữ trạng thái, người phụ trách, opened/resolved time, resolution note và blocked duration; resolve không tự sửa execution state ngoài rule.
+- Quyền xử lý: assigned Worker/Crew Lead resolve blocker thuộc phạm vi công việc của mình; Coordinator resolve blocker trong phạm vi điều phối dự án; Project Manager có quyền quản trị/resolve blocker của dự án. Mọi thao tác resolve lưu actor, thời điểm, note và duration; resolve không tự đổi execution state ngoài rule và không bypass quality gate (Q-09 / CR-001).
 
 ### JOB-SRS-021 — Tạm dừng và tiếp tục có lý do (Should)
 
@@ -420,7 +411,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Worker/Crew Lead/Crew Member được quyền
 - Channel: Mobile
-- Requirement: Người được phép phải cập nhật tiến độ, ghi chú hiện trường và ảnh/tệp bằng chứng cho Work Order.
+- Requirement: Người được phép phải cập nhật tiến độ, ghi chú hiện trường và ảnh/tệp bằng chứng cho Work Order. Thành viên tổ đội (non-Lead Crew Member) được quyền cập nhật tiến độ, ghi chú, bằng chứng ảnh, báo blocker và cập nhật rectification được giao, nhưng KHÔNG được quyền gửi Work Done (Q-05 / CR-001).
 - Truy vết BRD: JOB-14 | Quy tắc: BR-07 | Use Case: UC-05
 - Tiến độ trong phạm vi hợp lệ; mỗi lần cập nhật có actor/thời điểm; Crew member không được Submit Work Done nếu không phải Crew Lead.
 
@@ -442,14 +433,11 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 ### JOB-SRS-025 — Gửi Work Done (Must)
 
-- Actor: Assigned Worker/Crew Lead
+- Actor: Assigned Worker/Current Effective Crew Lead
 - Channel: Mobile
-- Requirement: Sau khi hoàn tất phần thi công và dữ liệu bắt buộc, assigned Worker hoặc Crew Lead phải có thể gửi Work Order sang WORK_DONE để chờ quality gate/final inspection.
+- Requirement: Sau khi hoàn tất phần thi công và dữ liệu bắt buộc, assigned Worker hoặc Crew Lead hiện hành (tại thời điểm gửi lệnh) phải có thể gửi Work Order sang WORK_DONE để chờ quality gate/final inspection (Q-06 / CR-001).
 - Truy vết BRD: JOB-18 | Quy tắc: BR-07, BR-15, BR-16 | Use Case: UC-05, UC-07
 - Chỉ đúng người chịu trách nhiệm được gửi; hệ thống chỉ rõ dữ liệu còn thiếu; Work Done không đồng nghĩa Closed; gửi lặp không tạo tác động trùng.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
 
 ## SCH
 
@@ -481,7 +469,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Hệ thống
 - Channel: System
-- Requirement: Trước self-accept/direct assign, hệ thống phải so sánh khoảng thời gian WO với assignment đang active của nguồn lực.
+- Requirement: Trước self-accept/direct assign, hệ thống phải so sánh khoảng thời gian thực hiện (scheduled time interval) của WO với các assignment đang active của nguồn lực. Nếu phát hiện chồng lấn thời gian (overlap), hệ thống từ chối phân công/nhận việc (hard block trong V1) kèm lý do rõ ràng (Q-03, Q-04 / CR-001).
 - Truy vết BRD: SCH-03 | Quy tắc: BR-04 | Use Case: UC-03, UC-04
 - So sánh theo khoảng thời gian, không chỉ theo ngày; kết quả được dùng trong eligibility.
 
@@ -489,9 +477,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Điều phối viên
 - Channel: Web
-- Requirement: Hệ thống nên cảnh báo hoặc chặn khi nguồn lực bị trùng lịch/quá tải theo chính sách cấu hình.
+- Requirement: Hệ thống nên cảnh báo hoặc cho phép ghi đè quá tải/trùng lịch theo chính sách cấu hình có kiểm soát (Ghi đè trùng lịch thuộc Should backlog, không hỗ trợ trong V1 baseline - Q-04 / CR-001).
 - Truy vết BRD: SCH-04 | Use Case: UC-03
-- Ghi đè nếu được phép phải có quyền/lý do; baseline không tự tối ưu lịch.
+- Ghi đè nếu được phép trong tương lai phải có quyền/lý do; baseline không tự tối ưu lịch.
 
 ### SCH-SRS-006 — So sánh kế hoạch và thực tế (Should)
 
@@ -508,9 +496,6 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 - Requirement: Khi WO chưa hoàn thành và cần tiếp tục ở thời điểm khác, điều phối viên nên cập nhật lịch tiếp theo và lý do mà không mất tiến độ đã ghi.
 - Truy vết BRD: SCH-05 | Use Case: UC-05, UC-06
 - Lưu lịch trước/sau, lý do và thông báo; không tạo Work Order mới chỉ để biểu diễn lần quay lại.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
 
 ## QUA
 
@@ -534,9 +519,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Worker/Crew Lead
 - Channel: Mobile
-- Requirement: Người chịu trách nhiệm phải hoàn thành checklist chuẩn bị/an toàn được yêu cầu trước khi Start.
+- Requirement: Người chịu trách nhiệm phải hoàn thành checklist chuẩn bị/an toàn được yêu cầu trước khi Start. Mục blocking chưa đạt sẽ chặn Start mà không có cơ chế override trong V1 (Q-08 / CR-001).
 - Truy vết BRD: QUA-03 | Quy tắc: BR-13 | Use Case: UC-05
-- Mục blocking chưa đạt không cho Start; lưu câu trả lời, actor, thời điểm và ảnh khi cấu hình.
+- Lưu câu trả lời, actor, thời điểm và ảnh khi cấu hình.
 
 ### QUA-SRS-004 — Khai báo Inspection Checkpoint (Must)
 
@@ -566,7 +551,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: QC
 - Channel: Web/Mobile
-- Requirement: Khi Work Order đạt Hold Point, hệ thống phải ngăn bước thi công bị kiểm soát cho đến khi QC có quyền kiểm tra và release.
+- Requirement: Khi Work Order đạt Hold Point, hệ thống phải ngăn bước thi công bị kiểm soát cho đến khi duy nhất QC có thẩm quyền kiểm tra và release. Project Manager, Coordinator, Worker, hoặc Crew Lead không được quyền release Hold Point (Q-10 / CR-001).
 - Truy vết BRD: QUA-05 | Quy tắc: BR-14 | Use Case: UC-07
 - Release chỉ khi tiêu chí bắt buộc đạt; fail giữ checkpoint chưa release và có thể tạo rectification; mọi lần release/fail được audit.
 
@@ -598,7 +583,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Worker/Crew Lead/Crew Member được quyền
 - Channel: Mobile
-- Requirement: Người được giao phải xem lỗi, cập nhật nội dung đã sửa và nộp bằng chứng khắc phục.
+- Requirement: Người được giao phải xem lỗi, cập nhật nội dung đã sửa và nộp bằng chứng khắc phục (non-Lead Crew Member được quyền cập nhật/nộp bằng chứng rectification được giao - Q-05 / CR-001).
 - Truy vết BRD: QUA-07 | Use Case: UC-07
 - Chỉ người/Crew liên quan cập nhật; nộp chuyển item sang chờ reinspection; Crew Lead chịu trách nhiệm submit ở cấp item nếu cấu hình yêu cầu.
 
@@ -622,7 +607,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: QC/Điều phối viên
 - Channel: Web/Mobile
-- Requirement: Hệ thống nên hỗ trợ checkpoint Witness Point để ghi việc đã thông báo bên cần chứng kiến, attendance và kết quả theo rule dự án mà không mặc định chặn công việc.
+- Requirement: Hệ thống nên hỗ trợ checkpoint Witness Point để ghi việc đã thông báo bên cần chứng kiến, attendance và kết quả theo rule dự án mà không mặc định chặn công việc (Witness Point thuộc Should backlog, không nằm trong baseline cam kết bảo vệ - Q-11 / CR-001).
 - Truy vết BRD: QUA-09 | Use Case: UC-07
 - Nếu bên chứng kiến không tham dự, khả năng tiếp tục theo chính sách được cấu hình/ghi nhận; baseline không xây portal riêng cho external party.
 
@@ -630,12 +615,9 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: QC
 - Channel: Web/Mobile
-- Requirement: QC nên có thể kết luận Conditional Pass khi phần thi công cơ bản chấp nhận nhưng còn rectification nhỏ cần đóng.
+- Requirement: QC nên có thể kết luận Conditional Pass khi phần thi công cơ bản chấp nhận nhưng còn rectification nhỏ cần đóng (Conditional Pass thuộc Should backlog, không nằm trong baseline cam kết bảo vệ - Q-11 / CR-001).
 - Truy vết BRD: QUA-10 | Quy tắc: BR-16 | Use Case: UC-07
 - Conditional Pass phải có ít nhất một rectification item; Work Order vẫn chưa CLOSED cho đến khi item được verified.
-- Thuộc tính
-- Nội dung
-- Tổng yêu cầu
 
 ## RPT
 
@@ -667,7 +649,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Quản lý/Điều phối viên
 - Channel: Web
-- Requirement: Web phải hiển thị chỉ số về unassigned, in-progress, overdue, blocked, work-done-waiting-QC, rectification-open và workload cơ bản.
+- Requirement: Web phải hiển thị chỉ số về unassigned, in-progress, overdue, blocked, work-done-waiting-QC, rectification-open, workload cơ bản và tiến độ dự án. Chỉ số tiến độ dự án chính thức (Official Project Progress) bắt buộc tính theo tỷ lệ Work Order đã CLOSED: `Progress % = Closed Work Orders / Total applicable Work Orders × 100`. Work Done không được tính là hoàn thành chính thức (Q-12 / CR-001).
 - Truy vết BRD: RPT-02 | Use Case: UC-09
 - Mỗi chỉ số có định nghĩa, thời điểm cập nhật và tôn trọng phạm vi dự án/quyền.
 
@@ -691,7 +673,7 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Người có quyền
 - Channel: Web
-- Requirement: Người dùng nên xuất danh sách/report được phê duyệt sang CSV/XLSX hoặc định dạng thống nhất sau khi chốt.
+- Requirement: Người dùng nên xuất danh sách/report được phê duyệt sang định dạng CSV (V1 chỉ hỗ trợ CSV; XLSX không thuộc committed scope V1 - Q-13 / CR-001).
 - Truy vết BRD: RPT-05 | Use Case: UC-09
 - Dữ liệu xuất dùng cùng bộ lọc/quyền và giới hạn số dòng; không có report designer tùy biến.
 
@@ -699,6 +681,6 @@ Canonical normalized index of SRS-CWM-QC-002 V2.1. Full wording remains availabl
 
 - Actor: Hệ thống/Quản trị viên/Quản lý
 - Channel: System/Web
-- Requirement: Hệ thống phải ghi và cho người có quyền tra cứu thay đổi về tài khoản/quyền, assignment, lịch, readiness, blocker, material, trạng thái và quality decision.
+- Requirement: Hệ thống phải ghi và cho người có quyền tra cứu thay đổi về tài khoản/quyền, assignment, lịch, readiness, blocker, material, trạng thái và quality decision. Hồ sơ audit nghiệp vụ và tệp bằng chứng đính kèm được lưu giữ tối thiểu 5 năm sau khi dự án Đóng (5 years after Project Closed) theo chính sách cấu hình được (Q-15 / CR-001).
 - Truy vết BRD: RPT-04 | Quy tắc: BR-18 | Use Case: UC-09
 - Bản ghi gồm actor, thời điểm, hành động, đối tượng, before/after khi cần và lý do; chỉ đọc, lọc được, không chứa bí mật xác thực.

@@ -6,7 +6,7 @@ Use it for a new business rule, changed priority, new state/transition, altered 
 
 ## Workflow
 
-1. Create a change record from [templates/CHANGE-REQUEST-TEMPLATE.md](templates/CHANGE-REQUEST-TEMPLATE.md).
+1. Create a change record from [templates/CHANGE-REQUEST-TEMPLATE.md](templates/CHANGE-REQUEST-TEMPLATE.md) in `docs/foundation/changes/`.
 2. Assign a stable ID `CR-###` and list the triggering evidence.
 3. Identify impacted BRD/SRS/rules/states/modules/data/tests and out-of-scope boundaries.
 4. Classify the change as clarification, correction, Must scope change or Should/backlog.
@@ -14,6 +14,12 @@ Use it for a new business rule, changed priority, new state/transition, altered 
 6. Update affected canonical documents, traceability and open decisions together.
 7. If implementation exists, add migration/backfill, compatibility and rollout/rollback notes.
 8. Merge only when documentation and implementation proof agree.
+
+## Registered change records
+
+| ID | Title | Status | Date | Approver | File |
+| --- | --- | --- | --- | --- | --- |
+| CR-001 | Approval and Reconciliation of Business Policy Decisions (Q-01 through Q-15) | Approved | 2026-09-02 | Project Owner / Team | [CR-001](changes/CR-001-business-policy-decisions.md) |
 
 ## Conflict policy
 

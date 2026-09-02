@@ -9,15 +9,16 @@ This directory is the canonical documentation entry point for BuildFlow.
 - Business baseline: BRD-CWM-QC-002 V2.0, 54 business requirements (44 Must, 10 Should).
 - Software baseline: SRS-CWM-QC-002 V2.1, 82 functional requirements (70 Must, 12 Should).
 - Data baseline: DBD-CWM-QC-002 V2.1, proposed 34-table physical schema (26 business tables, 8 support tables).
-- Status: all three supplied documents are drafts awaiting confirmation. They are inputs, not permission to silently resolve open decisions.
+- Change records: [CR-001](changes/CR-001-business-policy-decisions.md) formally approved and reconciled business policy decisions `Q-01` through `Q-15`.
+- Status: Historical provenance drafts are normalized into this foundation; approved change records are the authoritative baseline for all resolved decisions.
 
 ## Authority by topic
 
 | Topic | Primary authority | Secondary check | Rule |
 | --- | --- | --- | --- |
-| Business goals, scope, actors, priorities | BRD V2.0 | SRS V2.1 | SRS may detail but must not expand the committed scope silently. |
-| Observable software behaviour and acceptance | SRS V2.1 | BRD V2.0 | A conflict is recorded as an open decision; do not choose by convenience. |
-| Physical data model | DBD V2.1 | SRS V2.1 then BRD V2.0 | DBD may implement a requirement, but cannot invent a business rule. |
+| Business goals, scope, actors, priorities | BRD V2.0 / Approved CRs | SRS V2.1 | SRS may detail but must not expand the committed scope silently. |
+| Observable software behaviour and acceptance | SRS V2.1 / Approved CRs | BRD V2.0 | A conflict is recorded as an open decision; do not choose by convenience. |
+| Physical data model | DBD V2.1 / Approved CRs | SRS V2.1 then BRD V2.0 | DBD may implement a requirement, but cannot invent a business rule. |
 | New approved requirement | Approved change record | BRD/SRS/DBD | Update every affected canonical document and trace link together. |
 | Implementation details | Module design created just in time | All above | Code and old architecture documents never override the product baseline. |
 
