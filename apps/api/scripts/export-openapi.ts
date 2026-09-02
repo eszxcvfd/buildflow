@@ -3,17 +3,24 @@
  *
  * Run with:
  *   pnpm --filter @buildflow/api openapi:export
+ *
+ * This script boots the app without booting PrismaModule so it can run
+ * without a reachable database.
  */
 import 'reflect-metadata';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { AppModule } from '../src/app.module';
+import { Module } from '@nestjs/common';
+import { HealthController } from '../src/health/health.controller';
+import { AppController } from '../src/app.controller';
+
+@Module({ controllers: [AppController, HealthController] })
+class OpenapiOnlyModule {}
 
 async function main(): Promise<void> {
-  process.env.NODE_ENV = process.env.NODE_ENV ?? 'development';
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(OpenapiOnlyModule, { logger: false });
   const prefix = (process.env.API_GLOBAL_PREFIX ?? '/api/v1').replace(/^\//, '');
   app.setGlobalPrefix(prefix);
 
@@ -28,12 +35,10 @@ async function main(): Promise<void> {
   const out = resolve(__dirname, '..', 'openapi.json');
   writeFileSync(out, JSON.stringify(document, null, 2));
   await app.close();
-  // eslint-disable-next-line no-console
   console.log(`Wrote ${out}`);
 }
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
   console.error('OpenAPI export failed:', err);
   process.exit(1);
 });

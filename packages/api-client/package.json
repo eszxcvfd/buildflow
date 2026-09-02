@@ -17,7 +17,7 @@
     "@buildflow/tsconfig": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^9.0.0",
-    "openapi-typescript": "^7.4.0",
-    "typescript": "^5.6.0"
+    "openapi-typescript": "7.6.0",
+    "typescript": "5.6.3"
   }
 }
