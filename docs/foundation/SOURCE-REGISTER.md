@@ -15,11 +15,11 @@
 - When a source changes, compare version, modification time, requirement counts, IDs, state domains and open decisions before updating derived documents.
 - A newer timestamp does not automatically win a semantic conflict. Authority is determined by topic and explicit approval.
 
-## Historical source gaps (Reconciled in Foundation)
+## Historical source gaps (Reconciled in Foundation & Architecture)
 
 The raw historical source documents originally contained open questions and draft statuses:
 - 15 business/product questions were open in raw BRD/SRS/DBD; all 15 have been formally approved and resolved via [CR-001](changes/CR-001-business-policy-decisions.md) and recorded in [OPEN-DECISIONS.md](OPEN-DECISIONS.md).
-- Mobile platform target (formerly TBD) is committed to Android 10+ (Q-14).
+- Mobile platform target is committed to Android 10+ (Q-14 / ADR-005 / ADR-015).
 - KPI formulas are locked to Closed Work Order ratio for official progress (Q-12).
 - Data retention (5 years post-closure), CSV export format, schedule conflict hard-block, and immediate direct assignment have been locked in the canonical baseline.
-- DBD remains a proposed physical schema baseline to be realized through reviewed migrations.
+- DBD physical schema baseline is realized using PostgreSQL 18.x and Prisma ORM 7.x per accepted technical decisions ([ADR-007](../architecture/adr/ADR-007-postgresql-database.md), [ADR-008](../architecture/adr/ADR-008-prisma-migrations.md)).

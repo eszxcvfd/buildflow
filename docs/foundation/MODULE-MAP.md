@@ -1,6 +1,6 @@
 # Module Map
 
-These are logical business modules, not permission to create microservices. The baseline remains a modular system with one business database proposal, formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md). Deployment and framework details are decided later.
+These are logical business modules implemented within a NestJS Modular Monolith ([ADR-003](../architecture/adr/ADR-003-backend-platform.md)) on a single shared PostgreSQL 18.x database ([ADR-007](../architecture/adr/ADR-007-postgresql-database.md)), formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md). Microservices are strictly out of scope for V1.
 
 ## Modules and ownership
 
@@ -71,7 +71,7 @@ The producing module owns the business outcome. Notification & Insight receives 
 ## Cross-module invariants
 
 - Public module interfaces express business operations, not table CRUD.
-- Web and Mobile consume the same application contracts; neither owns separate business rules.
+- Web and Mobile consume the same application contracts via generated API client (ADR-006); neither owns separate business rules.
 - Consumers do not update another module's tables directly.
 - Historical snapshots remain attributable even when Crew Lead, membership or assignment changes.
 - The interface is the primary test surface; implementation details remain private.

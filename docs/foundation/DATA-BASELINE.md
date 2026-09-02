@@ -1,12 +1,12 @@
 # Data Baseline
 
-DBD-CWM-QC-002 V2.1 proposes PostgreSQL 15+ and one shared physical database, formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md). This remains a proposed physical baseline until approved and implemented through reviewed migrations.
+Governed by approved change record [CR-001](changes/CR-001-business-policy-decisions.md) and technical architecture decisions [ADR-007](../architecture/adr/ADR-007-postgresql-database.md) (PostgreSQL 18.x), [ADR-008](../architecture/adr/ADR-008-prisma-migrations.md) (Prisma 7.x), [ADR-009](../architecture/adr/ADR-009-authentication-session.md) (Session Persistence), [ADR-010](../architecture/adr/ADR-010-attachment-storage.md) (Object Storage), and [ADR-011](../architecture/adr/ADR-011-redis-deferred.md) (Redis Deferred).
 
 ## Ownership catalog
 
 | Module | Tables |
 | --- | --- |
-| Identity & Access | `users`, `roles`, `user_roles`, `project_members` |
+| Identity & Access | `users`, `roles`, `user_roles`, `project_members`, `sessions` |
 | Workforce | `contractors`, `trades`, `resource_trades`, `crews`, `crew_members` |
 | Project Setup | `projects`, `project_areas`, `work_types`, `work_order_dependencies` |
 | Work Management | `work_orders`, `assignments`, `work_order_state_history` |
@@ -14,28 +14,31 @@ DBD-CWM-QC-002 V2.1 proposes PostgreSQL 15+ and one shared physical database, fo
 | Quality Control | `checklist_templates`, `checklist_template_items`, `checklist_instances`, `checklist_instance_items`, `inspection_checkpoint_templates`, `inspection_checkpoints`, `inspections`, `corrective_actions` |
 | Notification & Insight | `attachments`, `notifications`, `audit_logs` |
 
-The source classifies 26 tables as business tables and 8 as support tables. The physical baseline contains 34 tables. Framework tables such as refresh tokens, device tokens, idempotency requests, outbox/jobs and migration history are excluded until a concrete technical need exists.
+The physical database baseline comprises 34 business and support tables plus technical session/audit tables. Framework tables (such as refresh token sessions and migration history) are managed via Prisma 7.x. Redis is explicitly deferred from V1 (ADR-011); all session state and business data reside in PostgreSQL.
 
 ## Global conventions
 
-- UUID primary keys and `snake_case` plural table names.
-- `timestamptz` stored and compared in UTC; project timezone controls local display/interpretation.
-- Referenced history uses status/inactivity rather than destructive deletion.
-- Sensitive transitions update the current record, history, audit and required notification reliably as one application operation.
-- Backend authorization uses role plus active project membership, strictly distinguishing `Project Manager` and `Coordinator` capabilities (Q-01 / CR-001).
-- Completed checklist and inspection data is versioned or superseded, never silently rewritten.
-- Retention policy: `audit_logs` and business evidence `attachments` are retained for 5 years after Project Closed (`projects.status = 'CLOSED'`) under a configurable policy (Q-15 / CR-001). Temporary/unreferenced uploads have a separate cleanup lifecycle.
+- **Engine**: PostgreSQL 18.x (single physical database for the Modular Monolith per ADR-007).
+- **ORM & Migrations**: Prisma ORM 7.x + Prisma Migrate (ADR-008).
+- **Primary Keys**: UUID primary keys and `snake_case` plural table names.
+- **Timestamps**: `timestamptz` stored and compared in UTC; project timezone controls local display/interpretation.
+- **History Preservation**: Referenced history uses status/inactivity rather than destructive deletion.
+- **Transactional Atomicity**: Sensitive transitions update current records, history, audit and notifications reliably as one ACID database transaction.
+- **Authorization Scope**: Backend authorization uses role plus active project membership, strictly distinguishing `Project Manager` and `Coordinator` capabilities (Q-01 / CR-001).
+- **Quality Immutability**: Completed checklist and inspection data is versioned or superseded, never silently overwritten.
+- **Binary vs Metadata Separation**: File binaries are stored in S3-compatible object storage (MinIO for dev/demo per ADR-010); PostgreSQL `attachments` table stores only metadata, ownership links, MIME types, and storage keys.
+- **Data Retention**: `audit_logs` and business evidence `attachments` are retained for 5 years after Project Closed (`projects.status = 'CLOSED'`) under a configurable policy (Q-15 / CR-001). Temporary/unreferenced uploads have a separate cleanup lifecycle.
 
 ## Database-enforceable invariants
 
 - Unique normalized account identity.
 - One active Crew Lead per Crew.
 - One active membership for each Crew/Worker and Project/User pair.
-- One current assignment per Work Order through a partial unique index covering `status = 'ACTIVE'`. (Any schema fields for `PENDING_ACCEPTANCE` represent future extension space only and are not part of committed V1 behavior - Q-02 / CR-001).
+- One current assignment per Work Order through a partial unique index covering `status = 'ACTIVE'` (implemented via reviewed migration SQL in Prisma per ADR-008). Any schema fields for `PENDING_ACCEPTANCE` represent future extension space only and are not part of committed V1 behavior (Q-02 / CR-001).
 - Self-dependency and direct cycles in `work_order_dependencies` are rejected; full graph-cycle detection is an application rule. V1 enforces mandatory hard dependencies only (Q-07 / CR-001).
 - Positive quantities, valid ranges and mutually exclusive Worker/Crew references use checks where feasible.
 - Mandatory `responsible_party` fields on `work_order_blockers` (Q-09 / CR-001).
-- History and audit data are append-oriented.
+- History, session revocations, and audit data are append-oriented.
 
 ## Application/transaction invariants
 
@@ -59,6 +62,7 @@ The source classifies 26 tables as business tables and 8 as support tables. The 
 ## Migration policy
 
 - Never generate migrations from the obsolete V1 data model.
-- Each migration is forward, reviewed, ordered by dependency and paired with rollback/recovery notes appropriate to its risk.
+- Each migration is managed through Prisma Migrate (`apps/api/prisma/migrations/`), forward-only, reviewed, ordered by dependency and paired with rollback/recovery notes appropriate to its risk.
+- PostgreSQL-specific features (partial unique indexes, check constraints) are integrated via reviewed migration SQL files.
 - Seed only approved roles, catalog examples and demo data; do not encode unresolved policy as seed truth.
-- Verify constraints with concurrency and invalid-data tests, not only successful migration execution.
+- Verify constraints with concurrency and invalid-data tests against real PostgreSQL, not only successful migration execution.

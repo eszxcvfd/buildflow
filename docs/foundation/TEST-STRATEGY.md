@@ -1,18 +1,18 @@
 # Test Strategy
 
-Reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md).
+Reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md) and technical architecture decisions ([ADR-012](../architecture/adr/ADR-012-testing-platform.md), [ADR-013](../architecture/adr/ADR-013-ci-platform.md)).
 
 ## Evidence layers
 
-| Layer | Purpose |
-| --- | --- |
-| Domain/application unit | State transitions, eligibility (schedule interval overlap check), dependency/readiness gate, blocker duration, Crew Lead authority and quality gate |
-| Integration | Database constraints (unique account/active assignment, partial indexes), transaction atomicity, idempotency, file ownership and audit/notification persistence |
-| Contract | Backend contracts consumed by Web and Mobile, including CSV export, errors and authorization |
-| Component/UI | Action availability, loading/error/empty states, keyboard/accessibility, Mobile Android 10+ layouts and retry feedback |
-| End-to-end | Complete Plan-to-Close acceptance workflow across Web and Mobile |
-| Performance/concurrency | 95th percentile response targets, 20-way self-accept and dashboard dataset target |
-| Security | Role/project isolation (PM vs Coordinator separation), input/upload validation, secret handling, QC-only Hold Point release and audit access |
+| Layer | Purpose | Tooling (ADR-012) |
+| --- | --- | --- |
+| Domain/application unit | State transitions, eligibility (schedule interval overlap check), dependency/readiness gate, blocker duration, Crew Lead authority and quality gate | Jest |
+| Database Integration | Database constraints (unique account/active assignment, partial indexes), transaction atomicity, idempotency, and audit/notification persistence | Supertest + Real PostgreSQL 18 container (Docker / Testcontainers) |
+| Contract | Backend contracts consumed by Web and Mobile, OpenAPI specification, generated TypeScript client compilation | OpenAPI + TypeScript compiler |
+| Component/UI | Action availability, loading/error/empty states, keyboard/accessibility, Mobile Android 10+ layouts and retry feedback | Web: React Testing Library (Jest/Vitest); Mobile: React Native Testing Library (Jest) |
+| End-to-end | Complete Plan-to-Close acceptance workflow across Web and Mobile | Web: Playwright; Mobile: Maestro / Expo tooling (Android 10+) |
+| Performance/concurrency | 95th percentile response targets, 20-way self-accept and dashboard dataset target | K6 / Artillery / Jest concurrency against real PostgreSQL |
+| Security | Role/project isolation (PM vs Coordinator separation), input/upload validation, secret handling, QC-only Hold Point release and audit access | Supertest + Security test suites |
 
 ## Mandatory scenario families
 
@@ -33,10 +33,10 @@ Reconciled with approved change record [CR-001](changes/CR-001-business-policy-d
 
 Any defect that permits unauthorized access, duplicate current assignment, schedule overlap bypass, invalid Start, bypassed Hold Point, non-QC Hold Point release, premature Closed, incorrect blocker duration, lost inspection/rectification history or failure on Android 10+ blocks release.
 
-## Test-data baseline
+## Real Database Verification Rule
 
-Use at least two projects, users with independent and combined PM/Coordinator roles, active/inactive Workers, one Crew with Lead change history, conflicting schedule intervals, hard dependencies, blocking and non-blocking readiness items, material shortage, Hold Point, failed Final Inspection, and multiple rectification rounds.
+Concurrency tests (such as 20-way self-accept per `NFR-PERF-003`), database partial unique indexes, foreign key constraints, transaction rollbacks, and schedule interval overlap validation **must be executed against a real PostgreSQL instance**, never against mocked repositories or in-memory arrays (ADR-012).
 
 ## Proof format
 
-Every Must requirement links to a test ID or an explicit demo step. Record command/environment, result and relevant fixture. Do not claim a runtime test for documentation-only changes.
+Every Must requirement links to a test ID or an explicit demo step. CI automatically runs all unit, contract, and PostgreSQL integration tests on GitHub Actions before pull request merge (ADR-013).

@@ -1,6 +1,6 @@
 # Quality Attributes
 
-These measurable requirements come from SRS V2.1, formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md). They are delivery constraints, not optional implementation advice.
+These measurable requirements come from SRS V2.1, formally reconciled with approved change record [CR-001](changes/CR-001-business-policy-decisions.md) and technical decisions ([ADR-001](../architecture/adr/ADR-001-monorepo-workspace.md) through [ADR-015](../architecture/adr/ADR-015-mobile-build.md)). They are delivery constraints, not optional implementation advice.
 
 | ID | Priority | Attribute | Requirement |
 | --- | --- | --- | --- |
@@ -24,7 +24,7 @@ These measurable requirements come from SRS V2.1, formally reconciled with appro
 | NFR-USA-003 | Must | Responsive | Web dùng được từ 1366x768; Mobile dùng được từ chiều rộng 360px mà không mất hành động chính. |
 | NFR-USA-004 | Must | Khả năng truy cập cơ bản | Chức năng chính có nhãn rõ; trạng thái không chỉ thể hiện bằng màu; Web hỗ trợ keyboard cho form/action chính. |
 | NFR-CMP-001 | Must | Trình duyệt Web | Web hỗ trợ hai phiên bản ổn định gần nhất của Chrome và Edge; các luồng chính được smoke-test trên Firefox. |
-| NFR-CMP-002 | Must | Nền tảng Mobile | Phạm vi phát hành và nghiệm thu Mobile cam kết hỗ trợ Android 10+. iOS nằm ngoài phạm vi nghiệm thu cam kết của V1 (Q-14 / CR-001). |
+| NFR-CMP-002 | Must | Nền tảng Mobile | Phạm vi phát hành và nghiệm thu Mobile cam kết hỗ trợ Android 10+. iOS nằm ngoài phạm vi nghiệm thu cam kết của V1 (Q-14 / CR-001 / ADR-005). |
 | NFR-MNT-001 | Must | Khả năng kiểm thử | Business rule eligibility, dependency/readiness gate, one-winner, blocker duration và quality gate phải có unit/integration test phù hợp. |
 | NFR-MNT-002 | Must | Logging/correlation | Lỗi hệ thống và thao tác quan trọng phải có mã correlation/request để đối chiếu giữa phản hồi, server log và audit. |
 | NFR-MNT-003 | Must | Cấu hình môi trường | Secret và cấu hình môi trường tách khỏi source/public docs; có hướng dẫn cấu hình cho môi trường demo. |
@@ -33,6 +33,7 @@ These measurable requirements come from SRS V2.1, formally reconciled with appro
 
 - Record the benchmark environment, dataset size and measurement method with every performance result.
 - Treat authorization, one-winner assignment, Start gate, Hold Point and quality close failures as release-blocking.
-- Test retry/idempotency and concurrent execution at the application boundary, not only with isolated units.
+- Test retry/idempotency and concurrent execution at the application boundary against real PostgreSQL (ADR-012), not only with isolated units.
 - Web and Mobile must demonstrate shared business state; a channel-specific copy of a rule is not acceptable.
-- NFR-CMP-002 is approved for Android 10+ (CR-001/Q-14). iOS is excluded from committed V1 release/acceptance verification.
+- `NFR-CMP-002` is approved for Android 10+ (`CR-001/Q-14`, `ADR-005`, `ADR-015`). iOS is excluded from committed V1 release/acceptance verification.
+- Automated CI verification on GitHub Actions enforces lint, typecheck, unit tests, PostgreSQL integration tests, and build checks before merge (ADR-013).
