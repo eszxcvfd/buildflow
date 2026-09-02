@@ -13,7 +13,9 @@ const EnvSchema = z.object({
 
 export type AppEnv = z.infer<typeof EnvSchema>;
 
-export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
+export type ProcessEnv = Record<string, string | undefined>;
+
+export function loadEnv(source: ProcessEnv = process.env): AppEnv {
   const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
     const issues = parsed.error.issues

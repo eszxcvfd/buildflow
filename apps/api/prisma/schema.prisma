@@ -1,0 +1,23 @@
+// BuildFlow — Prisma schema baseline.
+//
+// This schema is intentionally empty of business entities. It exists only
+// to prove the Prisma → PostgreSQL 18 toolchain end to end. Business
+// tables will be added module by module through approved Prisma migrations.
+//
+// In Prisma 7 the datasource connection URL is provided by
+// `prisma.config.ts` (Migrate) and the `PrismaClient` adapter at runtime
+// (application). The schema here only declares the database provider and
+// generator.
+//
+// See:
+//   - docs/architecture/adr/ADR-007-postgresql-database.md
+//   - docs/architecture/adr/ADR-008-prisma-migrations.md
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

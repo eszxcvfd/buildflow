@@ -11,7 +11,7 @@
     "build:web": "expo export --platform web",
     "validate": "expo-doctor",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx",
+    "lint": "eslint .",
     "test": "echo \"no @buildflow/mobile tests yet\" && exit 0"
   },
   "dependencies": {

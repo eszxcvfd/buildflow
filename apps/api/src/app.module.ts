@@ -5,6 +5,7 @@ import { configValidationSchema } from './config/env.schema';
 import configuration from './config/configuration';
 import { HealthModule } from './health/health.module';
 import { AppController } from './app.controller';
+import { PrismaModule } from './database/prisma.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AppController } from './app.controller';
       validationSchema: configValidationSchema,
       envFilePath: ['.env.local', '.env'],
     }),
+    PrismaModule,
     HealthModule,
   ],
   controllers: [AppController],
