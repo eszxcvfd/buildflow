@@ -5,7 +5,7 @@
 - Product facts live in this foundation and its registered source snapshots.
 - Root `CONTEXT.md` owns domain vocabulary only.
 - Open choices live only in `OPEN-DECISIONS.md` until approved.
-- Hard-to-reverse accepted technical choices may receive a concise ADR in `docs/adr/`.
+- Hard-to-reverse accepted technical choices may receive a concise ADR in `docs/architecture/adr/`.
 - Module details live in one module design created just in time.
 
 ## Required metadata
@@ -30,6 +30,24 @@ Allowed status: Draft, In Review, Approved, Superseded.
 - Before implementation: approve the module design and Definition of Ready.
 - Before merge: update traceability and evidence.
 - After an approved change: update all affected documents in the same pull request.
+
+## Artifact placement
+
+To keep the repository free of orphan directories, every written artifact must use the canonical location below. Do not invent new top-level folders (`docs/plans/`, `docs/notes/`, `docs/tmp/`, `planning/`, `notes/`) without demonstrated need and explicit change control approval.
+
+| Artifact | Canonical location |
+| --- | --- |
+| Product / business baseline, source-of-truth requirements, state machines, business rules, module map | `docs/foundation/` |
+| Change records, policy reconciliations | `docs/foundation/changes/` |
+| Domain vocabulary, glossary of approved terms | `CONTEXT.md` (repo root) |
+| Architecture decisions (ADRs) | `docs/architecture/adr/` |
+| Feature specs and implementation tickets | GitHub Issues |
+| Just-in-time module designs | `docs/foundation/modules/<module>/` (see `docs/foundation/modules/README.md`) |
+| Large multi-session decision planning / wayfinder maps | GitHub Issues |
+| Temporary reports, session handoffs, research notes, throwaway prototypes | OS temporary directory (e.g. `%TEMP%/opencode/`), unless the relevant skill explicitly says otherwise |
+| Tooling-derived docs (e.g. generated API client references) | `packages/api-client/README.md` or `apps/<app>/README.md` |
+
+When two locations seem plausible, follow the rule in `WORK-ROUTING.md`. The repository documentation policy is the source of truth.
 
 ## Agent loading
 

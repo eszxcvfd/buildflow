@@ -20,7 +20,7 @@ Use the repository's canonical GitHub triage labels.
 
 ### Domain docs
 
-This is a single-context repository using root `CONTEXT.md`. Create `docs/adr/` lazily only for an accepted decision that genuinely requires an ADR.
+This is a single-context repository using root `CONTEXT.md`. Create `docs/architecture/adr/` lazily only for an accepted decision that genuinely requires an ADR. The legacy redirect at `docs/adr/README.md` is not a creation target.
 
 ### Canonical BuildFlow foundation
 
