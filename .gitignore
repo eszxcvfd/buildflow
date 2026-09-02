@@ -4,8 +4,16 @@ dist/
 out/
 coverage/
 .expo/
+.turbo/
 *.log
 .DS_Store
+
+# environment
 .env
-infra/docker/.env
+.env.local
+.env.*.local
+infra/.env
+
+# build artifacts
 *.tsbuildinfo
+packages/api-client/src/generated/

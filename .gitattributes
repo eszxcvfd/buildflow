@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+package-lock.json   text=auto eol=lf -diff
+yarn.lock           text=auto eol=lf -diff
+pnpm-lock.yaml      text=auto eol=lf -diff merge=union
+
+*.png  binary
+*.jpg  binary
+*.webp binary

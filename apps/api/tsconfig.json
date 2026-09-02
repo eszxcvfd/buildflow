@@ -1,0 +1,14 @@
+{
+  "extends": "@buildflow/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./src",
+    "paths": {
+      "@buildflow/config": ["./src/config/configuration"]
+    },
+    "types": ["jest", "node"],
+    "rootDirs": ["./src", "./test", "./scripts"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/generated/**"]
+}

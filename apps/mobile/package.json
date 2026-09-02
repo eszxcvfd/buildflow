@@ -1,0 +1,49 @@
+{
+  "name": "@buildflow/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "dev": "expo start --port 19006",
+    "android": "expo run:android",
+    "web": "expo start --web --port 19006",
+    "build:web": "expo export --platform web",
+    "validate": "expo-doctor",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo \"no @buildflow/mobile tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@buildflow/api-client": "workspace:*",
+    "@buildflow/contracts": "workspace:*",
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@tanstack/react-query": "^5.59.0",
+    "expo": "~57.0.19",
+    "expo-build-properties": "~57.0.16",
+    "expo-constants": "~57.0.17",
+    "expo-font": "~57.0.3",
+    "expo-linking": "~57.0.9",
+    "expo-router": "~57.0.18",
+    "expo-secure-store": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-hook-form": "^7.54.0",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-web": "^0.21.2",
+    "zod": "^3.23.8",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@buildflow/eslint-config": "workspace:*",
+    "@buildflow/tsconfig": "workspace:*",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "expo-doctor": "1.20.4",
+    "typescript": "~6.0.3"
+  }
+}

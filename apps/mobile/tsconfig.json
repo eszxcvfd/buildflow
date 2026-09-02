@@ -1,0 +1,20 @@
+{
+  "extends": "@buildflow/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "jsx": "react-native",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "types": ["react-native"]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": ["node_modules", ".expo"]
+}

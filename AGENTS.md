@@ -12,12 +12,27 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues and are managed with `gh`. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues and are managed with `gh`.
 
 ### Triage labels
 
-Use the default canonical triage labels. See `docs/agents/triage-labels.md`.
+Use the repository's canonical GitHub triage labels.
 
 ### Domain docs
 
-This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+This is a single-context repository using root `CONTEXT.md`. Create `docs/architecture/adr/` lazily only for an accepted decision that genuinely requires an ADR. The legacy redirect at `docs/adr/README.md` is not a creation target.
+
+### Canonical BuildFlow foundation
+
+- For every product, design, code, schema, test or delivery task, read `docs/foundation/README.md` immediately after `WORK-ROUTING.md`.
+- `docs/foundation/` and root `CONTEXT.md` are the current product/design authority.
+- Root `BRD.md`, `SRS.md`, `DBD.md` and `ARCHITECTURE.md` are entry points only.
+- Files marked legacy or unreconciled must not be used as business or architecture truth.
+- Never infer answers for entries in `docs/foundation/OPEN-DECISIONS.md`.
+- Before implementing a module, complete the just-in-time module design and satisfy the documented Definition of Ready.
+
+### Environment contract
+
+- Keep runtime values in the owning workspace's ignored `.env` file and track a safe `.env.example` beside it.
+- Add, rename, or remove an environment variable in code, its validator, `.env.example`, relevant documentation, and CI/deployment configuration in the same change.
+- Keep examples free of real credentials. An app reads only its own environment file; shared libraries do not read application environment variables.

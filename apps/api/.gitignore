@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.tsbuildinfo
+src/generated/
+prisma/migrations/dev.db*

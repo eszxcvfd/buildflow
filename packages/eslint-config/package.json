@@ -1,0 +1,28 @@
+{
+  "name": "@buildflow/eslint-config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./base": "./base.js",
+    "./nestjs": "./nestjs.js",
+    "./nextjs": "./nextjs.js",
+    "./react-native": "./react-native.js"
+  },
+  "files": [
+    "base.js",
+    "nestjs.js",
+    "nextjs.js",
+    "react-native.js"
+  ],
+  "dependencies": {
+    "@eslint/js": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.13.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9.0.0"
+  }
+}

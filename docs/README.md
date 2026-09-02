@@ -1,41 +1,14 @@
 # Documentation
 
-> Đây là canonical index cho quyền sở hữu và định tuyến tài liệu. Mỗi chủ đề chỉ có một owner; tài liệu khác phải link tới owner thay vì chép lại rule.
+Start at [foundation/README.md](foundation/README.md).
 
-## Ownership and routing
+## Canonical current documents
 
-| Area | Canonical owner |
-| --- | --- |
-| System orientation and cross-workspace architecture | [`../ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| Workspace change routing | [`../WORK-ROUTING.md`](../WORK-ROUTING.md) |
-| Lane selection, proof and closeout | [`process/DEVELOPMENT.md`](process/DEVELOPMENT.md) |
-| Current work queue | [`issues/ROADMAP.md`](issues/ROADMAP.md) |
-| Non-trivial plans and durable coordination | [`../PLANS.md`](../PLANS.md) |
-| API modular/clean architecture | [`architecture/API.md`](architecture/API.md) |
-| Web routes, features and Ark UI | [`architecture/WEB.md`](architecture/WEB.md) |
-| Mobile React Native/Expo proposal | [`architecture/MOBILE.md`](architecture/MOBILE.md) |
-| Runtime lifecycle and environment boundaries | [`architecture/RUNTIME.md`](architecture/RUNTIME.md) |
-| Data layer: Docker, PostgreSQL and Redis | [`architecture/DATA.md`](architecture/DATA.md) |
-| HTTP/JSON/OpenAPI and compatibility admission | [`architecture/NETCODE.md`](architecture/NETCODE.md) |
-| Server resources and cook/package boundaries | [`architecture/CONTENT.md`](architecture/CONTENT.md) |
-| Framework/template source notes | [`architecture/STACK-REFERENCES.md`](architecture/STACK-REFERENCES.md) |
-| Durable architectural decisions | [`adr/`](adr/) |
+- Product and sources: [foundation/SOURCE-REGISTER.md](foundation/SOURCE-REGISTER.md), [foundation/PRODUCT-BASELINE.md](foundation/PRODUCT-BASELINE.md)
+- Domain and design: [../CONTEXT.md](../CONTEXT.md), [foundation/MODULE-MAP.md](foundation/MODULE-MAP.md), [foundation/WORKFLOWS-AND-STATES.md](foundation/WORKFLOWS-AND-STATES.md)
+- Architecture & Technical Platform: [architecture/adr/README.md](architecture/adr/README.md) (ADR-001 through ADR-015)
+- Requirements and data: [foundation/REQUIREMENTS-CATALOG.md](foundation/REQUIREMENTS-CATALOG.md), [foundation/DATA-BASELINE.md](foundation/DATA-BASELINE.md)
+- Governance: [foundation/OPEN-DECISIONS.md](foundation/OPEN-DECISIONS.md), [foundation/TRACEABILITY.md](foundation/TRACEABILITY.md), [foundation/CHANGE-CONTROL.md](foundation/CHANGE-CONTROL.md)
+- Delivery: [foundation/DELIVERY-ROADMAP.md](foundation/DELIVERY-ROADMAP.md), [foundation/GIT-WORKFLOW.md](foundation/GIT-WORKFLOW.md), [foundation/TEST-STRATEGY.md](foundation/TEST-STRATEGY.md)
 
-## Reading rule
-
-Open the smallest current document set needed:
-
-- mọi thay đổi: `ARCHITECTURE.md` và `WORK-ROUTING.md`;
-- API/domain: `architecture/API.md`;
-- web: `architecture/WEB.md`;
-- mobile: `architecture/MOBILE.md`;
-- contract: `architecture/NETCODE.md`;
-- lifecycle/deploy: `architecture/RUNTIME.md`;
-- data layer: `architecture/DATA.md`;
-- design decision khó đảo ngược: `adr/` và [`../PLANS.md`](../PLANS.md) nếu thuộc điều kiện plan.
-
-Khi tài liệu owner im lặng hoặc stale, cập nhật owner trước khi dựa vào rule mới. Không tạo routing note cạnh tranh trong workspace, issue hoặc skill.
-
-## Document status
-
-Tài liệu architecture hiện mô tả target design cho scaffold rỗng. Claim runtime/test/build chỉ được đánh dấu verified sau khi có source/toolchain và bằng chứng tương ứng.
+All unreconciled scaffold documentation has been removed. Canonical technical platform decisions are governed by the accepted Architecture Decision Records in [architecture/adr/](architecture/adr/README.md).

@@ -1,0 +1,9 @@
+{
+  "extends": "@buildflow/tsconfig/react-library.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts", "src/generated/**/*.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}
