@@ -1,16 +1,15 @@
-# Workspace Protocol — BuildFlow
+# Workspace Protocol — buildflow
 
-<!-- PASEO_WORKSPACE_PROTOCOL_VERSION: 2 -->
+<!-- PASEO_WORKSPACE_PROTOCOL_VERSION: 3 -->
 
-- identity: `owner=Human; version=1; last_reviewed=2026-08-21; applies_to=/home/trung/Documents/2026/project/buildflow`
-- project risk/protected areas: `pre-publication scaffold; risk class=unclassified; protect src/api domain and HTTP/OpenAPI contract, src/web and src/mobile boundaries, runtime/environment credentials, and generated artifacts; target-design documents are not runtime evidence`
-- default topology: `Lead-direct for exact tiny coordination or documentation edits; use one bounded Engineer Peer for product implementation; use an independent Reviewer in a fresh worktree for material candidate review; add Supervisor observation only when it can change a decision or reduce risk`
-- ownership/hotspots: `one writer per moving scope; src/api owns domain and API contract, src/web owns web presentation/routes, src/mobile owns the mobile client, and documentation ownership follows docs/README.md and WORK-ROUTING.md; Human owns merge, push, deploy, and irreversible product decisions`
-- routing defaults: `route by producer and owner using WORK-ROUTING.md; read ARCHITECTURE.md plus the smallest relevant owner docs; every delegated task states reason, scope, base/candidate SHA where applicable, and expiry; no silent provider/model/host fallback`
-- peer model routing: `Peer dùng model đúng theo: /home/trung/.paseo-pi-team`.
-- project policy: `no package or runtime version is locked yet; when one is adopted, record its exact package/version, scope, authority, and conflict rule in the owning document or ADR; keep the pre-publication API/protocol as one current v1 contract with no legacy or fallback path`
-- review/evidence: `documentation changes require file/link/tree/source consistency only; code changes require the lane proof in docs/process/DEVELOPMENT.md; never claim test, build, lint, or runtime success without command output; Lead owns acceptance and Human owns merge/deploy`
-- escalation/Human decisions: `Peers may return REOPEN_REQUEST, DEPENDENCY_REQUEST, or BLOCKED with file/command evidence; unresolved domain, product, security, or irreversible decisions go to Human; durable decisions belong in the relevant owner document, ADR, or PLANS.md`
-- repository exceptions/anti-patterns: `no second routing rule, no two writers on one moving scope, no cross-workspace implementation imports, no backend logic duplicated in web BFF routes, no shared DOM/native UI or speculative infrastructure, and no treating scaffold placeholders as verified runtime behavior`
-
-LEAD_WRITE_POLICY: allowed for this coordination artifact only; product implementation remains Engineer Peer-owned.
+- identity: owner `Human`; version `1`; last_reviewed `2026-09-03`; applies_to `/home/trung/Documents/2026/project/buildflow`
+- project risk/protected areas: risk class `unclassified`; chưa ghi nhận protected area riêng; Lead phải đọc current repository instructions và current bytes trước mutation.
+- default topology: Lead-direct cho exact tiny task; chỉ thêm smallest useful Peer/Supervisor khi uncertainty, risk hoặc independent judgment thật sự cần.
+- ownership/hotspots: mỗi moving/coupled scope có một write Owner; assignment phải nêu shared hoặc coupled surfaces trước delegation.
+- routing defaults: discover rồi pin provider/model/effort trong bounded assignment; không silent fallback; route phải có reason, scope và expiry.
+- issue tracker: Beads Central là durable issue/work graph bắt buộc cho Lead, Peer và Supervisor. Mỗi role gọi `beads_status` khi bắt đầu assignment, dùng đúng project do Paseo bind, đọc issue liên quan trước action và ghi authoritative readback ở material handoff; Central unavailable thì mutation `BLOCKED` và issue state giữ `UNKNOWN`, việc inspect không mutation vẫn tiếp tục, không fallback native `bd`/tracker khác. Lead create/update và chỉ close sau verdict; mutating Peer claim/update exact granted issue và dùng `discoveredFrom`; read-only Peer không cần issue grant để inspect; Supervisor read-only.
+- existing harness: chưa khảo sát. Ghi ra những gì đã cai trị repository này (`AGENTS.md`, `CONTRIBUTING`, CI gates, review conventions) và protocol này nhường cái nào; chỉ ghi `none` sau khi đã thực sự nhìn.
+- project policy: `none`; chỉ activate exact package + version + scope + authority + conflict rule bằng Human decision hoặc protocol revision mới.
+- review/evidence: focused checks và current diff là mặc định; independent review theo material risk; Lead/Human giữ acceptance authority.
+- escalation/Human decisions: dùng `REOPEN`, `DEPENDENCY` hoặc `BLOCKED` với evidence và exact decision cần Human chốt.
+- repository exceptions/anti-patterns: chưa ghi nhận exception riêng; không dựng control plane thứ hai, self-approve hoặc mở rộng lease từ tool/runtime capability.
