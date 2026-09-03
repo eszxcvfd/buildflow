@@ -28,6 +28,30 @@
           "health"
         ]
       }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Auth"
+        ]
+      }
     }
   },
   "info": {
@@ -46,6 +70,11 @@
         "type": "http"
       }
     },
-    "schemas": {}
+    "schemas": {
+      "LoginRequestDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
   }
 }

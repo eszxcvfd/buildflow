@@ -7,7 +7,7 @@ const EnvSchema = z.object({
   CORS_ORIGINS: z.string().min(1),
   DATABASE_URL: z.string().url(),
   MINIO_ENDPOINT: z.string().optional().default(''),
-  MINIO_PORT: z.coerce.number().int().positive(),
+  MINIO_PORT: z.coerce.number().int().positive().optional().default(9000),
   MINIO_ACCESS_KEY: z.string().optional().default(''),
   MINIO_SECRET_KEY: z.string().optional().default(''),
 });

@@ -15,12 +15,27 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Module } from '@nestjs/common';
 import { HealthController } from '../src/health/health.controller';
 import { AppController } from '../src/app.controller';
+import { AuthController } from '../src/modules/iam/api/rest/controller/auth.controller';
+import { LoginUseCase } from '../src/modules/iam/application/use-case/login.use-case';
+import { USER_REPOSITORY } from '../src/modules/iam/domain/repository/user.repository.port';
+import { HASHER_PORT } from '../src/modules/iam/application/port/hasher.port';
+import { TOKEN_PORT } from '../src/modules/iam/application/port/token.port';
+import { AUDIT_PORT } from '../src/modules/iam/application/port/audit.port';
+import { LOGIN_LIMITER_PORT } from '../src/modules/iam/application/port/login-limiter.port';
 import { PrismaService } from '../src/database/prisma.service';
 import { API_GLOBAL_PREFIX } from '../src/config/api.constants';
 
 @Module({
-  controllers: [AppController, HealthController],
-  providers: [{ provide: PrismaService, useValue: {} }],
+  controllers: [AppController, HealthController, AuthController],
+  providers: [
+    { provide: PrismaService, useValue: {} },
+    LoginUseCase,
+    { provide: USER_REPOSITORY, useValue: { findByEmail: async () => null } },
+    { provide: HASHER_PORT, useValue: { compare: async () => false } },
+    { provide: TOKEN_PORT, useValue: { sign: async () => ({ token: '', expiresAt: new Date() }) } },
+    { provide: AUDIT_PORT, useValue: { log: async () => {} } },
+    { provide: LOGIN_LIMITER_PORT, useValue: { isBlocked: async () => false, recordFailure: async () => {}, reset: async () => {} } },
+  ],
 })
 class OpenapiOnlyModule {}
 

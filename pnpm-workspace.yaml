@@ -3,7 +3,10 @@ packages:
   - "packages/*"
 
 allowBuilds:
-  '@scarf/scarf': set this to true or false
+  '@prisma/engines': true
+  '@scarf/scarf': true
+  prisma: true
+  unrs-resolver: true
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.21'
