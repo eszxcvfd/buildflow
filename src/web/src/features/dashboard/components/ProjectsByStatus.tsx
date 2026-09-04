@@ -51,7 +51,7 @@ export function ProjectsByStatus() {
 
   React.useEffect(() => {
     let alive = true;
-    listProjects().then(
+    listProjects({ limit: 100 }).then(
       (data) => {
         if (alive) setState({ kind: 'ok', groups: groupProjectsByStatus(data), total: data.length });
       },

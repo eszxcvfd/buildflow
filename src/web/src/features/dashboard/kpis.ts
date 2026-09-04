@@ -8,7 +8,7 @@ import type { ProjectsOverview } from './hooks/useProjectsOverview';
 /**
  * Các loader KPI chạy độc lập — hàm module-scope để useKpi không re-run effect.
  * Ghi chú: lib/api/listProjects() không nhận tham số lọc status, nên số "đang chạy"
- * được đếm client-side từ chính danh sách trả về.
+ * được đếm client-side từ chính danh sách trả về (fetch limit 100 — server cap).
  */
 
 export async function loadContractorsKpi(): Promise<KpiData> {

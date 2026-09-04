@@ -56,8 +56,18 @@ async function parseError(res: Response, fallback: string): Promise<never> {
   throw { status: res.status, message: fallback } satisfies ProjectsError;
 }
 
-export async function listProjects(): Promise<Project[]> {
-  const res = await fetch(`${getApiBaseUrl()}/api/v1/projects`, {
+export interface ListProjectsParams {
+  /** Server giới hạn 1–100 (mặc định 20). Dashboard dùng 100 để đếm chính xác. */
+  limit?: number;
+  offset?: number;
+}
+
+export async function listProjects(params: ListProjectsParams = {}): Promise<Project[]> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  const query = qs.toString();
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/projects${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
     cache: 'no-store',
   });

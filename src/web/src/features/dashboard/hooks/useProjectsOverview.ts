@@ -18,7 +18,7 @@ export function useProjectsOverview(): ProjectsOverview {
 
   React.useEffect(() => {
     let alive = true;
-    listProjects().then(
+    listProjects({ limit: 100 }).then(
       (data) => {
         if (alive) setState({ projects: data, loading: false, error: null });
       },

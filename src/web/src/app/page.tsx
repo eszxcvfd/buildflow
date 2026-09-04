@@ -1,7 +1,22 @@
+import type { CSSProperties } from 'react';
+import { BrandMark } from '@/components/layout/BrandMark';
 import { fetchStatus, fetchHealthLive, fetchHealthReady } from '@/lib/api/client';
 import type { ApiStatus, HealthLive, HealthReady } from '@/lib/api/client';
 
 export const dynamic = 'force-dynamic';
+
+const preStyle: CSSProperties = {
+  margin: 0,
+  padding: '12px 14px',
+  background: 'var(--bf-surface-2)',
+  border: '1px solid var(--bf-line)',
+  borderRadius: 'var(--bf-r-control)',
+  fontSize: 12.5,
+  lineHeight: 1.5,
+  overflowX: 'auto',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+};
 
 export default async function HomePage() {
   let status: ApiStatus | null = null;
@@ -16,37 +31,64 @@ export default async function HomePage() {
   }
 
   return (
-    <main>
-      <nav style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem', fontSize: '0.95rem' }}>
-        <a href="/login" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
+    <div className="bf-content" style={{ maxWidth: 860, paddingTop: 40 }}>
+      <header className="bf-page-head" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <BrandMark size={34} />
+        <div>
+          <h1 style={{ fontSize: 22 }}>Buildflow — trạng thái hệ thống</h1>
+          <p className="bf-page-head-sub">Sàn điều hành thi công: dự án, nhà thầu, công nhân.</p>
+        </div>
+      </header>
+
+      <nav style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+        <a className="bf-btn bf-btn-primary" href="/login">
           Đăng nhập
         </a>
-        <a href="/dashboard" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
-          Dashboard
+        <a className="bf-btn bf-btn-secondary" href="/dashboard">
+          Vào bảng điều khiển
         </a>
       </nav>
-      <h1>Buildflow Status</h1>
+
       {error ? (
-        <div role="alert" style={{ color: 'red' }}>
-          <p>API unavailable: {error}</p>
-          <p>Check that the API service is running at the configured URL.</p>
+        <div className="bf-card">
+          <div className="bf-alert bf-tone-risk" role="alert">
+            <p style={{ margin: '0 0 6px', fontWeight: 600 }}>Không kết nối được API</p>
+            <p style={{ margin: 0 }}>{error}</p>
+            <p style={{ margin: '6px 0 0', color: 'var(--bf-muted)' }}>
+              Kiểm tra dịch vụ API đã chạy tại địa chỉ cấu hình chưa.
+            </p>
+          </div>
         </div>
       ) : (
-        <>
-          <section aria-labelledby="api-status">
-            <h2 id="api-status">API v1 Status</h2>
-            <pre>{JSON.stringify(status, null, 2)}</pre>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <section className="bf-card" aria-labelledby="api-status">
+            <div className="bf-card-head">
+              <h2 className="bf-card-title" id="api-status">
+                API v1
+              </h2>
+            </div>
+            <pre style={preStyle}>{JSON.stringify(status, null, 2)}</pre>
           </section>
-          <section aria-labelledby="health-live">
-            <h2 id="health-live">Liveness</h2>
-            <pre>{JSON.stringify(live, null, 2)}</pre>
+
+          <section className="bf-card" aria-labelledby="health-live">
+            <div className="bf-card-head">
+              <h2 className="bf-card-title" id="health-live">
+                Liveness
+              </h2>
+            </div>
+            <pre style={preStyle}>{JSON.stringify(live, null, 2)}</pre>
           </section>
-          <section aria-labelledby="health-ready">
-            <h2 id="health-ready">Readiness</h2>
-            <pre>{JSON.stringify(ready, null, 2)}</pre>
+
+          <section className="bf-card" aria-labelledby="health-ready">
+            <div className="bf-card-head">
+              <h2 className="bf-card-title" id="health-ready">
+                Readiness
+              </h2>
+            </div>
+            <pre style={preStyle}>{JSON.stringify(ready, null, 2)}</pre>
           </section>
-        </>
+        </div>
       )}
-    </main>
+    </div>
   );
 }
