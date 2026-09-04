@@ -9,7 +9,7 @@ async function bootstrap() {
   const config = loadConfig();
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:19006', 'http://localhost:19007'],
+    origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3101', 'http://localhost:19006', 'http://localhost:19007', 'http://localhost:19066'],
     credentials: true,
   });
   app.enableShutdownHooks();

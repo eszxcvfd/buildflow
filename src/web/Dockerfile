@@ -4,6 +4,9 @@ COPY package.json package-lock.json* ./
 RUN npm ci --ignore-scripts || npm install --ignore-scripts
 COPY tsconfig.json next.config.mjs ./
 COPY src ./src
+# NEXT_PUBLIC_* được inline lúc build — cho phép cấu hình API base của browser
+ARG NEXT_PUBLIC_API_URL=http://localhost:3000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
 FROM node:20.11.1-alpine AS runner

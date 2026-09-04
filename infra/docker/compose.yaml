@@ -51,6 +51,7 @@ services:
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (>= 32 ky tu) in infra/docker/.env}
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     networks: [internal]
@@ -70,6 +71,8 @@ services:
     build:
       context: ../../src/web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
     image: buildflow-web:local
     restart: unless-stopped
     environment:
