@@ -9,10 +9,8 @@ export const metadata = { title: 'Đặt lại mật khẩu — Buildflow' };
  */
 export default function ResetPasswordPage() {
   return (
-    <main style={{ minHeight: '80vh', display: 'grid', placeItems: 'center', padding: '2rem 1rem', background: '#f9fafb' }}>
-      <React.Suspense fallback={<p role="status">Đang tải biểu mẫu…</p>}>
-        <ResetPasswordForm />
-      </React.Suspense>
-    </main>
+    <React.Suspense fallback={<p role="status" className="bf-card-meta">Đang tải biểu mẫu…</p>}>
+      <ResetPasswordForm />
+    </React.Suspense>
   );
 }

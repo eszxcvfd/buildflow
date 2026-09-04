@@ -3,6 +3,9 @@
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { confirmPasswordReset, type PasswordActionError } from '@/lib/api/password';
+import { Card } from '@/components/ui/card/Card';
+import { Input } from '@/components/ui/input/Input';
+import { Alert } from '@/components/ui/alert/Alert';
 
 export const POLICY_HINT = 'Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số.';
 
@@ -47,43 +50,79 @@ export function ResetPasswordForm() {
     }
   }
 
-  function fieldError(name: string) {
-    return fieldErrors[name] ? <span style={{ color: '#b91c1c', fontSize: '0.8rem', marginTop: 2, display: 'block' }}>{fieldErrors[name].join(' ')}</span> : null;
+  function fieldError(name: string, id?: string) {
+    return fieldErrors[name] ? (
+      <span id={id} role="alert" className="bf-field-error">
+        {fieldErrors[name].join(' ')}
+      </span>
+    ) : null;
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 460, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Đặt lại mật khẩu</h1>
+    <Card>
+      <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+        <h1 className="bf-card-title" style={{ fontSize: '1.15rem', margin: 0 }}>
+          Đặt lại mật khẩu
+        </h1>
+        <p className="bf-card-meta" style={{ margin: 0 }}>
+          {POLICY_HINT}
+        </p>
+      </div>
+
       {done ? (
-        <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '1rem' }}>
-          <p style={{ margin: 0, color: '#166534' }}>Đổi mật khẩu thành công. Đang chuyển đến trang đăng nhập…</p>
-        </div>
+        <Alert tone="success">Đổi mật khẩu thành công. Đang chuyển đến trang đăng nhập…</Alert>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem' }}>
-          {globalError ? <p role="alert" style={{ color: '#b91c1c', margin: 0 }}>{globalError}</p> : null}
-          {!token ? <p style={{ color: '#b91c1c', fontSize: '0.85rem', margin: 0 }}>Link không chứa token đặt lại. Vui lòng dùng link mới từ email.</p> : null}
-          <p style={{ margin: 0, fontSize: '0.82rem', color: '#6b7280' }}>{POLICY_HINT}</p>
-          <div>
-            <label htmlFor="rp-new" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Mật khẩu mới</label>
-            <input id="rp-new" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={submitting || !token}
-              style={{ width: '100%', border: fieldErrors.newPassword ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} />
-            {fieldError('newPassword')}
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14 }}>
+          {globalError ? <Alert tone="error">{globalError}</Alert> : null}
+          {!token ? (
+            <Alert tone="error">Link không chứa token đặt lại. Vui lòng dùng link mới từ email.</Alert>
+          ) : null}
+          <div className="bf-field">
+            <label htmlFor="rp-new" className="bf-label">
+              Mật khẩu mới
+            </label>
+            <Input
+              id="rp-new"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              disabled={submitting || !token}
+              hasError={Boolean(fieldErrors.newPassword)}
+              aria-describedby={fieldErrors.newPassword ? 'rp-new-error' : undefined}
+            />
+            {fieldError('newPassword', 'rp-new-error')}
           </div>
-          <div>
-            <label htmlFor="rp-confirm" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Xác nhận mật khẩu mới</label>
-            <input id="rp-confirm" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={submitting || !token}
-              style={{ width: '100%', border: fieldErrors.confirmPassword ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} />
-            {fieldError('confirmPassword')}
+          <div className="bf-field">
+            <label htmlFor="rp-confirm" className="bf-label">
+              Xác nhận mật khẩu mới
+            </label>
+            <Input
+              id="rp-confirm"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={submitting || !token}
+              hasError={Boolean(fieldErrors.confirmPassword)}
+              aria-describedby={fieldErrors.confirmPassword ? 'rp-confirm-error' : undefined}
+            />
+            {fieldError('confirmPassword', 'rp-confirm-error')}
           </div>
-          <button type="submit" disabled={submitting || !token}
-            style={{ background: submitting || !token ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '0.6rem 1rem', fontWeight: 600, cursor: submitting ? 'wait' : 'pointer' }}>
+          <button
+            type="submit"
+            className="bf-btn bf-btn-primary"
+            disabled={submitting || !token}
+            aria-busy={submitting || undefined}
+            style={{ width: '100%' }}
+          >
             {submitting ? 'Đang đặt lại…' : 'Đặt lại mật khẩu'}
           </button>
-          <p style={{ margin: 0, fontSize: '0.85rem' }}>
-            <a href="/login" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Quay lại đăng nhập</a>
+          <p className="bf-card-meta" style={{ margin: 0 }}>
+            <a href="/login">Quay lại đăng nhập</a>
           </p>
         </form>
       )}
-    </main>
+    </Card>
   );
 }

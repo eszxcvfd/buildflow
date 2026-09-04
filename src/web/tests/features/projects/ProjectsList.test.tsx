@@ -23,13 +23,15 @@ describe('ProjectsList (IAM-SRS-006)', () => {
 
   afterEach(cleanup);
 
-  it('renders member projects with scope badge', async () => {
+  it('renders member projects in a table with status badge', async () => {
     listMock.mockResolvedValueOnce([
       { id: 'p1', code: 'PRA', name: 'Du an A', status: 'ACTIVE', managerId: 'm1', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
     ]);
     render(<ProjectsList />);
     expect(await screen.findByText(/Du an A/)).toBeTruthy();
-    expect(screen.getByText('Trong phạm vi của bạn')).toBeTruthy();
+    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getByText('ACTIVE')).toBeTruthy();
+    expect(screen.getByText(/PRA/)).toBeTruthy();
   });
 
   it('shows empty state when no member projects', async () => {

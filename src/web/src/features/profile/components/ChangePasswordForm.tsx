@@ -6,6 +6,7 @@ import { changePassword, type PasswordActionError } from '@/lib/api/password';
 import { getAuth, clearAuth, isTokenExpired } from '@/lib/auth/storage';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
+import { Input } from '@/components/ui/input/Input';
 import { Card } from '@/components/ui/card/Card';
 
 const POLICY_HINT = 'Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số.';
@@ -72,40 +73,78 @@ export function ChangePasswordForm() {
     }
   }
 
-  function fieldError(name: string) {
-    return fieldErrors[name] ? <span style={{ color: '#b91c1c', fontSize: '0.8rem', marginTop: 2, display: 'block' }}>{fieldErrors[name].join(' ')}</span> : null;
+  function fieldError(name: string, id?: string) {
+    return fieldErrors[name] ? (
+      <span id={id} role="alert" className="bf-field-error">
+        {fieldErrors[name].join(' ')}
+      </span>
+    ) : null;
   }
 
   if (!authChecked) return null;
 
   return (
     <Card>
-      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.9rem' }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Đổi mật khẩu</h2>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.82rem', color: '#6b7280' }}>{POLICY_HINT}</p>
+      <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+        <h2 className="bf-card-title" style={{ margin: 0 }}>
+          Đổi mật khẩu
+        </h2>
+        <p className="bf-card-meta" style={{ margin: 0 }}>
+          {POLICY_HINT}
+        </p>
+      </div>
+      {globalError ? <Alert tone="error">{globalError}</Alert> : null}
+      <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14, marginTop: globalError ? 14 : 0 }}>
+        <div className="bf-field">
+          <label htmlFor="cp-current" className="bf-label">
+            Mật khẩu hiện tại
+          </label>
+          <Input
+            id="cp-current"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            disabled={submitting}
+            hasError={Boolean(fieldErrors.currentPassword)}
+            aria-describedby={fieldErrors.currentPassword ? 'cp-current-err' : undefined}
+          />
+          {fieldError('currentPassword', 'cp-current-err')}
         </div>
-        {globalError ? <Alert tone="error">{globalError}</Alert> : null}
-        <div>
-          <label htmlFor="cp-current" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Mật khẩu hiện tại</label>
-          <input id="cp-current" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} disabled={submitting}
-            style={{ width: '100%', border: fieldErrors.currentPassword ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} />
-          {fieldError('currentPassword')}
+        <div className="bf-field">
+          <label htmlFor="cp-new" className="bf-label">
+            Mật khẩu mới
+          </label>
+          <Input
+            id="cp-new"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            disabled={submitting}
+            hasError={Boolean(fieldErrors.newPassword)}
+            aria-describedby={fieldErrors.newPassword ? 'cp-new-err' : undefined}
+          />
+          {fieldError('newPassword', 'cp-new-err')}
+        </div>
+        <div className="bf-field">
+          <label htmlFor="cp-confirm" className="bf-label">
+            Xác nhận mật khẩu mới
+          </label>
+          <Input
+            id="cp-confirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            disabled={submitting}
+            hasError={Boolean(fieldErrors.confirmPassword)}
+            aria-describedby={fieldErrors.confirmPassword ? 'cp-confirm-err' : undefined}
+          />
+          {fieldError('confirmPassword', 'cp-confirm-err')}
         </div>
         <div>
-          <label htmlFor="cp-new" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Mật khẩu mới</label>
-          <input id="cp-new" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={submitting}
-            style={{ width: '100%', border: fieldErrors.newPassword ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} />
-          {fieldError('newPassword')}
-        </div>
-        <div>
-          <label htmlFor="cp-confirm" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Xác nhận mật khẩu mới</label>
-          <input id="cp-confirm" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={submitting}
-            style={{ width: '100%', border: fieldErrors.confirmPassword ? '1px solid #ef4444' : '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} />
-          {fieldError('confirmPassword')}
-        </div>
-        <div>
-          <Button type="submit" loading={submitting} disabled={submitting}>
+          <Button type="submit" loading={submitting}>
             {submitting ? 'Đang đổi mật khẩu…' : 'Đổi mật khẩu'}
           </Button>
         </div>

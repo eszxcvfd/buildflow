@@ -62,8 +62,8 @@ describe('AdminUserList (IAM-SRS-004)', () => {
     expect(await screen.findByText(/a@b\.com/)).toBeTruthy();
     expect(screen.getByText(/Nguyen Van A/)).toBeTruthy();
     expect(screen.getByText(/Tran Thi B/)).toBeTruthy();
-    expect(screen.getAllByText('Bị khóa').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Hoạt động').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('LOCKED').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThan(0);
     expect(screen.getByText(/Tổng: 2 tài khoản/)).toBeTruthy();
   });
 
@@ -93,7 +93,7 @@ describe('AdminUserList (IAM-SRS-004)', () => {
       expect(statusMock).toHaveBeenCalledWith('u-1', { status: 'LOCKED' });
     });
     await waitFor(() => {
-      expect(screen.getAllByText('Bị khóa').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('LOCKED').length).toBeGreaterThan(0);
     });
   });
 
@@ -108,6 +108,6 @@ describe('AdminUserList (IAM-SRS-004)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận' }));
 
     expect(await screen.findByText('Lỗi hệ thống')).toBeTruthy();
-    expect(screen.getByText('a@b.com')).toBeTruthy();
+    expect(screen.getAllByText('a@b.com').length).toBeGreaterThan(0);
   });
 });

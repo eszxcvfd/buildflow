@@ -211,7 +211,10 @@ describe('route smoke', () => {
     const loginPage = fs.readFileSync('src/app/(auth)/login/page.tsx', 'utf8');
     expect(loginPage).toMatch(/LoginForm/);
     const dash = fs.readFileSync('src/app/(app)/dashboard/page.tsx', 'utf8');
-    expect(dash).toMatch(/BR-13|projectIds|roles/);
+    // Dashboard redesign: page không còn thẻ minh họa BR-13 — chỉ đọc getAuth()
+    // để chào theo tên; phạm vi dữ liệu (project-scoped, IAM-SRS-006/BR-13) do server lọc.
+    expect(dash).toMatch(/getAuth/);
+    expect(dash).toMatch(/PageHeader/);
   });
   it('does not import src/api (boundary WORK-ROUTING.md)', async () => {
     const fs = await import('fs');

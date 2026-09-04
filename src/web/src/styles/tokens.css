@@ -1,0 +1,61 @@
+/* ==========================================================================
+   Buildflow design tokens — "Blueprint & Site"
+   Ngôn ngữ thị giác: bản vẽ kỹ thuật (navy mực) + công trường (cam an toàn).
+   Cam chỉ dùng cho hành động và điểm nhấn dữ liệu; màu status chỉ trong badge.
+   ========================================================================== */
+
+:root {
+  /* Nền & bề mặt */
+  --bf-ink: #14243d;          /* navy bản vẽ: sidebar, tiêu đề */
+  --bf-ink-soft: #1d3152;     /* hover/gradient trên navy */
+  --bf-paper: #f2f4f7;        /* nền app — bê tông nhạt */
+  --bf-surface: #ffffff;      /* thẻ */
+  --bf-surface-2: #f7f9fb;    /* thẻ phụ / dòng bảng xen kẽ */
+
+  /* Chữ */
+  --bf-text: #1c2b42;
+  --bf-muted: #5c6b82;        /* xám xanh: phụ đề, meta */
+  --bf-faint: #8a97ab;        /* placeholder, meta yếu hơn */
+  --bf-text-on-ink: #e8edf5;
+  --bf-muted-on-ink: #97a7c1;
+
+  /* Vạch kẻ — như đường chỉ trên bản vẽ */
+  --bf-line: #dce1e8;
+  --bf-line-strong: #c4ccd8;
+
+  /* Cam an toàn — hành động + điểm nhấn dữ liệu, KHÔNG sơn nền section */
+  --bf-accent: #e8590c;
+  --bf-accent-hover: #cf4d09;
+  --bf-accent-soft: #fdeee4;  /* tint nền khi cần nhấn nhẹ */
+
+  /* Trạng thái (chỉ dùng trong badge/indicator) */
+  --bf-ok: #0e7c4a;
+  --bf-ok-bg: #e2f4ea;
+  --bf-busy: #925e00;
+  --bf-busy-bg: #fbf0d9;
+  --bf-risk: #c0331b;
+  --bf-risk-bg: #fbe9e5;
+  --bf-idle: #5c6b82;
+  --bf-idle-bg: #ebf0f5;
+  --bf-info: #1d5bbf;
+  --bf-info-bg: #e7effb;
+
+  /* Focus */
+  --bf-focus: #1d5bbf;
+
+  /* Hình học — bán kính phân tầng theo cấp bậc (sắc, kỹ thuật như bản vẽ) */
+  --bf-r-card: 10px;
+  --bf-r-control: 6px;
+  --bf-r-pill: 999px;
+
+  /* Bóng — đúng 1 cấp, thẻ nổi mới có */
+  --bf-shadow-card: 0 1px 2px rgba(20, 36, 61, 0.05), 0 4px 14px rgba(20, 36, 61, 0.05);
+  --bf-shadow-pop: 0 8px 28px rgba(20, 36, 61, 0.16);
+
+  /* Kích thước bố cục */
+  --bf-sidebar-w: 248px;
+  --bf-shell-max: 1280px;
+  --bf-gutter: 24px;
+
+  --bf-font: var(--font-be-vietnam-pro, 'Be Vietnam Pro'), system-ui, sans-serif;
+}

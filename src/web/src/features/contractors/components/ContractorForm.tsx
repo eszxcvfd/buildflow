@@ -118,18 +118,24 @@ export function ContractorForm({ mode, initial }: Props) {
 
   return (
     <Card style={{ maxWidth: 720 }}>
-      <h1 style={{ margin: '0 0 0.25rem', fontSize: '1.25rem', fontWeight: 700 }}>{mode === 'create' ? 'Tạo nhà thầu' : 'Cập nhật nhà thầu'}</h1>
-      <p style={{ margin: '0 0 1rem', color: '#6b7280', fontSize: '0.9rem' }}>
-        {mode === 'create' ? 'Nhập định danh, contact, scope và trạng thái. Thiếu contact/scope sẽ bị từ chối (400). INACTIVE không cho phân công mới.' : `Đang sửa: ${initial?.code ?? ''} · ${initial?.status ?? ''}`}
-      </p>
+      {mode === 'edit' ? (
+        <p className="bf-card-meta" style={{ marginTop: 0 }}>
+          Đang sửa: {initial?.code ?? ''} · {initial?.status ?? ''}
+        </p>
+      ) : null}
 
       {globalError ? <Alert tone="error">{globalError}</Alert> : null}
       {globalSuccess ? <Alert tone="success">{globalSuccess}</Alert> : null}
 
-      {initial && !initial.eligible ? <div style={{ marginTop: '0.75rem' }}><Alert tone="info">Nhà thầu hiện không đủ điều kiện phân công (INACTIVE). Lịch sử cũ vẫn xem được; phân công mới sẽ bị chặn.</Alert></div> : null}
+      {initial && !initial.eligible ? (
+        <Alert tone="info">
+          Nhà thầu hiện không đủ điều kiện phân công (INACTIVE). Lịch sử cũ vẫn xem được; phân công
+          mới sẽ bị chặn.
+        </Alert>
+      ) : null}
 
       {showStatusConfirm ? (
-        <div style={{ marginTop: '0.75rem', border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>
+        <div style={{ border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>
           <p style={{ margin: 0, fontWeight: 600, color: '#92400e' }}>Xác nhận đổi trạng thái sang INACTIVE?</p>
           <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>Nhà thầu ngừng hoạt động sẽ không được chọn cho phân công mới nhưng lịch sử cũ vẫn được giữ. Hành động này sẽ được audit.</p>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
@@ -141,59 +147,67 @@ export function ContractorForm({ mode, initial }: Props) {
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          <div>
-            <label htmlFor="code" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Mã nhà thầu *</label>
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="code">Mã nhà thầu *</label>
             <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} hasError={Boolean(fieldErrors.code)} placeholder="CTR-001" />
-            {fieldErrors.code ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.code.join(' ')}</p> : null}
+            {fieldErrors.code ? <p className="bf-field-error" role="alert">{fieldErrors.code.join(' ')}</p> : null}
           </div>
-          <div>
-            <label htmlFor="status" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Trạng thái</label>
-            <select id="status" value={status} onChange={(e) => handleStatusChange(e.target.value)} style={{ width: '100%', border: `1px solid ${fieldErrors.status ? '#ef4444' : '#d1d5db'}`, borderRadius: 8, padding: '0.6rem 0.75rem', background: '#fff' }}>
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="status">Trạng thái</label>
+            <select id="status" className="bf-input" value={status} onChange={(e) => handleStatusChange(e.target.value)} style={fieldErrors.status ? { borderColor: 'var(--bf-risk)' } : undefined}>
               <option value="ACTIVE">Hoạt động (đủ điều kiện)</option>
               <option value="INACTIVE">Ngừng hoạt động (chặn phân công mới)</option>
             </select>
-            {fieldErrors.status ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.status.join(' ')}</p> : null}
+            {fieldErrors.status ? <p className="bf-field-error" role="alert">{fieldErrors.status.join(' ')}</p> : null}
           </div>
         </div>
 
-        <div>
-          <label htmlFor="name" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Tên nhà thầu *</label>
+        <div className="bf-field">
+          <label className="bf-label" htmlFor="name">Tên nhà thầu *</label>
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} hasError={Boolean(fieldErrors.name)} />
-          {fieldErrors.name ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.name.join(' ')}</p> : null}
+          {fieldErrors.name ? <p className="bf-field-error" role="alert">{fieldErrors.name.join(' ')}</p> : null}
         </div>
 
-        <div>
-          <label htmlFor="contactName" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Thông tin liên hệ *</label>
+        <div className="bf-field">
+          <label className="bf-label" htmlFor="contactName">Thông tin liên hệ *</label>
           <Input id="contactName" value={contactName} onChange={(e) => setContactName(e.target.value)} hasError={Boolean(fieldErrors.contactName)} placeholder="Nguyễn Văn A" />
-          {fieldErrors.contactName ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.contactName.join(' ')}</p> : null}
+          {fieldErrors.contactName ? <p className="bf-field-error" role="alert">{fieldErrors.contactName.join(' ')}</p> : null}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-          <div>
-            <label htmlFor="phone" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>SĐT</label>
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="phone">SĐT</label>
             <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} hasError={Boolean(fieldErrors.phone)} />
-            {fieldErrors.phone ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.phone.join(' ')}</p> : null}
+            {fieldErrors.phone ? <p className="bf-field-error" role="alert">{fieldErrors.phone.join(' ')}</p> : null}
           </div>
-          <div>
-            <label htmlFor="email" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Email</label>
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="email">Email</label>
             <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} hasError={Boolean(fieldErrors.email)} />
-            {fieldErrors.email ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.email.join(' ')}</p> : null}
+            {fieldErrors.email ? <p className="bf-field-error" role="alert">{fieldErrors.email.join(' ')}</p> : null}
           </div>
         </div>
 
-        <div>
-          <label htmlFor="scope" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>Phạm vi công việc *</label>
-          <textarea id="scope" value={scope} onChange={(e) => setScope(e.target.value)} rows={3} style={{ width: '100%', border: `1px solid ${fieldErrors.scope ? '#ef4444' : '#d1d5db'}`, borderRadius: 8, padding: '0.6rem 0.75rem', fontFamily: 'inherit' }} placeholder="Thí dụ: Thi công phần thô, cốt thép, hoàn thiện" />
-          {fieldErrors.scope ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.scope.join(' ')}</p> : null}
+        <div className="bf-field">
+          <label className="bf-label" htmlFor="scope">Phạm vi công việc *</label>
+          <textarea
+            id="scope"
+            className="bf-input"
+            value={scope}
+            onChange={(e) => setScope(e.target.value)}
+            rows={3}
+            style={fieldErrors.scope ? { borderColor: 'var(--bf-risk)' } : undefined}
+            placeholder="Thí dụ: Thi công phần thô, cốt thép, hoàn thiện"
+          />
+          {fieldErrors.scope ? <p className="bf-field-error" role="alert">{fieldErrors.scope.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
-          <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo nhà thầu' : 'Lưu thay đổi'}</Button>
-          <Button type="button" variant="secondary" onClick={() => router.push('/contractors')}>Hủy</Button>
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>Tải lại</Button>
+          <Button type="button" variant="secondary" onClick={() => router.push('/contractors')}>Hủy</Button>
+          <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo nhà thầu' : 'Lưu thay đổi'}</Button>
         </div>
 
-        <p style={{ margin: 0, color: '#6b7280', fontSize: '0.8rem' }}>Lỗi thiếu định danh/contact/scope (400) sẽ nêu nguyên nhân cụ thể; lỗi trùng mã (409) không tạo bản ghi một phần; lỗi quyền (403) yêu cầu ADMIN.</p>
+        <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.8rem' }}>Trường có dấu * là bắt buộc. Nếu mã nhà thầu đã tồn tại, hệ thống sẽ báo trùng và không tạo bản ghi.</p>
       </form>
     </Card>
   );

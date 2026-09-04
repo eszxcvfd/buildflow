@@ -103,7 +103,7 @@ export function AdminUserRoleAssign({ userId }: { userId: string }) {
         <Card>
           <Alert tone="error">Phiên hết hạn, vui lòng đăng nhập lại (401)</Alert>
           <div style={{ marginTop: '0.75rem' }}>
-            <a href="/login" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Đến trang đăng nhập</a>
+            <a href="/login">Đến trang đăng nhập</a>
           </div>
         </Card>
       );
@@ -131,76 +131,77 @@ export function AdminUserRoleAssign({ userId }: { userId: string }) {
   const hasChanges = diff.added.length > 0 || diff.removed.length > 0;
 
   return (
-    <div style={{ display: 'grid', gap: '1rem' }}>
-      <Card>
-        <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.1rem' }}>
-          Vai trò: {user?.fullName ?? userId} {user ? <span style={{ color: '#6b7280', fontWeight: 400 }}>({user.email})</span> : null}
+    <Card style={{ maxWidth: 720 }}>
+      <div className="bf-card-head">
+        <h2 className="bf-card-title" style={{ margin: 0 }}>
+          Vai trò: {user?.fullName ?? userId} {user ? <span style={{ color: 'var(--bf-muted)', fontWeight: 400 }}>({user.email})</span> : null}
         </h2>
-        {success ? (
-          <Alert tone="success">
-            Đã cập nhật vai trò ({success.before.length} → {success.after.length} role). Quyền mới có hiệu lực từ lần truy cập tiếp theo (đăng nhập lại nếu cần).
-          </Alert>
+      </div>
+
+      {success ? (
+        <Alert tone="success">
+          Đã cập nhật vai trò ({success.before.length} → {success.after.length} role). Quyền mới có hiệu lực từ lần truy cập tiếp theo (đăng nhập lại nếu cần).
+        </Alert>
+      ) : null}
+      {globalError ? <Alert tone="error">{globalError}</Alert> : null}
+
+      <p style={{ margin: '0.5rem 0 1rem', color: 'var(--bf-muted)' }}>
+        Chỉ vai trò đã phê duyệt mới gán được. Server kiểm tra quyền ở mọi thao tác.
+      </p>
+
+      <div style={{ display: 'grid', gap: '0.5rem' }}>
+        {currentRoles.length === 0 ? (
+          <p style={{ margin: 0, color: 'var(--bf-muted)' }}>Chưa có vai trò active nào — chọn bên dưới để gán.</p>
+        ) : (
+          currentRoles.map((r) => (
+            <label key={r.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={selected.has(r.id)}
+                onChange={() => toggle(r.id)}
+                disabled={saving}
+                aria-label={`Chọn vai trò ${r.code}`}
+              />
+              <strong>{r.code}</strong> — {r.name}
+            </label>
+          ))
+        )}
+        {currentRoles.length === 0 ? (
+          <p style={{ margin: '0.5rem 0 0', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+            Các vai trò được phép gán: {APPROVED_ROLE_CODES.join(', ')}.
+          </p>
         ) : null}
-        {globalError ? <Alert tone="error">{globalError}</Alert> : null}
+      </div>
 
-        <p style={{ margin: '0.5rem 0 1rem', color: '#6b7280', fontSize: '0.9rem' }}>
-          Chỉ vai trò đã phê duyệt mới gán được. Server kiểm tra quyền ở mọi thao tác.
-        </p>
-
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          {currentRoles.length === 0 ? (
-            <p style={{ margin: 0, color: '#6b7280' }}>Chưa có vai trò active nào — chọn bên dưới để gán.</p>
-          ) : (
-            currentRoles.map((r) => (
-              <label key={r.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={selected.has(r.id)}
-                  onChange={() => toggle(r.id)}
-                  disabled={saving}
-                  aria-label={`Chọn vai trò ${r.code}`}
-                />
-                <strong>{r.code}</strong> — {r.name}
-              </label>
-            ))
-          )}
-          {currentRoles.length === 0 ? (
-            <p style={{ margin: '0.5rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
-              Catalog role được phép: {APPROVED_ROLE_CODES.join(', ')}. Danh sách đầy đủ lấy từ API GET /admin/users/:id/roles.
-            </p>
-          ) : null}
-        </div>
-
-        {hasChanges ? (
-          <div style={{ marginTop: '1rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem 1rem' }}>
-            <strong style={{ fontSize: '0.9rem' }}>Diff trước/sau:</strong>
-            <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
-              {diff.added.length > 0 ? <div>+ Thêm: {diff.added.map((id) => diff.roleById.get(id)?.code ?? id).join(', ')}</div> : null}
-              {diff.removed.length > 0 ? <div style={{ color: '#991b1b' }}>− Bỏ: {diff.removed.map((id) => diff.roleById.get(id)?.code ?? id).join(', ')}</div> : null}
-              <div style={{ color: '#6b7280', marginTop: 4 }}>Sau khi lưu: {diff.after.length} role</div>
-            </div>
+      {hasChanges ? (
+        <div style={{ marginTop: '1rem', background: 'var(--bf-surface-2)', border: '1px solid var(--bf-line)', borderRadius: 8, padding: '0.75rem 1rem' }}>
+          <strong style={{ fontSize: '0.9rem' }}>Diff trước/sau:</strong>
+          <div style={{ marginTop: 4, fontSize: '0.88rem' }}>
+            {diff.added.length > 0 ? <div>+ Thêm: {diff.added.map((id) => diff.roleById.get(id)?.code ?? id).join(', ')}</div> : null}
+            {diff.removed.length > 0 ? <div style={{ color: '#991b1b' }}>− Bỏ: {diff.removed.map((id) => diff.roleById.get(id)?.code ?? id).join(', ')}</div> : null}
+            <div style={{ color: 'var(--bf-muted)', marginTop: 4 }}>Sau khi lưu: {diff.after.length} role</div>
           </div>
-        ) : null}
-
-        <div style={{ marginTop: '1rem' }}>
-          <label htmlFor="aur-reason" style={{ display: 'block', fontWeight: 600, marginBottom: 4, fontSize: '0.9rem' }}>Lý do (tùy chọn, tối đa 500 ký tự)</label>
-          <input
-            id="aur-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            maxLength={500}
-            style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }}
-            placeholder="VD: Thăng chức sang vị trí công nhân..."
-          />
         </div>
+      ) : null}
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem' }}>
-          <Button onClick={() => void handleSave()} loading={saving} aria-busy={saving} disabled={!hasChanges || saving}>
-            Lưu vai trò
-          </Button>
-          <a href="/admin/users" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Về danh sách</a>
-        </div>
-      </Card>
-    </div>
+      <div className="bf-field" style={{ marginTop: '1rem' }}>
+        <label className="bf-label" htmlFor="aur-reason">Lý do (tùy chọn, tối đa 500 ký tự)</label>
+        <input
+          id="aur-reason"
+          className="bf-input"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={500}
+          placeholder="VD: Thăng chức sang vị trí công nhân..."
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'flex-end', marginTop: '1rem' }}>
+        <Button onClick={() => void handleSave()} loading={saving} aria-busy={saving} disabled={!hasChanges || saving}>
+          Lưu vai trò
+        </Button>
+        <a href="/admin/users">Về danh sách</a>
+      </div>
+    </Card>
   );
 }

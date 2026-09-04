@@ -125,6 +125,14 @@ Ark UI chịu trách nhiệm behavior/state machine và accessibility primitives
 - Không coi primitive headless là sản phẩm hoàn chỉnh: mỗi component phải có visual states, responsive behavior, reduced-motion behavior và test keyboard/focus.
 - Khi dùng component của Ark UI trong Server Component, đặt nó sau client wrapper cần thiết và kiểm tra boundary của package.
 
+### 6.1 Design tokens "Blueprint & Site" (đã chốt)
+
+- Tokens nằm ở `src/styles/tokens.css` (CSS custom properties `--bf-*`), recipes dùng chung ở `src/app/globals.css` với prefix `.bf-*`. Feature KHÔNG hard-code màu/spacing — phải dùng token hoặc class `.bf-*`.
+- Hướng thị giác: navy bản vẽ `--bf-ink` cho sidebar/tiêu đề; cam an toàn `--bf-accent` chỉ dùng cho hành động và điểm nhấn dữ liệu; màu trạng thái chỉ trong badge (`.bf-badge-*`).
+- Font: Be Vietnam Pro qua `next/font/google` (subset `vietnamese`), 400/500/600/700; số liệu dùng `font-feature-settings: 'tnum'`.
+- Shell: `components/layout/AppShell.tsx` (client) sở hữu guard phiên + sidebar + topbar; route `(app)/*` tự động bọc trong shell qua `(app)/layout.tsx`; route `(auth)/*` dùng khung `.bf-auth`.
+- Motion: đúng một orchestrated moment khi load (ví dụ progress bar KPI); mọi transition khác ≤ 120ms; `prefers-reduced-motion` được tôn trọng ở global.
+
 ## 7. Data, auth và lỗi
 
 - API NestJS là source of truth; web dùng HTTP/OpenAPI contract, không dùng DB trực tiếp.

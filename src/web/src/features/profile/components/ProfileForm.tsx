@@ -91,53 +91,83 @@ export function ProfileForm() {
 
   if (loading) {
     return (
-      <main style={{ padding: '2rem', maxWidth: 640, margin: '0 auto' }}>
-        <p role="status">Đang tải hồ sơ…</p>
-      </main>
+      <Card>
+        <p role="status" style={{ margin: 0 }}>
+          Đang tải hồ sơ…
+        </p>
+      </Card>
     );
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 640, margin: '0 auto' }}>
-      <h1>Hồ sơ cá nhân</h1>
+    <Card>
+      <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+        <h2 className="bf-card-title" style={{ margin: 0 }}>
+          Thông tin cá nhân
+        </h2>
+      </div>
       {globalError ? <Alert tone="error">{globalError}</Alert> : null}
       {success ? <Alert tone="success">Đã cập nhật hồ sơ thành công</Alert> : null}
-      <Card style={{ marginTop: '1rem' }}>
-        <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem' }}>
-          <div>
-            <label htmlFor="pf-email" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Email (read-only)</label>
-            <Input id="pf-email" value={profile?.email ?? ''} readOnly aria-readonly="true" />
-          </div>
-          <div>
-            <label htmlFor="pf-role" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Vai trò (read-only)</label>
-            <Input id="pf-role" value={profile?.userType ?? ''} readOnly aria-readonly="true" />
-          </div>
-          <div>
-            <label htmlFor="pf-status" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Trạng thái (read-only)</label>
-            <Input id="pf-status" value={profile?.status ?? ''} readOnly aria-readonly="true" />
-          </div>
-          <div>
-            <label htmlFor="pf-name" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Họ tên</label>
-            <Input
-              id="pf-name" value={fullName} onChange={(ev) => setFullName(ev.target.value)}
-              hasError={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'pf-name-err' : undefined}
-            />
-            {fieldErrors.fullName ? <p id="pf-name-err" role="alert" style={{ color: '#ef4444', margin: '0.4rem 0 0' }}>{fieldErrors.fullName.join(' ')}</p> : null}
-          </div>
-          <div>
-            <label htmlFor="pf-phone" style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Số điện thoại</label>
-            <Input
-              id="pf-phone" value={phone} onChange={(ev) => setPhone(ev.target.value)}
-              hasError={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? 'pf-phone-err' : undefined}
-            />
-            {fieldErrors.phone ? <p id="pf-phone-err" role="alert" style={{ color: '#ef4444', margin: '0.4rem 0 0' }}>{fieldErrors.phone.join(' ')}</p> : null}
-          </div>
-          <Button type="submit" loading={saving} aria-busy={saving}>Lưu thay đổi</Button>
-          <p style={{ margin: 0, color: '#6b7280', fontSize: '0.8rem' }}>
-            Các trường định danh và quyền (email, vai trò, trạng thái) chỉ đọc — không thể tự thay đổi (IAM-SRS-003).
-          </p>
-        </form>
-      </Card>
-    </main>
+      <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14, marginTop: globalError || success ? 14 : 0 }}>
+        <div className="bf-field">
+          <label htmlFor="pf-email" className="bf-label">
+            Email (read-only)
+          </label>
+          <Input id="pf-email" value={profile?.email ?? ''} readOnly aria-readonly="true" />
+        </div>
+        <div className="bf-field">
+          <label htmlFor="pf-role" className="bf-label">
+            Vai trò (read-only)
+          </label>
+          <Input id="pf-role" value={profile?.userType ?? ''} readOnly aria-readonly="true" />
+        </div>
+        <div className="bf-field">
+          <label htmlFor="pf-status" className="bf-label">
+            Trạng thái (read-only)
+          </label>
+          <Input id="pf-status" value={profile?.status ?? ''} readOnly aria-readonly="true" />
+        </div>
+        <div className="bf-field">
+          <label htmlFor="pf-name" className="bf-label">
+            Họ tên
+          </label>
+          <Input
+            id="pf-name"
+            value={fullName}
+            onChange={(ev) => setFullName(ev.target.value)}
+            hasError={Boolean(fieldErrors.fullName)}
+            aria-describedby={fieldErrors.fullName ? 'pf-name-err' : undefined}
+          />
+          {fieldErrors.fullName ? (
+            <p id="pf-name-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
+              {fieldErrors.fullName.join(' ')}
+            </p>
+          ) : null}
+        </div>
+        <div className="bf-field">
+          <label htmlFor="pf-phone" className="bf-label">
+            Số điện thoại
+          </label>
+          <Input
+            id="pf-phone"
+            value={phone}
+            onChange={(ev) => setPhone(ev.target.value)}
+            hasError={Boolean(fieldErrors.phone)}
+            aria-describedby={fieldErrors.phone ? 'pf-phone-err' : undefined}
+          />
+          {fieldErrors.phone ? (
+            <p id="pf-phone-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
+              {fieldErrors.phone.join(' ')}
+            </p>
+          ) : null}
+        </div>
+        <Button type="submit" loading={saving} aria-busy={saving}>
+          Lưu thay đổi
+        </Button>
+        <p className="bf-card-meta" style={{ margin: 0 }}>
+          Các trường định danh và quyền (email, vai trò, trạng thái) chỉ đọc — không thể tự thay đổi (IAM-SRS-003).
+        </p>
+      </form>
+    </Card>
   );
 }

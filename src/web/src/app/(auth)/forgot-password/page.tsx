@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 import { requestPasswordReset } from '@/lib/api/password';
+import { Card } from '@/components/ui/card/Card';
+import { Input } from '@/components/ui/input/Input';
+import { Alert } from '@/components/ui/alert/Alert';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState('');
@@ -27,32 +30,57 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main style={{ padding: '2rem', maxWidth: 460, margin: '0 auto' }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Quên mật khẩu</h1>
+    <Card>
+      <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+        <h1 className="bf-card-title" style={{ fontSize: '1.15rem', margin: 0 }}>
+          Đặt lại mật khẩu
+        </h1>
+        <p className="bf-card-meta" style={{ margin: 0 }}>
+          Nhập email đăng nhập để nhận hướng dẫn đặt lại mật khẩu.
+        </p>
+      </div>
+
       {done ? (
-        <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '1rem' }}>
-          <p style={{ margin: 0, color: '#166534' }}>Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.</p>
-          <p style={{ margin: '0.75rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+        <Alert tone="success">
+          <p style={{ margin: 0 }}>
+            Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.
+          </p>
+          <p className="bf-card-meta" style={{ margin: '8px 0 0' }}>
             Nếu bạn không nhận được email, liên hệ quản trị viên.
           </p>
-        </div>
+        </Alert>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem' }}>
-          {error ? <p role="alert" style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
-          <div>
-            <label htmlFor="fp-email" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>Email</label>
-            <input id="fp-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={submitting}
-              style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }} placeholder="name@company.com" />
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14 }}>
+          {error ? <Alert tone="error">{error}</Alert> : null}
+          <div className="bf-field">
+            <label htmlFor="fp-email" className="bf-label">
+              Email
+            </label>
+            <Input
+              id="fp-email"
+              type="email"
+              autoComplete="email"
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={submitting}
+              hasError={error === 'Email không được để trống'}
+            />
           </div>
-          <button type="submit" disabled={submitting}
-            style={{ background: submitting ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '0.6rem 1rem', fontWeight: 600, cursor: submitting ? 'wait' : 'pointer' }}>
+          <button
+            type="submit"
+            className="bf-btn bf-btn-primary"
+            disabled={submitting}
+            aria-busy={submitting || undefined}
+            style={{ width: '100%' }}
+          >
             {submitting ? 'Đang gửi…' : 'Gửi hướng dẫn đặt lại'}
           </button>
-          <p style={{ margin: 0, fontSize: '0.85rem' }}>
-            <a href="/login" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Quay lại đăng nhập</a>
+          <p className="bf-card-meta" style={{ margin: 0 }}>
+            <a href="/login">Quay lại đăng nhập</a>
           </p>
         </form>
       )}
-    </main>
+    </Card>
   );
 }

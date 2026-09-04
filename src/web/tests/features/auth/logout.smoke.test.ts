@@ -112,11 +112,15 @@ describe('POST /api/v1/auth/logout contract', () => {
 });
 
 describe('route smoke logout', () => {
-  it('dashboard page uses logoutAndClear (không tự xử lý thu hồi)', async () => {
+  it('logout do AppShell xử lý qua logoutAndClear — dashboard page không tự thu hồi', async () => {
     const fs = await import('fs');
     const dash = fs.readFileSync('src/app/(app)/dashboard/page.tsx', 'utf8');
-    expect(dash).toMatch(/logoutAndClear/);
+    // Dashboard redesign: page assume đã đăng nhập (AppShell lo guard + đăng xuất),
+    // nên page phải KHÔNG chứa logoutAndClear và không tự gọi endpoint logout.
+    expect(dash).not.toMatch(/logoutAndClear/);
     expect(dash).not.toMatch(/fetch.*\/api\/v1\/auth\/logout/); // business logic ở features, app chỉ composition
+    const shell = fs.readFileSync('src/components/layout/AppShell.tsx', 'utf8');
+    expect(shell).toMatch(/logoutAndClear/);
     const service = fs.readFileSync('src/features/auth/services/auth.service.ts', 'utf8');
     expect(service).toMatch(/logoutRequest/);
     expect(service).toMatch(/clearAuth/);
