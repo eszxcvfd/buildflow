@@ -2,9 +2,9 @@ import React from 'react';
 import {
   View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet,
 } from 'react-native';
-import { fetchProfile, updateProfileRequest, LoginError, type Profile } from '../../api/client';
+import { fetchProfile, updateProfileRequest, changePasswordRequest, LoginError, type Profile } from '../../api/client';
 
-export function ProfileScreen({ token }: { token: string }) {
+export function ProfileScreen({ token, onPasswordChanged }: { token: string; onPasswordChanged?: () => void }) {
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [fullName, setFullName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -12,6 +12,13 @@ export function ProfileScreen({ token }: { token: string }) {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
+  // IAM-SRS-007 change password state
+  const [currentPassword, setCurrentPassword] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [changing, setChanging] = React.useState(false);
+  const [changeError, setChangeError] = React.useState<string | null>(null);
+  const [changeSuccess, setChangeSuccess] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -50,6 +57,29 @@ export function ProfileScreen({ token }: { token: string }) {
       setError(e instanceof LoginError ? e.message : 'Không thể kết nối máy chủ, vui lòng thử lại');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangePassword() {
+    setChangeError(null);
+    setChangeSuccess(false);
+    if (!currentPassword) { setChangeError('Mật khẩu hiện tại không được để trống'); return; }
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      setChangeError('Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số');
+      return;
+    }
+    if (confirmPassword !== newPassword) { setChangeError('Xác nhận mật khẩu không khớp'); return; }
+    setChanging(true);
+    try {
+      await changePasswordRequest(token, currentPassword, newPassword);
+      setChangeSuccess(true);
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+      // Session invalidated server-side: force re-login
+      onPasswordChanged?.();
+    } catch (e) {
+      setChangeError(e instanceof LoginError ? e.message : 'Không thể kết nối máy chủ, vui lòng thử lại');
+    } finally {
+      setChanging(false);
     }
   }
 
@@ -106,6 +136,36 @@ export function ProfileScreen({ token }: { token: string }) {
         <Text style={styles.hint}>
           Email, vai trò và trạng thái chỉ đọc — không thể tự thay đổi (IAM-SRS-003).
         </Text>
+      </View>
+
+      {/* IAM-SRS-007: change password */}
+      <View style={styles.card}>
+        <Text accessibilityRole="header" style={styles.title}>Đổi mật khẩu</Text>
+        <Text style={styles.hint}>Tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số. Sau khi đổi, bạn sẽ phải đăng nhập lại.</Text>
+        {changeError ? (
+          <View accessibilityRole="alert" style={styles.errorBox}>
+            <Text style={styles.errorText}>{changeError}</Text>
+          </View>
+        ) : null}
+        {changeSuccess ? (
+          <View accessibilityRole="text" style={styles.successBox}>
+            <Text style={styles.successText}>Đổi mật khẩu thành công. Vui lòng đăng nhập lại.</Text>
+          </View>
+        ) : null}
+        <Text style={styles.label}>Mật khẩu hiện tại</Text>
+        <TextInput style={styles.input} secureTextEntry autoComplete="password" value={currentPassword} onChangeText={setCurrentPassword} editable={!changing} accessibilityLabel="current password input" />
+        <Text style={styles.label}>Mật khẩu mới</Text>
+        <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={newPassword} onChangeText={setNewPassword} editable={!changing} accessibilityLabel="new password input" />
+        <Text style={styles.label}>Xác nhận mật khẩu mới</Text>
+        <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={confirmPassword} onChangeText={setConfirmPassword} editable={!changing} accessibilityLabel="confirm password input" />
+        <Pressable
+          accessibilityRole="button" accessibilityLabel="change password"
+          accessibilityState={{ disabled: changing, busy: changing }}
+          onPress={handleChangePassword} style={[styles.button, changing ? styles.buttonDisabled : null]}
+          disabled={changing}
+        >
+          {changing ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Đổi mật khẩu</Text>}
+        </Pressable>
       </View>
     </ScrollView>
   );

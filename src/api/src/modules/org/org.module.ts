@@ -26,6 +26,8 @@ import { HASHER_PORT } from '../iam/application/port/hasher.port';
 import { TOKEN_PORT } from '../iam/application/port/token.port';
 import { TOKEN_REVOCATION_PORT } from '../iam/application/port/token-revocation.port';
 import { InMemoryTokenRevocationService } from '../iam/infrastructure/security/in-memory-token-revocation.service';
+import { PgUserRepository } from '../iam/infrastructure/database/pg-user.repository';
+import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
 
 @Module({
   controllers: [WorkersController, ContractorsController],
@@ -48,6 +50,7 @@ import { InMemoryTokenRevocationService } from '../iam/infrastructure/security/i
     { provide: HASHER_PORT, useClass: BcryptHasherService },
     { provide: TOKEN_PORT, useClass: JwtTokenService },
     { provide: TOKEN_REVOCATION_PORT, useClass: InMemoryTokenRevocationService },
+    { provide: USER_REPOSITORY, useClass: PgUserRepository },
   ],
 })
 export class OrgModule {}

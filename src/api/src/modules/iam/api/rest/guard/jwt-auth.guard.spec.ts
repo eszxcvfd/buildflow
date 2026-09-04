@@ -3,6 +3,7 @@ import { ExecutionContext } from '@nestjs/common';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token.service';
 import { InMemoryTokenRevocationService } from '../../../infrastructure/security/in-memory-token-revocation.service';
+import { USER_REPOSITORY } from '../../../domain/repository/user-repository.port';
 
 function mockContext(authHeader?: string): ExecutionContext {
   const req: Record<string, unknown> = { headers: { authorization: authHeader }, user: undefined };
@@ -17,13 +18,14 @@ describe('JwtAuthGuard IAM-SRS-002', () => {
   let guard: JwtAuthGuard;
   let tokenService: JwtTokenService;
   let revocation: InMemoryTokenRevocationService;
+  const stubUserRepo = { getPasswordChangedAt: async () => null };
 
   beforeEach(() => {
     process.env.JWT_SECRET = 'test-guard-secret';
     process.env.JWT_EXPIRES_IN = '1h';
     tokenService = new JwtTokenService();
     revocation = new InMemoryTokenRevocationService();
-    guard = new JwtAuthGuard(tokenService, revocation);
+    guard = new JwtAuthGuard(tokenService, revocation, stubUserRepo as never);
   });
 
   it('cho phép request với token hợp lệ chưa bị thu hồi', async () => {
@@ -52,7 +54,7 @@ describe('JwtAuthGuard IAM-SRS-002', () => {
     process.env.JWT_EXPIRES_IN = '1s';
     const localService = new JwtTokenService();
     const localRev = new InMemoryTokenRevocationService();
-    const localGuard = new JwtAuthGuard(localService, localRev);
+    const localGuard = new JwtAuthGuard(localService, localRev, stubUserRepo as never);
     const { token } = await localService.sign({ sub: 'u1', email: 'a@b.com', roles: ['WORKER'] });
     await new Promise((r) => setTimeout(r, 1100));
     const ctx = mockContext(`Bearer ${token}`);

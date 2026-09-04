@@ -99,6 +99,51 @@ export async function updateProfileRequest(token: string, payload: { fullName?: 
   throw new LoginError(message, res.status);
 }
 
+/** IAM-SRS-007: change password for the signed-in user. */
+export async function changePasswordRequest(token: string, currentPassword: string, newPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
+  const res = await fetch(`${API_URL}/api/v1/me/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ currentPassword, newPassword, confirmPassword: newPassword }),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body) return body as { message: string; reauthRequired: boolean };
+  const b = (body ?? {}) as Record<string, unknown>;
+  const nested = b.message && typeof b.message === 'object' ? (b.message as { message?: string }).message : undefined;
+  const message = typeof b.message === 'string' ? b.message : nested ?? `Đổi mật khẩu thất bại (${res.status})`;
+  throw new LoginError(message, res.status);
+}
+
+/** IAM-SRS-007: request reset (anti-enumeration — generic message always). */
+export async function requestPasswordResetRequest(email: string): Promise<{ message: string; resetUrl?: string }> {
+  const res = await fetch(`${API_URL}/api/v1/auth/password-reset/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Accept: 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body) return body as { message: string; resetUrl?: string };
+  throw new LoginError(`Gửi yêu cầu thất bại (${res.status})`, res.status);
+}
+
+/** IAM-SRS-007: confirm reset with one-time token. */
+export async function confirmPasswordResetRequest(token: string, newPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
+  const res = await fetch(`${API_URL}/api/v1/auth/password-reset/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Accept: 'application/json' },
+    body: JSON.stringify({ token, newPassword }),
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body) return body as { message: string; reauthRequired: boolean };
+  const b = (body ?? {}) as Record<string, unknown>;
+  const message = typeof b.message === 'string' ? b.message : `Đặt lại mật khẩu thất bại (${res.status})`;
+  throw new LoginError(message, res.status);
+}
+
 export async function loginRequest(email: string, password: string): Promise<LoginSuccess> {
   const res = await fetch(`${API_URL}/api/v1/auth/login`, {
     method: 'POST',

@@ -14,6 +14,8 @@ import { TokenRevocationPort } from '../../application/port/token-revocation.por
 @Injectable()
 export class InMemoryTokenRevocationService implements TokenRevocationPort {
   private readonly revoked = new Map<string, number>(); // jti -> expiresAt ms
+  // IAM-SRS-007: userId -> cutoff ms; tokens issued before cutoff are rejected
+  private readonly userCutoffs = new Map<string, number>();
 
   async revoke(jti: string, expiresAt: Date): Promise<void> {
     this.purgeExpired();
@@ -29,6 +31,23 @@ export class InMemoryTokenRevocationService implements TokenRevocationPort {
       return false;
     }
     return true;
+  }
+
+  async revokeAllForUserBefore(userId: string, cutoff: Date, maxTtlMs: number): Promise<void> {
+    this.purgeExpired();
+    this.userCutoffs.set(userId, cutoff.getTime());
+    // Self-purge when no token can still predate the cutoff
+    const tid = setTimeout(() => this.userCutoffs.delete(userId), maxTtlMs);
+    if (typeof tid === 'object' && 'unref' in tid) (tid as { unref: () => void }).unref();
+  }
+
+  async isUserRevokedBefore(userId: string, iat: number | undefined, cutoff: Date): Promise<boolean> {
+    const set = this.userCutoffs.get(userId);
+    // Effective cutoff: max(in-memory, provided from DB) — survives restarts via DB value
+    const effective = set === undefined ? cutoff.getTime() : Math.max(set, cutoff.getTime());
+    // Missing iat → cannot prove issued after cutoff → reject (fail closed)
+    if (iat === undefined) return true;
+    return iat * 1000 < effective;
   }
 
   // Exposed for tests

@@ -5,6 +5,7 @@ import { AdminController } from './api/rest/controller/admin.controller';
 import { AdminRolesController } from './api/rest/controller/admin-roles.controller';
 import { ProjectsController } from './api/rest/controller/projects.controller';
 import { AuditController } from './api/rest/controller/audit.controller';
+import { PasswordController } from './api/rest/controller/password.controller';
 import { LoginUseCase } from './application/use-case/login.use-case';
 import { LogoutUseCase } from './application/use-case/logout.use-case';
 import { GetProfileUseCase } from './application/use-case/get-profile.use-case';
@@ -18,6 +19,9 @@ import { AssignRolesUseCase } from './application/use-case/assign-roles.use-case
 import { GetProjectUseCase } from './application/use-case/get-project.use-case';
 import { ListProjectsUseCase } from './application/use-case/list-projects.use-case';
 import { QueryAuditLogsUseCase } from './application/use-case/query-audit-logs.use-case';
+import { ChangePasswordUseCase } from './application/use-case/change-password.use-case';
+import { RequestPasswordResetUseCase } from './application/use-case/request-password-reset.use-case';
+import { ResetPasswordUseCase } from './application/use-case/reset-password.use-case';
 import { ProjectScopeService } from './application/service/project-scope.service';
 import { PgUserRepository } from './infrastructure/database/pg-user.repository';
 import { PgRoleRepository } from './infrastructure/database/pg-role.repository';
@@ -26,6 +30,7 @@ import { PgTransactionManager } from './infrastructure/database/pg-transaction.m
 import { PgProjectRepository } from './infrastructure/database/pg-project.repository';
 import { PgProjectMembershipRepository } from './infrastructure/database/pg-project-membership.repository';
 import { PgAuditLogRepository } from './infrastructure/database/pg-audit-log.repository';
+import { PgPasswordResetRepository } from './infrastructure/database/pg-password-reset.repository';
 import { BcryptHasherService } from './infrastructure/security/bcrypt-hasher.service';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
 import { USER_REPOSITORY } from './domain/repository/user-repository.port';
@@ -39,10 +44,11 @@ import { AUDIT_PORT } from './application/port/audit.port';
 import { TRANSACTION_PORT } from './application/port/transaction.port';
 import { TOKEN_REVOCATION_PORT } from './application/port/token-revocation.port';
 import { InMemoryTokenRevocationService } from './infrastructure/security/in-memory-token-revocation.service';
+import { PASSWORD_RESET_REPOSITORY } from './domain/repository/password-reset.repository.port';
 import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
 
 @Module({
-  controllers: [AuthController, ProfileController, AdminController, AdminRolesController, ProjectsController, AuditController],
+  controllers: [AuthController, ProfileController, AdminController, AdminRolesController, ProjectsController, AuditController, PasswordController],
   providers: [
     LoginUseCase,
     LogoutUseCase,
@@ -58,6 +64,9 @@ import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
     GetProjectUseCase,
     ListProjectsUseCase,
     QueryAuditLogsUseCase,
+    ChangePasswordUseCase,
+    RequestPasswordResetUseCase,
+    ResetPasswordUseCase,
     ProjectScopeService,
     JwtTokenService,
     JwtAuthGuard,
@@ -66,6 +75,7 @@ import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
     { provide: PROJECT_REPOSITORY, useClass: PgProjectRepository },
     { provide: PROJECT_MEMBERSHIP_REPOSITORY, useClass: PgProjectMembershipRepository },
     { provide: AUDIT_LOG_REPOSITORY, useClass: PgAuditLogRepository },
+    { provide: PASSWORD_RESET_REPOSITORY, useClass: PgPasswordResetRepository },
     { provide: HASHER_PORT, useClass: BcryptHasherService },
     { provide: TOKEN_PORT, useClass: JwtTokenService },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },

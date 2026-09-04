@@ -216,6 +216,25 @@ export class PgUserRepository implements UserRepositoryPort {
     await this.saveOnExecutor(this.pool(), user);
   }
 
+  async updatePasswordHash(userId: string, passwordHash: string, changedAt: Date, client?: PoolClient): Promise<void> {
+    const executor = client ?? this.pool();
+    await executor.query(
+      `UPDATE public.users SET password_hash = $2, password_changed_at = $3, updated_at = $3 WHERE id = $1`,
+      [userId, passwordHash, changedAt],
+    );
+  }
+
+  async getPasswordChangedAt(userId: string): Promise<Date | null> {
+    const result = await this.pool().query(
+      `SELECT password_changed_at FROM public.users WHERE id = $1`,
+      [userId],
+    );
+    // pg returns Date objects for timestamptz — never stringify (loses ms precision)
+    const raw = result.rows[0]?.['password_changed_at'];
+    if (!raw) return null;
+    return raw instanceof Date ? raw : new Date(String(raw));
+  }
+
   async saveWithClient(client: PoolClient, user: UserEntity): Promise<void> {
     await this.saveOnExecutor(client, user);
   }

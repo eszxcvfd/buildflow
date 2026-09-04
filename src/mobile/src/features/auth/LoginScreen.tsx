@@ -8,7 +8,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { loginRequest, logoutRequest, LoginError, type LoginSuccess } from '../../api/client';
+import { loginRequest, logoutRequest, requestPasswordResetRequest, confirmPasswordResetRequest, LoginError, type LoginSuccess } from '../../api/client';
 import { saveSession, getSession, isSessionExpired, clearSession } from '../../storage/session';
 import { ProfileScreen } from '../profile/ProfileScreen';
 
@@ -25,6 +25,17 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [logoutError, setLogoutError] = React.useState<string | null>(null);
   const [showProfile, setShowProfile] = React.useState(false);
+  // IAM-SRS-007: forgot/reset password modes
+  const [mode, setMode] = React.useState<'login' | 'forgot' | 'reset'>('login');
+  const [forgotEmail, setForgotEmail] = React.useState('');
+  const [forgotBusy, setForgotBusy] = React.useState(false);
+  const [forgotDone, setForgotDone] = React.useState(false);
+  const [forgotError, setForgotError] = React.useState<string | null>(null);
+  const [resetToken, setResetToken] = React.useState('');
+  const [resetNewPassword, setResetNewPassword] = React.useState('');
+  const [resetBusy, setResetBusy] = React.useState(false);
+  const [resetDone, setResetDone] = React.useState(false);
+  const [resetError, setResetError] = React.useState<string | null>(null);
 
   const restore = React.useCallback(async () => {
     setRestoring(true);
@@ -104,7 +115,7 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
 
   if (session) {
     if (showProfile) {
-      return <ProfileScreen token={session.accessToken} />;
+      return <ProfileScreen token={session.accessToken} onPasswordChanged={() => { setSession(null); setShowProfile(false); }} />;
     }
     return (
       <ScrollView contentContainerStyle={styles.container}>
@@ -157,6 +168,73 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {mode === 'forgot' ? (
+        <View style={styles.card}>
+          <Text accessibilityRole="header" style={styles.title}>Quên mật khẩu</Text>
+          {forgotDone ? (
+            <View accessibilityRole="text" style={styles.successBox}>
+              <Text style={styles.successText}>Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.</Text>
+            </View>
+          ) : null}
+          {forgotError ? (
+            <View accessibilityRole="alert" style={styles.errorBox}>
+              <Text style={styles.errorText}>{forgotError}</Text>
+            </View>
+          ) : null}
+          {!forgotDone ? (
+            <>
+              <Text style={styles.label}>Email</Text>
+              <TextInput style={styles.input} autoCapitalize="none" keyboardType="email-address" value={forgotEmail} onChangeText={setForgotEmail} editable={!forgotBusy} accessibilityLabel="forgot email input" />
+              <Pressable accessibilityRole="button" accessibilityLabel="send reset request" onPress={async () => {
+                setForgotError(null);
+                if (!forgotEmail.trim()) { setForgotError('Email không được để trống'); return; }
+                setForgotBusy(true);
+                try { await requestPasswordResetRequest(forgotEmail.trim()); setForgotDone(true); } catch (e) { setForgotError(e instanceof LoginError ? e.message : 'Gửi yêu cầu thất bại'); } finally { setForgotBusy(false); }
+              }} style={[styles.button, forgotBusy ? styles.buttonDisabled : null]} disabled={forgotBusy}>
+                {forgotBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Gửi hướng dẫn đặt lại</Text>}
+              </Pressable>
+            </>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setForgotDone(false); setForgotError(null); }} style={[styles.button, styles.secondaryButton]}>
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>Quay lại đăng nhập</Text>
+          </Pressable>
+        </View>
+      ) : mode === 'reset' ? (
+        <View style={styles.card}>
+          <Text accessibilityRole="header" style={styles.title}>Đặt lại mật khẩu</Text>
+          <Text style={styles.hint}>Dán token từ link đặt lại (một lần, có thời hạn).</Text>
+          {resetDone ? (
+            <View accessibilityRole="text" style={styles.successBox}>
+              <Text style={styles.successText}>Đổi mật khẩu thành công. Vui lòng đăng nhập lại.</Text>
+            </View>
+          ) : null}
+          {resetError ? (
+            <View accessibilityRole="alert" style={styles.errorBox}>
+              <Text style={styles.errorText}>{resetError}</Text>
+            </View>
+          ) : null}
+          {!resetDone ? (
+            <>
+              <Text style={styles.label}>Token đặt lại</Text>
+              <TextInput style={styles.input} autoCapitalize="none" value={resetToken} onChangeText={setResetToken} editable={!resetBusy} accessibilityLabel="reset token input" />
+              <Text style={styles.label}>Mật khẩu mới</Text>
+              <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={resetNewPassword} onChangeText={setResetNewPassword} editable={!resetBusy} accessibilityLabel="reset new password input" />
+              <Pressable accessibilityRole="button" accessibilityLabel="confirm reset" onPress={async () => {
+                setResetError(null);
+                if (!resetToken.trim()) { setResetError('Token không được để trống'); return; }
+                if (resetNewPassword.length < 8 || !/[A-Za-z]/.test(resetNewPassword) || !/[0-9]/.test(resetNewPassword)) { setResetError('Mật khẩu mới tối thiểu 8 ký tự, chứa chữ cái và chữ số'); return; }
+                setResetBusy(true);
+                try { await confirmPasswordResetRequest(resetToken.trim(), resetNewPassword); setResetDone(true); } catch (e) { setResetError(e instanceof LoginError ? e.message : 'Đặt lại thất bại'); } finally { setResetBusy(false); }
+              }} style={[styles.button, resetBusy ? styles.buttonDisabled : null]} disabled={resetBusy}>
+                {resetBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Đặt lại mật khẩu</Text>}
+              </Pressable>
+            </>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setResetDone(false); setResetError(null); }} style={[styles.button, styles.secondaryButton]}>
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>Quay lại đăng nhập</Text>
+          </Pressable>
+        </View>
+      ) : (
       <View style={styles.card}>
         <Text accessibilityRole="header" style={styles.title}>
           Đăng nhập
@@ -216,7 +294,14 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
             <Text style={styles.buttonText}>Đăng nhập</Text>
           )}
         </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="forgot password" onPress={() => setMode('forgot')} style={[styles.button, styles.secondaryButton]}>
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Quên mật khẩu?</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="have reset token" onPress={() => setMode('reset')} style={[styles.button, styles.secondaryButton]}>
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Đã có token đặt lại</Text>
+        </Pressable>
       </View>
+      )}
     </ScrollView>
   );
 }
@@ -241,6 +326,8 @@ const styles = StyleSheet.create({
   fieldError: { color: '#ef4444', fontSize: 13, marginTop: -4 },
   errorBox: { backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 8, padding: 12 },
   errorText: { color: '#b91c1c', fontSize: 14 },
+  successBox: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', borderWidth: 1, borderRadius: 8, padding: 12 },
+  successText: { color: '#14532d', fontSize: 14 },
   button: { backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
