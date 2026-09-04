@@ -121,7 +121,14 @@ export async function listAdminUsers(params: ListAdminUsersParams = {}): Promise
   if (!res.ok) {
     await parseError(res, `Tải danh sách tài khoản thất bại (${res.status})`);
   }
-  return (await res.json()) as { data: AdminUser[] };
+  const body: unknown = await res.json().catch(() => null);
+  if (Array.isArray(body)) {
+    return { data: body as AdminUser[] };
+  }
+  if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown }).data)) {
+    return body as { data: AdminUser[] };
+  }
+  return { data: [] };
 }
 
 export async function getAdminUser(id: string): Promise<AdminUser> {
