@@ -9,7 +9,9 @@ async function bootstrap() {
   const config = loadConfig();
   const app = await NestFactory.create(AppModule);
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3101', 'http://localhost:19006', 'http://localhost:19007', 'http://localhost:19066'],
+    // Cho phép mọi origin loopback (localhost/127.0.0.1/[::1], mọi port) để
+    // tránh lỗi CORS khi truy cập web qua 127.0.0.1 thay vì localhost.
+    origin: [/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/],
     credentials: true,
   });
   app.enableShutdownHooks();
