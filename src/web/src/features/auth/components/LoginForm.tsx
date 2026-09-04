@@ -60,9 +60,9 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
-      <div style={{ display: 'grid', gap: 4 }}>
-        <h1 className="bf-card-title" style={{ fontSize: '1.15rem' }}>
+    <Card style={{ display: 'grid', gap: 20, padding: 24 }}>
+      <div style={{ display: 'grid', gap: 6 }}>
+        <h1 className="bf-card-title" style={{ fontSize: '1.25rem' }}>
           Đăng nhập
         </h1>
         <p className="bf-card-meta" style={{ margin: 0 }}>
@@ -72,7 +72,7 @@ export function LoginForm() {
 
       {globalError ? <Alert tone="error">{globalError}</Alert> : null}
 
-      <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14 }}>
+      <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 16 }}>
         <div className="bf-field">
           <label htmlFor="email" className="bf-label">
             Email
@@ -117,14 +117,41 @@ export function LoginForm() {
           ) : null}
         </div>
 
-        <Button type="submit" loading={loading} aria-busy={loading} style={{ width: '100%' }}>
+        <Button
+          type="submit"
+          loading={loading}
+          aria-busy={loading}
+          style={{ width: '100%', minHeight: 42, marginTop: 4 }}
+        >
           Đăng nhập
         </Button>
 
-        <p className="bf-card-meta" style={{ margin: 0 }}>
-          Bằng việc đăng nhập, phiên làm việc sẽ khởi tạo theo vai trò (BR-13). Tài khoản bị khóa hoặc ngừng hoạt
-          động sẽ bị từ chối; thông báo lỗi không tiết lộ tồn tại tài khoản (IAM-SRS-001).
-        </p>
+        <div style={{ textAlign: 'center' }}>
+          <a
+            href="/forgot-password"
+            style={{
+              fontSize: 13,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              textDecoration: 'none',
+            }}
+          >
+            <svg
+              width={14}
+              height={14}
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+              />
+            </svg>
+            Quên mật khẩu?
+          </a>
+        </div>
       </form>
     </Card>
   );

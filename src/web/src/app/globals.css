@@ -408,6 +408,12 @@ a:hover {
   box-shadow: 0 0 0 3px rgba(192, 51, 27, 0.14);
 }
 
+.bf-input[readonly] {
+  background: var(--bf-surface-2);
+  color: var(--bf-muted);
+  cursor: not-allowed;
+}
+
 .bf-field-error {
   font-size: 12.5px;
   color: var(--bf-risk);
