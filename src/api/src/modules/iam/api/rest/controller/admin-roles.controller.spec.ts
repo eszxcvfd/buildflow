@@ -3,10 +3,12 @@ import { AdminRolesController } from './admin-roles.controller';
 import { GetUserRolesUseCase } from '../../../application/use-case/get-user-roles.use-case';
 import { AssignRolesUseCase } from '../../../application/use-case/assign-roles.use-case';
 
+const VALID_CORR = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+
 function adminReq(roles: string[] = ['ADMIN'], sub = 'admin-1'): unknown {
   return {
     user: { sub, email: 'admin@example.com', roles },
-    headers: { 'user-agent': 'jest', 'x-correlation-id': 'corr-xyz' },
+    headers: { 'user-agent': 'jest', 'x-correlation-id': VALID_CORR },
     ip: '127.0.0.1',
   } as unknown as never;
 }
@@ -53,7 +55,7 @@ describe('AdminRolesController IAM-SRS-005', () => {
     const dto: { roleIds: string[]; reason: string } = { roleIds: ['22222222-2222-4222-8222-222222222222'], reason: 'promote' };
     const res = await ctrl.assign('11111111-1111-4111-8111-111111111111', dto as never, adminReq() as never);
     expect(assignMock.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ roleIds: dto.roleIds, correlationId: 'corr-xyz', reason: 'promote' }),
+      expect.objectContaining({ roleIds: dto.roleIds, correlationId: VALID_CORR, reason: 'promote' }),
     );
     expect(res.beforeRoleIds).toEqual(['r0']);
     expect(res.afterRoleIds).toEqual(['r1']);
@@ -68,5 +70,17 @@ describe('AdminRolesController IAM-SRS-005', () => {
     await expect(
       badCtrl.assign('11111111-1111-4111-8111-111111111111', { roleIds: ['not-uuid'] } as never, adminReq() as never),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('PUT rejects non-UUID X-Correlation-Id with 400 actionable message', async () => {
+    const badReq = {
+      user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+      headers: { 'user-agent': 'jest', 'x-correlation-id': 'bf20-test-corr-001' },
+      ip: '127.0.0.1',
+    } as unknown as never;
+    await expect(
+      ctrl.assign('11111111-1111-4111-8111-111111111111', { roleIds: ['22222222-2222-4222-8222-222222222222'] } as never, badReq),
+    ).rejects.toThrow(new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'));
+    expect(assignMock.execute).not.toHaveBeenCalled();
   });
 });

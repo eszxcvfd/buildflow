@@ -9,6 +9,7 @@ import {
   UsePipes,
   ValidationPipe,
   ForbiddenException,
+  BadRequestException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -44,6 +45,8 @@ function getRequestMeta(req: Request): { ip: string | null; userAgent: string | 
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Controller('api/v1/admin/users')
 @UseGuards(JwtAuthGuard)
 export class AdminRolesController {
@@ -77,6 +80,13 @@ export class AdminRolesController {
   ) {
     const actor = assertAdmin(req);
     const meta = getRequestMeta(req);
+    // correlation_id in audit_logs is uuid-typed: a non-UUID header must be rejected as 400
+    // with an actionable message instead of surfacing as a 500 audit-insert failure.
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const result = await this.assignRolesUseCase.execute({
       targetUserId: id,
       roleIds: dto.roleIds,

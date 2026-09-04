@@ -107,9 +107,14 @@ export class PgRoleRepository implements RoleRepositoryPort {
 
     // Insert new active assignments
     for (const roleId of params.roleIds) {
+      // Double-submit safety: a concurrent identical assignment may have committed between our
+      // deactivate and insert (partial unique index ux_user_roles_active). Upsert semantics keep
+      // the row idempotent instead of failing the whole tx with a 23505 -> 500.
       await client.query(
         `INSERT INTO public.user_roles (id, user_id, role_id, assigned_by, assigned_at, is_active)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, true)`,
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, true)
+         ON CONFLICT (user_id, role_id) WHERE is_active
+         DO UPDATE SET is_active = true, assigned_by = EXCLUDED.assigned_by, assigned_at = EXCLUDED.assigned_at, revoked_by = NULL, revoked_at = NULL`,
         [params.userId, roleId, params.actorUserId, params.now],
       );
     }
