@@ -18,7 +18,9 @@ src/mobile/
 ├── app/                                  # Expo Router route files
 │   ├── _layout.tsx
 │   ├── (auth)/
-│   │   └── sign-in.tsx
+│   │   ├── sign-in.tsx
+│   │   ├── forgot-password.tsx
+│   │   └── reset-password.tsx
 │   ├── (app)/
 │   │   ├── _layout.tsx
 │   │   └── index.tsx
@@ -48,6 +50,8 @@ src/mobile/
 ```
 
 `app/` là routing adapter; screen composition và business behavior thuộc feature. Không đặt domain logic vào file route. Nếu sau này không dùng Expo Router, chỉ thay `app/` bằng một navigation adapter trong workspace; feature interface vẫn giữ nguyên.
+
+Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): `forgot-password`/`reset-password` thuộc nhóm `(auth)`, form đổi mật khẩu nằm trong profile flow. Các screen chỉ gọi ba endpoint password trong [`API.md`](API.md); đổi/đặt lại thành công cắt session cũ nên app phải reset session state và quay về sign-in.
 
 ## 3. Dependency rules
 

@@ -58,6 +58,13 @@ export class PgPasswordResetRepository implements PasswordResetRepositoryPort {
     return result.rowCount ?? 0;
   }
 
+  async deleteExpired(): Promise<number> {
+    const result = await this.pool().query(
+      `DELETE FROM public.password_reset_tokens WHERE expires_at < NOW()`,
+    );
+    return result.rowCount ?? 0;
+  }
+
   private mapRow(row: Record<string, unknown>): PasswordResetTokenRecord {
     return {
       id: String(row['id']),

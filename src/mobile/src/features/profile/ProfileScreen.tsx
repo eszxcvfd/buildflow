@@ -19,6 +19,13 @@ export function ProfileScreen({ token, onPasswordChanged }: { token: string; onP
   const [changing, setChanging] = React.useState(false);
   const [changeError, setChangeError] = React.useState<string | null>(null);
   const [changeSuccess, setChangeSuccess] = React.useState(false);
+  const [changeFieldErrors, setChangeFieldErrors] = React.useState<Record<string, string[]>>({});
+  const reauthTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => () => {
+    // IAM-SRS-007: if the user leaves before the re-login hand-off fires, don't leak the timer.
+    if (reauthTimerRef.current !== null) clearTimeout(reauthTimerRef.current);
+  }, []);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -61,27 +68,43 @@ export function ProfileScreen({ token, onPasswordChanged }: { token: string; onP
   }
 
   async function handleChangePassword() {
+    if (changing) return; // double-submit guard
     setChangeError(null);
     setChangeSuccess(false);
-    if (!currentPassword) { setChangeError('Mật khẩu hiện tại không được để trống'); return; }
-    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-      setChangeError('Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số');
-      return;
-    }
-    if (confirmPassword !== newPassword) { setChangeError('Xác nhận mật khẩu không khớp'); return; }
+    const errors: Record<string, string[]> = {};
+    if (!currentPassword) errors.currentPassword = ['Mật khẩu hiện tại không được để trống'];
+    if (newPassword.length < 8) errors.newPassword = ['Mật khẩu mới tối thiểu 8 ký tự'];
+    else if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) errors.newPassword = ['Mật khẩu mới phải chứa ít nhất một chữ cái và một chữ số'];
+    if (confirmPassword !== newPassword) errors.confirmPassword = ['Xác nhận mật khẩu không khớp'];
+    setChangeFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setChanging(true);
     try {
-      await changePasswordRequest(token, currentPassword, newPassword);
+      await changePasswordRequest(token, currentPassword, newPassword, confirmPassword);
       setChangeSuccess(true);
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
-      // Session invalidated server-side: force re-login
-      onPasswordChanged?.();
+      // IAM-SRS-007: the session is invalidated server-side — show the success notice
+      // for ~1.2s (Web parity) so the user isn't kicked out abruptly, then hand off
+      // to re-login (LoginScreen clears the persisted session in onPasswordChanged).
+      if (reauthTimerRef.current !== null) clearTimeout(reauthTimerRef.current);
+      reauthTimerRef.current = setTimeout(() => {
+        reauthTimerRef.current = null;
+        onPasswordChanged?.();
+      }, 1200);
     } catch (e) {
-      setChangeError(e instanceof LoginError ? e.message : 'Không thể kết nối máy chủ, vui lòng thử lại');
+      if (e instanceof LoginError) {
+        setChangeError(e.message);
+        if (e.fieldErrors) setChangeFieldErrors(e.fieldErrors);
+      } else {
+        setChangeError('Không thể kết nối máy chủ, vui lòng thử lại');
+      }
     } finally {
       setChanging(false);
     }
   }
+
+  const changeFieldError = (field: string) =>
+    changeFieldErrors[field] ? <Text style={styles.fieldError}>{changeFieldErrors[field].join(' ')}</Text> : null;
 
   if (loading) {
     return (
@@ -153,11 +176,14 @@ export function ProfileScreen({ token, onPasswordChanged }: { token: string; onP
           </View>
         ) : null}
         <Text style={styles.label}>Mật khẩu hiện tại</Text>
-        <TextInput style={styles.input} secureTextEntry autoComplete="password" value={currentPassword} onChangeText={setCurrentPassword} editable={!changing} accessibilityLabel="current password input" />
+        <TextInput style={[styles.input, changeFieldErrors.currentPassword ? styles.inputError : null]} secureTextEntry autoComplete="password" value={currentPassword} onChangeText={setCurrentPassword} editable={!changing} accessibilityLabel="current password input" />
+        {changeFieldError('currentPassword')}
         <Text style={styles.label}>Mật khẩu mới</Text>
-        <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={newPassword} onChangeText={setNewPassword} editable={!changing} accessibilityLabel="new password input" />
+        <TextInput style={[styles.input, changeFieldErrors.newPassword ? styles.inputError : null]} secureTextEntry autoComplete="new-password" value={newPassword} onChangeText={setNewPassword} editable={!changing} accessibilityLabel="new password input" />
+        {changeFieldError('newPassword')}
         <Text style={styles.label}>Xác nhận mật khẩu mới</Text>
-        <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={confirmPassword} onChangeText={setConfirmPassword} editable={!changing} accessibilityLabel="confirm password input" />
+        <TextInput style={[styles.input, changeFieldErrors.confirmPassword ? styles.inputError : null]} secureTextEntry autoComplete="new-password" value={confirmPassword} onChangeText={setConfirmPassword} editable={!changing} accessibilityLabel="confirm password input" />
+        {changeFieldError('confirmPassword')}
         <Pressable
           accessibilityRole="button" accessibilityLabel="change password"
           accessibilityState={{ disabled: changing, busy: changing }}
@@ -182,6 +208,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, backgroundColor: '#fff',
   },
   readonly: { backgroundColor: '#f3f4f6', color: '#6b7280' },
+  inputError: { borderColor: '#ef4444' },
+  fieldError: { color: '#ef4444', fontSize: 13, marginTop: -4 },
   errorBox: { backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 8, padding: 12 },
   errorText: { color: '#b91c1c', fontSize: 14 },
   successBox: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0', borderWidth: 1, borderRadius: 8, padding: 12 },

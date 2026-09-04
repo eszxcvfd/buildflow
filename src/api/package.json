@@ -5,6 +5,7 @@
   "description": "Buildflow API - minimal NestJS service",
   "scripts": {
     "db:migrate": "node scripts/migrate.js",
+    "dev:reset-token": "node scripts/dev-issue-reset-token.js",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node src/main.ts",

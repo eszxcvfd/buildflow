@@ -125,7 +125,30 @@ Controller không được:
 
 Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpoint đầu tiên được chốt, OpenAPI phải được sinh/kiểm tra từ API owner và consumer phải cập nhật cùng contract change.
 
-## 7. Domain và application conventions
+## 7. Password management (IAM-SRS-007)
+
+Đổi mật khẩu và self-service password reset thuộc IAM context. Ba endpoint dưới đây là contract công bố cho web/mobile; thay đổi breaking phải route qua [`NETCODE.md`](NETCODE.md) và đồng bộ consumer trong cùng PR.
+
+| Method | Path | Auth | Body | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| PATCH | `/api/v1/me/password` | JWT bắt buộc | `{ currentPassword, newPassword, confirmPassword }` | `200 { message, reauthRequired: true }` | `400` sai `currentPassword` (field error), `confirmPassword` không khớp, vi phạm policy; `401` chưa xác thực |
+| POST | `/api/v1/auth/password-reset/request` | Public | `{ email }` | LUÔN `200 { message }` generic | `400` chỉ khi body sai định dạng (ValidationPipe) |
+| POST | `/api/v1/auth/password-reset/confirm` | Public | `{ token, newPassword, confirmPassword }` | `200 { message, reauthRequired: true }` | `400` `confirmPassword` không khớp, vi phạm policy; `401` token sai/đã dùng/hết hạn |
+
+Quy tắc nghiệp vụ:
+
+- **Password policy:** `newPassword` (áp dụng cho cả hai luồng) dài tối thiểu 8, tối đa 128 ký tự, gồm ít nhất 1 chữ cái và 1 chữ số.
+- **`confirmPassword` bắt buộc** và phải khớp `newPassword`; lệch là lỗi `400`, không phụ thuộc validate phía client.
+- **Anti-enumeration:** `/password-reset/request` luôn trả `200` với message generic bất kể email có tài khoản hay không; response không chứa `resetUrl` hay bất kỳ dấu hiệu tiết lộ sự tồn tại của email, ở **mọi** môi trường.
+- **Token lifecycle:** reset token là one-time, hết hạn sau 30 phút; database chỉ lưu SHA-256 hash của token. Request reset mới đồng thời dọn các token đã hết hạn. `/password-reset/confirm` chạy trong một transaction nguyên tử: mật khẩu mới, vô hiệu hoá token và audit được ghi cùng lúc hoặc không gì cả.
+- **Session cutoff + reauth:** đổi/đặt lại mật khẩu thành công cập nhật `password_changed_at`; JWT phát hành trước thời điểm đó bị từ chối với `401`. Guard có cache cutoff 30s/instance, nên cửa sổ lệch tối đa 30s. Response trả `reauthRequired: true`; client phải đưa người dùng về đăng nhập lại.
+- **Ánh xạ lỗi:** `400` → `message` dạng mảng (ValidationPipe) hoặc `{ message, errors: { field: msg } }` cho lỗi nghiệp vụ (ví dụ field `currentPassword` khi mật khẩu hiện tại sai); `401` → chưa xác thực, hoặc reset token sai/hết hạn/đã dùng; `403` → cấm. Error contract chung thuộc [`NETCODE.md`](NETCODE.md).
+- **Demo/E2E:** token reset không bao giờ được cấp qua API response. Operator sinh token bằng `npm run dev:reset-token -- --email <email>` trong `src/api` (yêu cầu quyền DB); script tạo token mới 30 phút và in link `http://localhost:3001/reset-password?token=...`.
+- **Audit:** `IAM_PASSWORD_CHANGED`, `IAM_PASSWORD_CHANGE_FAILED`, `IAM_PASSWORD_RESET_REQUESTED`, `IAM_PASSWORD_RESET_FAILED`, `IAM_PASSWORD_RESET_COMPLETED` — không chứa credential hay token.
+
+Hạn chế đã ghi nhận: token revocation là in-memory **per-instance**; khi chạy multi-instance, một instance không thấy ngay revocation do instance khác ghi — cần Redis coordination, với `password_changed_at` trong PostgreSQL là source of truth. Trong phạm vi đó, cache cutoff 30s của guard là cửa sổ lệch đã chấp nhận.
+
+## 8. Domain và application conventions
 
 - Tên use case là động từ nghiệp vụ (`CreateX`, `RegisterY`), không phải tên CRUD chung chung nếu domain có ngôn ngữ chính xác hơn.
 - Entity bảo vệ invariant bằng method có ý nghĩa; không public mutable field để controller tự sửa state.
@@ -135,7 +158,7 @@ Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpo
 - DTO transport và domain type là hai interface khác nhau; mapper là seam, không dùng `as` để bỏ qua mapping.
 - Không đưa `any`, ORM decorator hoặc Nest decorator vào domain.
 
-## 8. Test và proof
+## 9. Test và proof
 
 | Phạm vi | Kiểm tra | Adapter |
 | --- | --- | --- |
@@ -146,7 +169,7 @@ Chi tiết transport/compatibility thuộc [`NETCODE.md`](NETCODE.md). Khi endpo
 
 Test phải bảo vệ observable outcome qua interface. Không giữ production API/state chỉ để test gọi private implementation. Khi có contract hard cut, audit producer, consumer, generated artifact, fixture và snapshot cùng lúc. Data integration test phải có PostgreSQL readiness/migration proof và Redis TTL/cache-miss/outage proof khi adapter bị ảnh hưởng.
 
-## 9. Cross-cutting tối thiểu
+## 10. Cross-cutting tối thiểu
 
 Các concern sau được bootstrap một lần ở composition root, nhưng policy chi tiết vẫn thuộc owner thích hợp:
 
@@ -160,7 +183,7 @@ Các concern sau được bootstrap một lần ở composition root, nhưng pol
 
 PostgreSQL và Redis được chọn cho data baseline; chi tiết Docker/Compose, persistence, TTL/eviction, migration và production topology thuộc [`DATA.md`](DATA.md). ORM, auth provider và production hosting chưa được chốt.
 
-## 10. Checklist thêm module
+## 11. Checklist thêm module
 
 - [ ] Context/feature và owner đã được gọi tên bằng domain language.
 - [ ] Invariant nằm ở domain, không nằm ở controller.

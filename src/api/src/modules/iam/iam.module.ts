@@ -42,8 +42,6 @@ import { HASHER_PORT } from './application/port/hasher.port';
 import { TOKEN_PORT } from './application/port/token.port';
 import { AUDIT_PORT } from './application/port/audit.port';
 import { TRANSACTION_PORT } from './application/port/transaction.port';
-import { TOKEN_REVOCATION_PORT } from './application/port/token-revocation.port';
-import { InMemoryTokenRevocationService } from './infrastructure/security/in-memory-token-revocation.service';
 import { PASSWORD_RESET_REPOSITORY } from './domain/repository/password-reset.repository.port';
 import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
 
@@ -80,7 +78,7 @@ import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
     { provide: TOKEN_PORT, useClass: JwtTokenService },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
-    { provide: TOKEN_REVOCATION_PORT, useClass: InMemoryTokenRevocationService },
+    // TOKEN_REVOCATION_PORT is provided app-wide by TokenRevocationModule (shared singleton)
   ],
   exports: [JwtAuthGuard, JwtTokenService, USER_REPOSITORY, ROLE_REPOSITORY, TOKEN_PORT],
 })

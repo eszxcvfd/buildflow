@@ -48,7 +48,12 @@ export class ChangePasswordUseCase {
           ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
         });
       } catch { /* best-effort */ }
-      throw new BadRequestException('Mật khẩu hiện tại không đúng');
+      // Contract IAM-SRS-007: 400 with a field error for currentPassword (never 401 —
+      // the session itself is valid; only the provided password is wrong).
+      throw new BadRequestException({
+        message: 'Mật khẩu hiện tại không đúng',
+        errors: { currentPassword: 'Mật khẩu hiện tại không đúng' },
+      });
     }
 
     const policy = validatePasswordPolicy(input.newPassword);
@@ -61,7 +66,11 @@ export class ChangePasswordUseCase {
 
     await this.tx.withTransaction(async (client: PoolClient) => {
       if (this.userRepo.updatePasswordHash) {
-        await this.userRepo.updatePasswordHash(user.id, await this.hasher.hash(input.newPassword), changedAt, client);
+        const updated = await this.userRepo.updatePasswordHash(user.id, await this.hasher.hash(input.newPassword), changedAt, client);
+        if (updated === 0) {
+          // User row disappeared mid-transaction — refuse instead of silently succeeding.
+          throw new UnauthorizedException('Phiên hết hạn, vui lòng đăng nhập lại');
+        }
       } else {
         throw new Error('User repository does not support password updates');
       }

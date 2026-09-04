@@ -30,12 +30,31 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
   const [forgotEmail, setForgotEmail] = React.useState('');
   const [forgotBusy, setForgotBusy] = React.useState(false);
   const [forgotDone, setForgotDone] = React.useState(false);
+  const [forgotMessage, setForgotMessage] = React.useState<string | null>(null);
   const [forgotError, setForgotError] = React.useState<string | null>(null);
   const [resetToken, setResetToken] = React.useState('');
   const [resetNewPassword, setResetNewPassword] = React.useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = React.useState('');
   const [resetBusy, setResetBusy] = React.useState(false);
   const [resetDone, setResetDone] = React.useState(false);
   const [resetError, setResetError] = React.useState<string | null>(null);
+  const [resetFieldErrors, setResetFieldErrors] = React.useState<Record<string, string[]>>({});
+
+  // IAM-SRS-007 (issue #22): after a successful reset, show the success notice briefly
+  // (Web auto-redirects after 2.5s — mobile parity ~2s), then return to the login form.
+  React.useEffect(() => {
+    if (!resetDone) return;
+    const timer = setTimeout(() => {
+      setMode('login');
+      setResetToken('');
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      setResetDone(false);
+      setResetError(null);
+      setResetFieldErrors({});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [resetDone]);
 
   const restore = React.useCallback(async () => {
     setRestoring(true);
@@ -56,6 +75,7 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
   }, [restore]);
 
   async function handleSubmit() {
+    if (submitting) return; // double-submit guard
     setGlobalError(null);
     const errors: Record<string, string[]> = {};
     const trimmed = email.trim();
@@ -105,6 +125,50 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
     setGlobalError(null);
   }
 
+  async function handleForgotSubmit() {
+    if (forgotBusy) return; // double-submit guard
+    setForgotError(null);
+    const trimmed = forgotEmail.trim();
+    if (!trimmed) { setForgotError('Email không được để trống'); return; }
+    setForgotBusy(true);
+    try {
+      // IAM-SRS-007: the API always answers with the same generic message — no resetUrl.
+      const out = await requestPasswordResetRequest(trimmed);
+      setForgotMessage(out.message || 'Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.');
+      setForgotDone(true);
+    } catch (e) {
+      setForgotError(e instanceof LoginError ? e.message : 'Gửi yêu cầu thất bại');
+    } finally {
+      setForgotBusy(false);
+    }
+  }
+
+  async function handleResetSubmit() {
+    if (resetBusy) return; // double-submit guard
+    setResetError(null);
+    const errors: Record<string, string[]> = {};
+    if (!resetToken.trim()) errors.token = ['Token không được để trống'];
+    if (resetNewPassword.length < 8) errors.newPassword = ['Mật khẩu mới tối thiểu 8 ký tự'];
+    else if (!/[A-Za-z]/.test(resetNewPassword) || !/[0-9]/.test(resetNewPassword)) errors.newPassword = ['Mật khẩu mới phải chứa ít nhất một chữ cái và một chữ số'];
+    if (resetConfirmPassword !== resetNewPassword) errors.confirmPassword = ['Xác nhận mật khẩu không khớp'];
+    setResetFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    setResetBusy(true);
+    try {
+      await confirmPasswordResetRequest(resetToken.trim(), resetNewPassword, resetConfirmPassword);
+      setResetDone(true); // auto-return to login mode is scheduled by the effect above
+    } catch (e) {
+      if (e instanceof LoginError) {
+        setResetError(e.message);
+        if (e.fieldErrors) setResetFieldErrors(e.fieldErrors);
+      } else {
+        setResetError('Đặt lại thất bại');
+      }
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
   if (restoring) {
     return (
       <View style={styles.center} accessible accessibilityLabel="loading session">
@@ -115,7 +179,14 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
 
   if (session) {
     if (showProfile) {
-      return <ProfileScreen token={session.accessToken} onPasswordChanged={() => { setSession(null); setShowProfile(false); }} />;
+      return <ProfileScreen token={session.accessToken} onPasswordChanged={async () => {
+        // IAM-SRS-007 (issue #22, P1): after a password change the server invalidated this
+        // session — wipe the persisted session (accessToken in AsyncStorage) BEFORE dropping
+        // UI state, matching handleLogout and Web clearAuth().
+        await clearSession();
+        setSession(null);
+        setShowProfile(false);
+      }} />;
     }
     return (
       <ScrollView contentContainerStyle={styles.container}>
@@ -171,9 +242,11 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
       {mode === 'forgot' ? (
         <View style={styles.card}>
           <Text accessibilityRole="header" style={styles.title}>Quên mật khẩu</Text>
-          {forgotDone ? (
+          {forgotDone && forgotMessage ? (
+            // IAM-SRS-007: the API always answers with the same generic message
+            // (anti-enumeration) — render it verbatim, there is no resetUrl anymore.
             <View accessibilityRole="text" style={styles.successBox}>
-              <Text style={styles.successText}>Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.</Text>
+              <Text style={styles.successText}>{forgotMessage}</Text>
             </View>
           ) : null}
           {forgotError ? (
@@ -185,17 +258,12 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
             <>
               <Text style={styles.label}>Email</Text>
               <TextInput style={styles.input} autoCapitalize="none" keyboardType="email-address" value={forgotEmail} onChangeText={setForgotEmail} editable={!forgotBusy} accessibilityLabel="forgot email input" />
-              <Pressable accessibilityRole="button" accessibilityLabel="send reset request" onPress={async () => {
-                setForgotError(null);
-                if (!forgotEmail.trim()) { setForgotError('Email không được để trống'); return; }
-                setForgotBusy(true);
-                try { await requestPasswordResetRequest(forgotEmail.trim()); setForgotDone(true); } catch (e) { setForgotError(e instanceof LoginError ? e.message : 'Gửi yêu cầu thất bại'); } finally { setForgotBusy(false); }
-              }} style={[styles.button, forgotBusy ? styles.buttonDisabled : null]} disabled={forgotBusy}>
+              <Pressable accessibilityRole="button" accessibilityLabel="send reset request" onPress={handleForgotSubmit} style={[styles.button, forgotBusy ? styles.buttonDisabled : null]} disabled={forgotBusy} accessibilityState={{ disabled: forgotBusy, busy: forgotBusy }}>
                 {forgotBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Gửi hướng dẫn đặt lại</Text>}
               </Pressable>
             </>
           ) : null}
-          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setForgotDone(false); setForgotError(null); }} style={[styles.button, styles.secondaryButton]}>
+          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setForgotDone(false); setForgotMessage(null); setForgotError(null); }} style={[styles.button, styles.secondaryButton]}>
             <Text style={[styles.buttonText, styles.secondaryButtonText]}>Quay lại đăng nhập</Text>
           </Pressable>
         </View>
@@ -216,21 +284,21 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
           {!resetDone ? (
             <>
               <Text style={styles.label}>Token đặt lại</Text>
-              <TextInput style={styles.input} autoCapitalize="none" value={resetToken} onChangeText={setResetToken} editable={!resetBusy} accessibilityLabel="reset token input" />
+              <TextInput style={[styles.input, resetFieldErrors.token ? styles.inputError : null]} autoCapitalize="none" value={resetToken} onChangeText={setResetToken} editable={!resetBusy} accessibilityLabel="reset token input" />
+              {resetFieldErrors.token ? <Text style={styles.fieldError}>{resetFieldErrors.token.join(' ')}</Text> : null}
               <Text style={styles.label}>Mật khẩu mới</Text>
-              <TextInput style={styles.input} secureTextEntry autoComplete="new-password" value={resetNewPassword} onChangeText={setResetNewPassword} editable={!resetBusy} accessibilityLabel="reset new password input" />
-              <Pressable accessibilityRole="button" accessibilityLabel="confirm reset" onPress={async () => {
-                setResetError(null);
-                if (!resetToken.trim()) { setResetError('Token không được để trống'); return; }
-                if (resetNewPassword.length < 8 || !/[A-Za-z]/.test(resetNewPassword) || !/[0-9]/.test(resetNewPassword)) { setResetError('Mật khẩu mới tối thiểu 8 ký tự, chứa chữ cái và chữ số'); return; }
-                setResetBusy(true);
-                try { await confirmPasswordResetRequest(resetToken.trim(), resetNewPassword); setResetDone(true); } catch (e) { setResetError(e instanceof LoginError ? e.message : 'Đặt lại thất bại'); } finally { setResetBusy(false); }
-              }} style={[styles.button, resetBusy ? styles.buttonDisabled : null]} disabled={resetBusy}>
+              <Text style={styles.hint}>Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số.</Text>
+              <TextInput style={[styles.input, resetFieldErrors.newPassword ? styles.inputError : null]} secureTextEntry autoComplete="new-password" value={resetNewPassword} onChangeText={setResetNewPassword} editable={!resetBusy} accessibilityLabel="reset new password input" />
+              {resetFieldErrors.newPassword ? <Text style={styles.fieldError}>{resetFieldErrors.newPassword.join(' ')}</Text> : null}
+              <Text style={styles.label}>Xác nhận mật khẩu mới</Text>
+              <TextInput style={[styles.input, resetFieldErrors.confirmPassword ? styles.inputError : null]} secureTextEntry autoComplete="new-password" value={resetConfirmPassword} onChangeText={setResetConfirmPassword} editable={!resetBusy} accessibilityLabel="reset confirm password input" />
+              {resetFieldErrors.confirmPassword ? <Text style={styles.fieldError}>{resetFieldErrors.confirmPassword.join(' ')}</Text> : null}
+              <Pressable accessibilityRole="button" accessibilityLabel="confirm reset" onPress={handleResetSubmit} style={[styles.button, resetBusy ? styles.buttonDisabled : null]} disabled={resetBusy} accessibilityState={{ disabled: resetBusy, busy: resetBusy }}>
                 {resetBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Đặt lại mật khẩu</Text>}
               </Pressable>
             </>
           ) : null}
-          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setResetDone(false); setResetError(null); }} style={[styles.button, styles.secondaryButton]}>
+          <Pressable accessibilityRole="button" onPress={() => { setMode('login'); setResetDone(false); setResetToken(''); setResetNewPassword(''); setResetConfirmPassword(''); setResetError(null); setResetFieldErrors({}); }} style={[styles.button, styles.secondaryButton]}>
             <Text style={[styles.buttonText, styles.secondaryButtonText]}>Quay lại đăng nhập</Text>
           </Pressable>
         </View>

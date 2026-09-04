@@ -8,7 +8,6 @@ export default function ForgotPasswordPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [done, setDone] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [devResetUrl, setDevResetUrl] = React.useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -16,9 +15,10 @@ export default function ForgotPasswordPage() {
     if (!email.trim()) { setError('Email không được để trống'); return; }
     setSubmitting(true);
     try {
-      const out = await requestPasswordReset(email.trim());
+      // IAM-SRS-007 anti-enumeration: response is always a generic { message };
+      // never surface resetUrl/dev links to the user.
+      await requestPasswordReset(email.trim());
       setDone(true);
-      setDevResetUrl(out.resetUrl ?? null);
     } catch {
       setError('Gửi yêu cầu thất bại, vui lòng thử lại');
     } finally {
@@ -32,11 +32,9 @@ export default function ForgotPasswordPage() {
       {done ? (
         <div style={{ marginTop: '1rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '1rem' }}>
           <p style={{ margin: 0, color: '#166534' }}>Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.</p>
-          {devResetUrl ? (
-            <p style={{ margin: '0.75rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
-              Môi trường demo chưa cấu hình email — dùng link đặt lại: <a href={devResetUrl} style={{ color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all' }}>{devResetUrl}</a>
-            </p>
-          ) : null}
+          <p style={{ margin: '0.75rem 0 0', fontSize: '0.85rem', color: '#6b7280' }}>
+            Nếu bạn không nhận được email, liên hệ quản trị viên.
+          </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.9rem', marginTop: '1rem' }}>
@@ -58,4 +56,3 @@ export default function ForgotPasswordPage() {
     </main>
   );
 }
-

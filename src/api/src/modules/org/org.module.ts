@@ -24,8 +24,6 @@ import { AUDIT_PORT } from '../iam/application/port/audit.port';
 import { TRANSACTION_PORT } from '../iam/application/port/transaction.port';
 import { HASHER_PORT } from '../iam/application/port/hasher.port';
 import { TOKEN_PORT } from '../iam/application/port/token.port';
-import { TOKEN_REVOCATION_PORT } from '../iam/application/port/token-revocation.port';
-import { InMemoryTokenRevocationService } from '../iam/infrastructure/security/in-memory-token-revocation.service';
 import { PgUserRepository } from '../iam/infrastructure/database/pg-user.repository';
 import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
 
@@ -49,7 +47,7 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: HASHER_PORT, useClass: BcryptHasherService },
     { provide: TOKEN_PORT, useClass: JwtTokenService },
-    { provide: TOKEN_REVOCATION_PORT, useClass: InMemoryTokenRevocationService },
+    // TOKEN_REVOCATION_PORT is provided app-wide by TokenRevocationModule (shared singleton)
     { provide: USER_REPOSITORY, useClass: PgUserRepository },
   ],
 })

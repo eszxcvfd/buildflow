@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { changePassword, type PasswordActionError } from '@/lib/api/password';
-import { getAuth, clearAuth } from '@/lib/auth/storage';
+import { getAuth, clearAuth, isTokenExpired } from '@/lib/auth/storage';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -12,12 +12,23 @@ const POLICY_HINT = 'Mật khẩu mới tối thiểu 8 ký tự, chứa ít nh�
 
 export function ChangePasswordForm() {
   const router = useRouter();
+  const [authChecked, setAuthChecked] = React.useState(false);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [globalError, setGlobalError] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
+
+  // Auth guard on mount (same pattern as ProfileForm): unauthenticated/expired → login.
+  React.useEffect(() => {
+    const auth = getAuth();
+    if (!auth || isTokenExpired(auth)) {
+      router.replace('/login?reason=session-expired');
+      return;
+    }
+    setAuthChecked(true);
+  }, [router]);
 
   function clientValidate(): Record<string, string[]> {
     const errors: Record<string, string[]> = {};
@@ -34,15 +45,26 @@ export function ChangePasswordForm() {
     const errors = clientValidate();
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
+    const auth = getAuth();
+    if (!auth || isTokenExpired(auth)) {
+      clearAuth();
+      router.replace('/login?reason=session-expired');
+      return;
+    }
     setSubmitting(true);
     try {
-      const auth = getAuth();
-      await changePassword(auth?.accessToken ?? null, currentPassword, newPassword);
+      await changePassword(auth.accessToken, currentPassword, newPassword, confirmPassword);
       // Per SRS: after change, require re-login (session invalid)
       clearAuth();
       router.replace('/login?reason=password-changed');
     } catch (err) {
       const e = err as PasswordActionError;
+      // 401 now only means dead session (not wrong currentPassword) → force re-login.
+      if (e.status === 401) {
+        clearAuth();
+        router.replace('/login?reason=password-changed');
+        return;
+      }
       setGlobalError(e.message || 'Đổi mật khẩu thất bại');
       if (e.fieldErrors) setFieldErrors(e.fieldErrors);
     } finally {
@@ -53,6 +75,8 @@ export function ChangePasswordForm() {
   function fieldError(name: string) {
     return fieldErrors[name] ? <span style={{ color: '#b91c1c', fontSize: '0.8rem', marginTop: 2, display: 'block' }}>{fieldErrors[name].join(' ')}</span> : null;
   }
+
+  if (!authChecked) return null;
 
   return (
     <Card>

@@ -66,11 +66,16 @@ Ví dụ route target:
 
 ```text
 src/app/
-├── (public)/page.tsx             → /
-├── (auth)/sign-in/page.tsx       → /sign-in
-├── (app)/dashboard/page.tsx      → /dashboard
-└── (app)/items/[itemId]/page.tsx → /items/:itemId
+├── (public)/page.tsx                 → /
+├── (auth)/sign-in/page.tsx           → /sign-in
+├── (auth)/forgot-password/page.tsx   → /forgot-password
+├── (auth)/reset-password/page.tsx    → /reset-password?token=...
+├── (app)/dashboard/page.tsx          → /dashboard
+├── (app)/profile/page.tsx            → /profile (gồm form đổi mật khẩu)
+└── (app)/items/[itemId]/page.tsx     → /items/:itemId
 ```
+
+Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): form đổi mật khẩu nằm trong `(app)/profile`; quên mật khẩu và đặt lại bằng token là hai route `(auth)` ở trên. Các màn hình này chỉ gọi ba endpoint password trong [`API.md`](API.md); vì session cũ bị cắt sau khi đổi/đặt lại thành công, luồng phải đưa người dùng về `/sign-in` để đăng nhập lại.
 
 ## 4. Server/Client boundary
 

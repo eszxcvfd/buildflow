@@ -37,12 +37,15 @@ export interface LoginSuccess {
 export class LoginError extends Error {
   status: number;
   code?: string;
+  /** IAM-SRS-007 (issue #22): per-field validation messages, ported from Web `PasswordActionError`. */
+  fieldErrors?: Record<string, string[]>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, fieldErrors?: Record<string, string[]>) {
     super(message);
     this.name = 'LoginError';
     this.status = status;
     this.code = code;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -99,49 +102,107 @@ export async function updateProfileRequest(token: string, payload: { fullName?: 
   throw new LoginError(message, res.status);
 }
 
-/** IAM-SRS-007: change password for the signed-in user. */
-export async function changePasswordRequest(token: string, currentPassword: string, newPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
-  const res = await fetch(`${API_URL}/api/v1/me/password`, {
+/**
+ * IAM-SRS-007 (issue #22): derive per-field validation errors from a password-action
+ * error body. Handles both shapes the backend can return:
+ *  - Nest validation 400: `{ message: string[], error, statusCode }` — entries are
+ *    classified into fields by the same Vietnamese keywords as the Web client.
+ *  - Use-case 400: `{ message: string, errors: { field: message } }` — keys are the field names.
+ * Ported from src/web/src/lib/api/password.ts (Web parity).
+ */
+function extractFieldErrors(body: unknown): Record<string, string[]> | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const b = body as Record<string, unknown>;
+  const fieldErrors: Record<string, string[]> = {};
+
+  if (Array.isArray(b.message)) {
+    for (const m of b.message as unknown[]) {
+      if (typeof m !== 'string') continue;
+      const lower = m.toLowerCase();
+      if (lower.includes('hiện tại')) fieldErrors.currentPassword = [...(fieldErrors.currentPassword ?? []), m];
+      else if (lower.includes('xác nhận')) fieldErrors.confirmPassword = [...(fieldErrors.confirmPassword ?? []), m];
+      else if (lower.includes('chữ số') || lower.includes('chữ cái') || lower.includes('mật khẩu mới') || lower.includes('tối thiểu 8')) fieldErrors.newPassword = [...(fieldErrors.newPassword ?? []), m];
+      else fieldErrors._global = [...(fieldErrors._global ?? []), m];
+    }
+  }
+
+  if (b.errors && typeof b.errors === 'object') {
+    for (const [field, value] of Object.entries(b.errors as Record<string, unknown>)) {
+      const messages = Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === 'string')
+        : typeof value === 'string' ? [value] : [];
+      if (messages.length > 0) fieldErrors[field] = [...(fieldErrors[field] ?? []), ...messages];
+    }
+  }
+
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined;
+}
+
+function toPasswordActionError(status: number, body: unknown, fallback: string): LoginError {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const nested = b.message && typeof b.message === 'object' && !Array.isArray(b.message)
+    ? (b.message as { message?: string })
+    : undefined;
+  const message = typeof b.message === 'string'
+    ? b.message
+    : nested?.message ?? (typeof b.error === 'string' ? b.error : undefined) ?? fallback;
+  const code = typeof b.code === 'string' ? b.code : undefined;
+  return new LoginError(message, status, code, extractFieldErrors(body));
+}
+
+async function parseBody(res: Response): Promise<unknown> {
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) return res.text().catch(() => null);
+  return res.json().catch(() => null);
+}
+
+/** Fetch wrapper for password actions: network failure → stable user-facing fallback. */
+async function passwordFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0);
+  }
+}
+
+/** IAM-SRS-007: change password for the signed-in user. Contract: confirmPassword is required. */
+export async function changePasswordRequest(token: string, currentPassword: string, newPassword: string, confirmPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
+  const res = await passwordFetch(`${API_URL}/api/v1/me/password`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       Accept: 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ currentPassword, newPassword, confirmPassword: newPassword }),
+    body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
   });
-  const body: unknown = await res.json().catch(() => null);
+  const body: unknown = await parseBody(res);
   if (res.ok && body) return body as { message: string; reauthRequired: boolean };
-  const b = (body ?? {}) as Record<string, unknown>;
-  const nested = b.message && typeof b.message === 'object' ? (b.message as { message?: string }).message : undefined;
-  const message = typeof b.message === 'string' ? b.message : nested ?? `Đổi mật khẩu thất bại (${res.status})`;
-  throw new LoginError(message, res.status);
+  throw toPasswordActionError(res.status, body, `Đổi mật khẩu thất bại (${res.status})`);
 }
 
-/** IAM-SRS-007: request reset (anti-enumeration — generic message always). */
-export async function requestPasswordResetRequest(email: string): Promise<{ message: string; resetUrl?: string }> {
-  const res = await fetch(`${API_URL}/api/v1/auth/password-reset/request`, {
+/** IAM-SRS-007: request reset (anti-enumeration — the response is always a generic message, no resetUrl). */
+export async function requestPasswordResetRequest(email: string): Promise<{ message: string }> {
+  const res = await passwordFetch(`${API_URL}/api/v1/auth/password-reset/request`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8', Accept: 'application/json' },
     body: JSON.stringify({ email }),
   });
-  const body: unknown = await res.json().catch(() => null);
-  if (res.ok && body) return body as { message: string; resetUrl?: string };
-  throw new LoginError(`Gửi yêu cầu thất bại (${res.status})`, res.status);
+  const body: unknown = await parseBody(res);
+  if (res.ok && body) return body as { message: string };
+  throw toPasswordActionError(res.status, body, `Gửi yêu cầu thất bại (${res.status})`);
 }
 
-/** IAM-SRS-007: confirm reset with one-time token. */
-export async function confirmPasswordResetRequest(token: string, newPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
-  const res = await fetch(`${API_URL}/api/v1/auth/password-reset/confirm`, {
+/** IAM-SRS-007: confirm reset with one-time token. Contract: confirmPassword is required. */
+export async function confirmPasswordResetRequest(token: string, newPassword: string, confirmPassword: string): Promise<{ message: string; reauthRequired: boolean }> {
+  const res = await passwordFetch(`${API_URL}/api/v1/auth/password-reset/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8', Accept: 'application/json' },
-    body: JSON.stringify({ token, newPassword }),
+    body: JSON.stringify({ token, newPassword, confirmPassword }),
   });
-  const body: unknown = await res.json().catch(() => null);
+  const body: unknown = await parseBody(res);
   if (res.ok && body) return body as { message: string; reauthRequired: boolean };
-  const b = (body ?? {}) as Record<string, unknown>;
-  const message = typeof b.message === 'string' ? b.message : `Đặt lại mật khẩu thất bại (${res.status})`;
-  throw new LoginError(message, res.status);
+  throw toPasswordActionError(res.status, body, `Đặt lại mật khẩu thất bại (${res.status})`);
 }
 
 export async function loginRequest(email: string, password: string): Promise<LoginSuccess> {

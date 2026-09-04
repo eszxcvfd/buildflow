@@ -13,8 +13,8 @@ export interface UserRepositoryPort {
   // Transactional variants — share same DB transaction/client as audit log for atomicity
   createWithClient?(client: PoolClient, user: UserEntity): Promise<void>;
   saveWithClient?(client: PoolClient, user: UserEntity): Promise<void>;
-  /** IAM-SRS-007: update only the password hash + password_changed_at atomically. */
-  updatePasswordHash?(userId: string, passwordHash: string, changedAt: Date, client?: PoolClient): Promise<void>;
+  /** IAM-SRS-007: update only the password hash + password_changed_at atomically. Returns affected row count. */
+  updatePasswordHash?(userId: string, passwordHash: string, changedAt: Date, client?: PoolClient): Promise<number>;
   /** IAM-SRS-007: read password_changed_at cutoff for session invalidation. */
   getPasswordChangedAt?(userId: string): Promise<Date | null>;
 }

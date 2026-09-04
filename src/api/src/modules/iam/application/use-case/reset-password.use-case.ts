@@ -35,6 +35,7 @@ export class ResetPasswordUseCase {
     const tokenHash = createHash('sha256').update(input.token).digest('hex');
     const record = await this.resetRepo.findLatestUsableByHash(tokenHash);
     if (!record) {
+      await this.auditFailed(input, null, 'invalid_or_expired');
       throw new UnauthorizedException('Link đặt lại không hợp lệ hoặc đã hết hạn');
     }
 
@@ -50,10 +51,19 @@ export class ResetPasswordUseCase {
         [record.id, now],
       );
       if (claimed.rowCount === 0) {
+        // Lost the race: token already consumed by another request.
+        await this.auditFailed(input, record.userId, 'already_used');
         throw new UnauthorizedException('Link đặt lại không hợp lệ hoặc đã hết hạn');
       }
       if (this.userRepo.updatePasswordHash) {
-        await this.userRepo.updatePasswordHash(record.userId, await this.hasher.hash(input.newPassword), changedAt, client);
+        const updated = await this.userRepo.updatePasswordHash(record.userId, await this.hasher.hash(input.newPassword), changedAt, client);
+        if (updated === 0) {
+          // User row disappeared mid-transaction — refuse instead of silently succeeding.
+          await this.auditFailed(input, record.userId, 'user_missing');
+          throw new UnauthorizedException('Link đặt lại không hợp lệ hoặc đã hết hạn');
+        }
+      } else {
+        throw new Error('User repository does not support password updates');
       }
       // Void any other outstanding tokens for this user
       await this.resetRepo.invalidateAllForUser(record.userId, now, client);
@@ -71,6 +81,21 @@ export class ResetPasswordUseCase {
     }
 
     return { reauthRequired: true };
+  }
+
+  /**
+   * Best-effort FAILED audit for every rejected reset attempt.
+   * NEVER logs the token value or its hash — only a coarse reason code.
+   * Uses audit.log (own connection) so the FAILED entry survives the tx rollback.
+   */
+  private async auditFailed(input: ResetPasswordInput, actorUserId: string | null, reason: string): Promise<void> {
+    try {
+      await this.audit.log({
+        actorUserId, action: 'IAM_PASSWORD_RESET_FAILED', entityType: 'USER', entityId: actorUserId,
+        afterData: { reason }, result: 'FAILED',
+        ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+      });
+    } catch { /* best-effort */ }
   }
 }
 
