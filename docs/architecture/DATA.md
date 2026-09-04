@@ -84,6 +84,15 @@ Redis không phải source of truth. Cache miss phải có behavior rõ (thườ
 - Baseline cache không cần durable volume; dùng bounded memory/eviction policy phù hợp khi implementation được scaffold.
 - Nếu Redis chuyển sang session durable, queue, event stream hoặc dữ liệu không thể rebuild, phải ghi ADR về persistence (AOF/RDB), backup, restore và failure semantics trước khi triển khai.
 
+### Key registry (hiện có)
+
+| Key pattern | Giá trị | TTL | Mục đích / failure semantics |
+| --- | --- | --- | --- |
+| `iam:revoked:jti:<jti>` | `'1'` | `expiresAt - now` (giây, min 1) — tự xoá khi token hết hạn tự nhiên | jti denylist cho logout/revocation (IAM-SRS-002), chỉ khi API chạy với `REDIS_URL`. READ lỗi → fail-open (denylist là cache); WRITE lỗi → warn + bỏ qua, token có hạn tự nhiên chặn thiệt hại. |
+| `iam:revoked:user:<userId>` | cutoff epoch-ms (`password_changed_at`) | `ceil(maxTokenTtlMs / 1000)`, min 1 — tái tạo semantics tự purge sau khi không còn token nào phát trước cutoff | Lan truyền cross-instance cutoff đổi mật khẩu (IAM-SRS-007). Không phải source of truth: guard luôn enforce `users.password_changed_at` từ PostgreSQL; Redis lỗi → fallback về giá trị DB. |
+
+Cả hai key chỉ chứa jti/cutoff (không credential, không token raw), được ghi qua `RedisTokenRevocationService` và chỉ tồn tại khi `REDIS_URL` được cấu hình.
+
 ## 5. Docker Compose contract
 
 Compose file phải thể hiện tối thiểu:

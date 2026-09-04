@@ -60,7 +60,7 @@ Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): `forgot-password`/`re
 - Native capability (camera, notification, secure storage, deep link) đi qua adapter nhỏ trong `src/`, không rải SDK call vào screen.
 - `src/components/ui` chứa native presentation primitives; không import `@ark-ui/react`, DOM type hoặc CSS Modules của web.
 - API model được generate/consume từ contract; không copy domain entity của server rồi giả vờ đó là mobile domain.
-- Auth token, secret và secure storage policy chưa được chốt; không lưu credential nhạy cảm trong plain async storage.
+- Session token (accessToken) lưu qua `expo-secure-store` (Keychain/Keystore) trên native qua adapter `src/storage/session.ts`; trên web, Expo SDK 51 chưa hỗ trợ SecureStore nên fallback về AsyncStorage — rủi ro plaintext trên web được chấp nhận vì web chỉ là dev/preview target. Session plaintext cũ trong AsyncStorage (kiến trúc trước đây) được legacy-migrate sang SecureStore ở lần đọc đầu rồi xoá, và `clearSession` luôn dọn cả hai nơi; credential nhạy cảm khác vẫn không lưu trong plain async storage.
 - Shared logic chỉ được tạo khi có ít nhất hai consumer và interface đủ sâu; duplication nhỏ trên web/mobile tốt hơn coupling sai seam.
 
 ## 4. Runtime và state

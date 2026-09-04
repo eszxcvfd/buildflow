@@ -3,10 +3,19 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-
 import { LoginScreen } from './LoginScreen';
 import * as client from '../../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+
+// Session persistence now goes through expo-secure-store on native (Keychain/Keystore);
+// AsyncStorage is only the web fallback + legacy migration source.
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+}));
 
 describe('LoginScreen', () => {
   beforeEach(async () => {
@@ -208,8 +217,12 @@ describe('LoginScreen password flows (IAM-SRS-007, issue #22)', () => {
     await waitFor(() => expect(screen.getByText('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.')).toBeTruthy());
 
     // After the ~1.2s success notice the hand-off must wipe the persisted session
-    // (accessToken) from AsyncStorage — not just the in-memory state (issue #22 P1).
+    // (accessToken) from secure storage (native path) — not just the in-memory
+    // state (issue #22 P1). The session is saved into SecureStore on login, so
+    // clearing must hit SecureStore too; AsyncStorage is only the web fallback
+    // and legacy migration source.
     await waitFor(() => expect(screen.getByRole('header', { name: 'Đăng nhập' })).toBeTruthy(), { timeout: 4000 });
+    await waitFor(() => expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('buildflow.auth.v1'));
     await expect(AsyncStorage.getItem('buildflow.auth.v1')).resolves.toBeNull();
   }, 15000);
 });

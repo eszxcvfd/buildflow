@@ -181,8 +181,8 @@ export function LoginScreen({ onSession }: { onSession?: (session: LoginSuccess)
     if (showProfile) {
       return <ProfileScreen token={session.accessToken} onPasswordChanged={async () => {
         // IAM-SRS-007 (issue #22, P1): after a password change the server invalidated this
-        // session — wipe the persisted session (accessToken in AsyncStorage) BEFORE dropping
-        // UI state, matching handleLogout and Web clearAuth().
+        // session — wipe the persisted session (accessToken in SecureStore on native /
+        // AsyncStorage on web) BEFORE dropping UI state, matching handleLogout and Web clearAuth().
         await clearSession();
         setSession(null);
         setShowProfile(false);
