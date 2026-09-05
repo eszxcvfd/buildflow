@@ -62,6 +62,24 @@ export function clearAuth(): void {
   }
 }
 
+/** Sự kiện phát khi thông tin user trong session thay đổi (vd: sau khi lưu hồ sơ). */
+export const AUTH_CHANGED_EVENT = 'buildflow:auth-changed';
+
+/**
+ * Cập nhật thông tin user trong session đã lưu rồi phát sự kiện AUTH_CHANGED_EVENT
+ * để các component đang mở (vd: navbar) hiển thị lại dữ liệu mới ngay, không cần reload.
+ */
+export function updateStoredUser(
+  patch: Partial<Pick<StoredAuthUser, 'fullName' | 'status' | 'userType'>>,
+): StoredAuth | null {
+  const current = getAuth();
+  if (!current) return null;
+  const next: StoredAuth = { ...current, user: { ...current.user, ...patch } };
+  saveAuth(next);
+  if (isBrowser()) window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+  return next;
+}
+
 export function isTokenExpired(auth: StoredAuth | null, now: Date = new Date()): boolean {
   if (!auth) return true;
   const exp = new Date(auth.expiresAt);

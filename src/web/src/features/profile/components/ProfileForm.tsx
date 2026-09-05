@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
-import { getAuth, isTokenExpired } from '@/lib/auth/storage';
+import { getAuth, isTokenExpired, updateStoredUser } from '@/lib/auth/storage';
 import { fetchProfile, updateProfile, type Profile, type ProfileError } from '@/lib/api/profile';
 
 export function ProfileForm() {
@@ -75,6 +75,8 @@ export function ProfileForm() {
       setProfile(updated);
       setFullName(updated.fullName ?? '');
       setPhone(updated.phone ?? '');
+      // đồng bộ ngay thông tin user cho navbar và các component đang mở
+      updateStoredUser({ fullName: updated.fullName ?? '' });
       setSuccess(true);
     } catch (err) {
       const e2 = err as ProfileError;

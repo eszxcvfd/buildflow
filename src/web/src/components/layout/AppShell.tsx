@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { logoutAndClear } from '@/features/auth';
 import { BrandMark } from './BrandMark';
-import { getAuth, isTokenExpired, type StoredAuth } from '@/lib/auth/storage';
+import { AUTH_CHANGED_EVENT, getAuth, isTokenExpired, type StoredAuth } from '@/lib/auth/storage';
 
 interface NavItem {
   href: string;
@@ -78,6 +78,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  // đồng bộ lại thông tin user trên navbar khi session thay đổi (vd: lưu hồ sơ cá nhân)
+  React.useEffect(() => {
+    function syncAuth() {
+      const a = getAuth();
+      if (a) setAuth(a);
+    }
+    window.addEventListener(AUTH_CHANGED_EVENT, syncAuth);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, syncAuth);
+  }, []);
 
   if (!checked || !auth) {
     return (
