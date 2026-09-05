@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { listWorkers, type Worker } from '@/lib/api/workers';
 import type { ApiError } from '@/lib/api/workers';
+import { updateAdminUserStatus } from '@/lib/api/admin-users';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -28,6 +29,9 @@ export function WorkerList() {
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
   const [retryKey, setRetryKey] = React.useState(0);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = React.useState<{ worker: Worker; next: string } | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -46,7 +50,7 @@ export function WorkerList() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, retryKey]);
+  }, [search, statusFilter]);
 
   React.useEffect(() => {
     void load();
@@ -54,6 +58,27 @@ export function WorkerList() {
 
   function handleRetry() {
     setRetryKey((k) => k + 1);
+  }
+
+  async function handleStatusChange(worker: Worker, next: 'ACTIVE' | 'INACTIVE') {
+    setActionError(null);
+    setBusyId(worker.id);
+    try {
+      const updated = await updateAdminUserStatus(worker.id, { status: next });
+      setWorkers((prev) => prev.map((w) => (w.id === updated.id
+        ? { ...w, status: updated.status, eligible: updated.status === 'ACTIVE' }
+        : w)));
+      setConfirmTarget(null);
+    } catch (e) {
+      const err = e as ApiError;
+      setActionError(err.status === 401
+        ? 'Phiên hết hạn, vui lòng đăng nhập lại.'
+        : err.status === 403
+          ? 'Không có quyền — cần ADMIN.'
+          : err.message || 'Thao tác thất bại');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (loading) {
@@ -139,8 +164,8 @@ export function WorkerList() {
           <Button variant="secondary" onClick={() => void load()}>
             Tìm
           </Button>
-          <a href="/workers/new" style={{ marginLeft: 'auto', alignSelf: 'center', color: '#1d4ed8', textDecoration: 'underline', fontWeight: 600 }}>
-            + Tạo worker
+          <a className="bf-btn bf-btn-primary" href="/workers/new" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
+            Thêm công nhân
           </a>
         </div>
         <p style={{ margin: '0.75rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
@@ -156,6 +181,31 @@ export function WorkerList() {
           </p>
         </Card>
       ) : (
+        <>
+        {actionError ? <Alert tone="error">{actionError}</Alert> : null}
+        {confirmTarget ? (
+          <Card>
+            <Alert tone="info">
+              Xác nhận chuyển trạng thái {confirmTarget.worker.fullName} sang{' '}
+              <strong>{confirmTarget.next === 'INACTIVE' ? 'Ngừng hoạt động' : 'Hoạt động'}</strong>?
+              {confirmTarget.next === 'INACTIVE' ? ' Worker sẽ bị chặn phân công mới; lịch sử vẫn giữ.' : ''}
+            </Alert>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+              <Button
+                onClick={() => {
+                  const t = confirmTarget;
+                  setConfirmTarget(null);
+                  void handleStatusChange(t.worker, t.next as 'ACTIVE' | 'INACTIVE');
+                }}
+                loading={busyId === confirmTarget.worker.id}
+                aria-busy={busyId === confirmTarget.worker.id}
+              >
+                Xác nhận
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmTarget(null)}>Hủy</Button>
+            </div>
+          </Card>
+        ) : null}
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {workers.map((w) => {
             const s = statusTone(w.status);
@@ -180,6 +230,15 @@ export function WorkerList() {
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     {!w.eligible ? <span style={{ fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 6, padding: '0.2rem 0.5rem' }}>Chặn phân công</span> : null}
+                    {w.status === 'ACTIVE' ? (
+                      <Button variant="secondary" onClick={() => setConfirmTarget({ worker: w, next: 'INACTIVE' })} disabled={busyId === w.id}>
+                        Ngừng hoạt động
+                      </Button>
+                    ) : w.status === 'INACTIVE' ? (
+                      <Button variant="secondary" onClick={() => setConfirmTarget({ worker: w, next: 'ACTIVE' })} disabled={busyId === w.id}>
+                        Kích hoạt lại
+                      </Button>
+                    ) : null}
                     <a href={`/workers/${w.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
                       Chi tiết
                     </a>
@@ -189,6 +248,7 @@ export function WorkerList() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

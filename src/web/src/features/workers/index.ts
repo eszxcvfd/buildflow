@@ -3,3 +3,4 @@ export * from './schemas/worker.schema';
 export * from './services/worker.service';
 export { WorkerList } from './components/WorkerList';
 export { WorkerForm } from './components/WorkerForm';
+export { WorkerDetail } from './components/WorkerDetail';
