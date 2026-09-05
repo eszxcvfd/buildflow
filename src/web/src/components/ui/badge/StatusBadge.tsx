@@ -10,7 +10,7 @@ export function toneForStatus(status: string): BadgeTone {
   const s = status.toLowerCase();
   // 'inactive' chứa 'active' — phải kiểm trước
   if (/(inactive|locked|block|fail|reject|overdue|cancel|suspend|error)/.test(s)) return 'risk';
-  if (/(complete|done|closed|paid|approved|passed)/.test(s)) return 'ok';
+  if (/(complete|done|closed|paid|approved|passed|success)/.test(s)) return 'ok';
   if (/(active|progress|running|open|assigned|in_?use)/.test(s)) return 'busy';
   if (/(hold|wait|pending|review|draft)/.test(s)) return 'info';
   return 'idle';

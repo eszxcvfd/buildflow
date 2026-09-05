@@ -27,7 +27,10 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   },
   {
     title: 'Quản trị',
-    items: [{ href: '/admin/users', label: 'Tài khoản', adminOnly: true }],
+    items: [
+      { href: '/admin/users', label: 'Tài khoản', adminOnly: true },
+      { href: '/admin/audit-logs', label: 'Nhật ký thao tác', adminOnly: true },
+    ],
   },
 ];
 
@@ -36,6 +39,7 @@ const TITLES: Array<[prefix: string, title: string]> = [
   ['/projects', 'Dự án'],
   ['/contractors', 'Nhà thầu'],
   ['/admin/users', 'Tài khoản'],
+  ['/admin/audit-logs', 'Nhật ký thao tác'],
   ['/profile', 'Hồ sơ cá nhân'],
 ];
 

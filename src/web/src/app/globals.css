@@ -528,6 +528,15 @@ a:hover {
   background: var(--bf-surface-2);
 }
 
+/* ---------- Phân trang ---------- */
+.bf-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
 /* ---------- KPI ---------- */
 .bf-kpi-grid {
   display: grid;

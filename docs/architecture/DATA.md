@@ -1,6 +1,6 @@
 # Data Layer Architecture — Docker, PostgreSQL và Redis
 
-> **Status:** baseline được ghi nhận cho scaffold; chưa có `compose.yaml`, migration, schema hoặc adapter implementation.
+> **Status:** PostgreSQL/Redis baseline đã chốt; `infra/docker/compose.yaml` đã có cho local data services. Migration, schema và repository adapter được implement trong `src/api` và đăng ký ở §7 (migration registry).
 > **Owner:** data service boundary, persistence/cache policy, Docker Compose và data-runtime proof.
 
 ## 1. Quyết định baseline
@@ -126,6 +126,20 @@ Application use case
 - Local volume có thể xóa; không coi dữ liệu local là fixture canonical.
 - Backup, restore, retention, replication, encryption at rest và disaster recovery chưa được quyết định; không ghi giả định production vào Compose file.
 - Integration test dùng database/schema/project riêng và phải cleanup; không chạy destructive reset trên volume developer mặc định.
+
+### Migration registry (hiện có)
+
+Forward-only migration do `src/api` sở hữu, chạy qua `scripts/migrate.js` (checksum sha256 + advisory lock, file `migrations/NNNN_name.sql`, skip nếu đã apply):
+
+| Version | File | Nội dung | Invariant |
+| --- | --- | --- | --- |
+| 0001 | `0001_dbd_v2_1_baseline.sql` | 34 bảng DBD V2.1 + indexes | schema baseline theo [`../../DBD.md`](../../DBD.md) |
+| 0002 | `0002_iam_srs007_password_reset.sql` | `users.password_changed_at`, bảng `password_reset_tokens` | one-time password reset token (IAM-SRS-007) |
+| 0003 | `0003_iam_srs008_audit_integrity.sql` | unique partial index `ux_audit_correlation_action` trên `audit_logs (correlation_id, action) WHERE correlation_id IS NOT NULL`; append-only triggers `audit_logs_append_only_rows` (BEFORE UPDATE/DELETE) và `audit_logs_append_only_truncate` (BEFORE TRUNCATE) | idempotency audit — mỗi event mang `correlation_id` đúng một record, retry/duplicate là no-op; `audit_logs` append-only: UPDATE/DELETE/TRUNCATE bị chặn ở mức DB (IAM-SRS-008; policy chi tiết ở [API.md §8](API.md)) |
+
+- Migration 0003 không tự dọn dữ liệu trùng legacy (append-only); môi trường có trùng `(correlation_id, action)` phải cleanup theo quyết định owner trước khi apply.
+- Residual risk (security review): app DB role đồng thời là owner của trigger/function (migrate chạy cùng `DATABASE_URL` với app pool) nên trigger chỉ chặn app-code bug, không chặn chính role đó — production cần chạy migration bằng owner role riêng và connect app bằng non-owner role (quyết định owner, pending).
+- Retention audit log chưa chốt (deferred chờ owner confirm) — khi cần gỡ append-only trigger phải qua migration riêng, không thao tác thủ công.
 
 ## 8. Proof và change routing
 

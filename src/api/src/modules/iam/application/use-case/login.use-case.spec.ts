@@ -101,6 +101,26 @@ describe('LoginUseCase IAM-SRS-001', () => {
     expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ result: 'FAILED' }));
   });
 
+  it('IAM-SRS-008: user không tồn tại → AUTH_LOGIN_FAILED traceable an toàn (actor null, không plaintext password)', async () => {
+    userEntity = null;
+    (repo.findByEmail as jest.Mock) = jest.fn(async () => null);
+    await expect(
+      useCase.execute({ email: 'ghost@example.com', password: 'PlaintextLeak123!' }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    const call = (audit.log as jest.Mock).mock.calls[0][0];
+    expect(call.action).toBe('AUTH_LOGIN_FAILED');
+    expect(call.actorUserId).toBeNull();
+    expect(call.entityId).toBeNull();
+    expect(call.result).toBe('FAILED');
+    expect(call.afterData).toEqual({ email: 'ghost@example.com', reason: 'user_not_found' });
+    // the attempted password and any password key must never reach audit metadata
+    const serialized = JSON.stringify(call);
+    expect(serialized).not.toContain('PlaintextLeak123!');
+    expect(serialized.toLowerCase()).not.toContain('"password"');
+  });
+
   it('sai mật khẩu → từ chối generic + tăng failed count', async () => {
     userEntity = makeUser({ failedLoginCount: 0 });
     await expect(useCase.execute({ email: 'alice@example.com', password: 'wrong' })).rejects.toThrow(UnauthorizedException);

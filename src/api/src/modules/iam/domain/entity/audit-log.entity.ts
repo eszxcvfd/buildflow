@@ -24,6 +24,7 @@ export interface AuditLogProps {
   entityId: string | null;
   beforeData: unknown | null;
   afterData: unknown | null;
+  reason?: string | null;
   result: AuditResult;
   ipAddress: string | null;
   userAgent: string | null;
@@ -41,6 +42,7 @@ export class AuditLogEntity {
   get entityId(): string | null { return this.props.entityId; }
   get beforeData(): unknown | null { return this.props.beforeData; }
   get afterData(): unknown | null { return this.props.afterData; }
+  get reason(): string | null { return this.props.reason ?? null; }
   get result(): AuditResult { return this.props.result; }
   get ipAddress(): string | null { return this.props.ipAddress; }
   get userAgent(): string | null { return this.props.userAgent; }
@@ -52,27 +54,41 @@ export class AuditLogEntity {
   }
 
   /**
-   * Ensure no secret fields leak via audit data.
-   * Secrets: password, passwordHash, token, resetCode, secret, hash
+   * Ensure no secret fields leak via audit data (IAM-SRS-008).
+   * Secrets: password, passwordHash, token, resetCode, secret, hash —
+   * checked recursively at every key depth, plus a stringified payload
+   * scan as belt-and-braces (rejection is conservative, never permissive).
    */
   static isSanitized(data: unknown): boolean {
     if (!data || typeof data !== 'object') return true;
+    if (AuditLogEntity.hasForbiddenKeyDeep(data)) return false;
     const str = JSON.stringify(data).toLowerCase();
-    const forbidden = ['password', 'passwd', 'pwd', 'secret', 'resetcode', 'reset_code', 'token', 'jwt', 'hash'];
-    // Specifically check passwordHash as key, not just any hash word in description
-    const keys = Object.keys(data as Record<string, unknown>).map((k) => k.toLowerCase());
-    for (const k of keys) {
-      if (k.includes('password') || k.includes('secret') || k.includes('token') || k === 'passwordhash' || k === 'resetcoderaw') return false;
-      if (k === 'hash' || k.includes('password_hash')) return false;
-    }
-    // Also brute check payload string for password field patterns: "password":"
-    if (str.includes('"password"') || str.includes('"passwordhash"') || str.includes('"token"') || str.includes('"secret"')) return false;
-    // Allow "passwordHash" in forgot detection already covers
-    // Additional check: if data contains forbidden substrings as keys
+    const forbidden = ['password', 'passwd', 'pwd', 'secret', 'resetcode', 'reset_code', 'token', 'jwt', 'hash', 'passwordhash', 'password_hash'];
     for (const f of forbidden) {
       // Only flag if as key pattern
       if (str.includes(`"${f}"`)) return false;
     }
     return true;
+  }
+
+  private static hasForbiddenKeyDeep(value: unknown): boolean {
+    if (!value || typeof value !== 'object') return false;
+    if (Array.isArray(value)) return value.some((v) => AuditLogEntity.hasForbiddenKeyDeep(v));
+    for (const [rawKey, child] of Object.entries(value as Record<string, unknown>)) {
+      const k = rawKey.toLowerCase();
+      if (
+        k.includes('password') ||
+        k.includes('secret') ||
+        k.includes('token') ||
+        k.includes('resetcode') ||
+        k.includes('reset_code') ||
+        k === 'hash' ||
+        k === 'jwt'
+      ) {
+        return true;
+      }
+      if (AuditLogEntity.hasForbiddenKeyDeep(child)) return true;
+    }
+    return false;
   }
 }

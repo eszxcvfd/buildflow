@@ -148,7 +148,65 @@ Quy tắc nghiệp vụ:
 
 **Multi-instance revocation (IAM-SRS-002/007):** adapter revocation được chọn theo deployment, không theo code — đặt `REDIS_URL` (non-empty) thì `TOKEN_REVOCATION_PORT` dùng `RedisTokenRevocationService`: jti denylist (`iam:revoked:jti:<jti>`, TTL = thời gian còn lại của token) và user cutoff (`iam:revoked:user:<userId>`, TTL = max TTL của token) lan truyền cross-instance qua Redis, mọi instance enforce revocation gần như tức thời; không đặt `REDIS_URL` thì fallback in-memory per-instance như trước. `password_changed_at` trong PostgreSQL vẫn là **source of truth** theo [`DATA.md`](DATA.md): Redis chỉ là cache/coordination tăng tốc lan truyền, guard luôn đọc và enforce cutoff từ DB (kèm cache cutoff 30s/instance nên cửa sổ lệch tối đa 30s vẫn được chấp nhận). Khi Redis outage: jti denylist fail-open (không treo request, chấp nhận miss một revocation), user cutoff tự fallback về giá trị DB truyền vào guard — DB vẫn luôn được guard check riêng nên phiên không bị nhầm trạng thái; lỗi ghi Redis chỉ warn, không phá request đổi mật khẩu.
 
-## 8. Domain và application conventions
+## 8. Audit log (IAM-SRS-008)
+
+Audit trail ghi lại các event bảo mật/IAM quan trọng (login success/failed, logout, user create/update, lock/unlock/deactivate/reactivate, role change, password flows, project scope bypass). Write path đi qua `AuditPort` (`application/port/audit.port.ts` → `PgAuditRepository`); read path là read-only qua `AUDIT_LOG_REPOSITORY` → `QueryAuditLogsUseCase`.
+
+### 8.1 Read endpoint
+
+| Method | Path | Auth | Query filters | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/audit-logs` | JWT bắt buộc, **ADMIN-only** (server-derived roles, check trong use case) | `action`, `actorUserId`, `entityType`, `entityId`, `result` (`SUCCESS`/`FAILED`), `correlationId`, `from`, `to` (ISO 8601 strict — date-only `YYYY-MM-DD` hoặc timestamp RFC3339 (`YYYY-MM-DDTHH:mm[:ss[.mmm]]` + `Z` hoặc `±HH:MM`); giá trị khác → `400`; date-only `from` được chuẩn hóa về `00:00:00.000Z`, date-only `to` về `23:59:59.999Z` — end-of-day inclusive, chọn đúng ngày cuối vẫn được bao gồm; `from ≤ to` vẫn bắt buộc), `limit` (1-100, default 20), `offset` (≥ 0) | `200 { data, total, limit, offset }`, `data[]` sort giảm dần theo `createdAt` | `401` chưa xác thực; `403` non-admin; `400` query sai (enum/date/limit/offset) |
+
+- Phân trang là limit/offset kèm `total` tuyệt đối; chưa có cursor pagination.
+- Response `data[]` có leak guard: nếu before/after data vi phạm `AuditLogEntity.isSanitized()` (xem 8.5) thì request bị từ chối `400` — defense in depth phía read.
+- Body lỗi hiện tại là shape Nest default `{ statusCode, message }`; freeze sang Problem Details ([`NETCODE.md`](NETCODE.md) §3) phải đi cùng OpenAPI và đồng bộ consumer.
+- Response `data[]` item gồm các trường: `id`, `actorUserId`, `action`, `entityType`, `entityId`, `beforeData`, `afterData`, `reason`, `result`, `ipAddress`, `userAgent`, `correlationId`, `createdAt`. `reason` là lý do nghiệp vụ nullable do producer ghi (write path hiện tại chưa ghi `reason` → thường `null`).
+
+Ví dụ một item trong `data[]`:
+
+```json
+{
+  "id": "0f8f2a5e-9d1c-4b7a-8e3f-2c6d5b4a9e10",
+  "actorUserId": "33333333-3333-3333-3333-333333333333",
+  "action": "AUTH_LOGIN_SUCCESS",
+  "entityType": "USER",
+  "entityId": "33333333-3333-3333-3333-333333333333",
+  "beforeData": null,
+  "afterData": { "email": "admin@buildflow.vn", "roles": ["ADMIN"] },
+  "reason": null,
+  "result": "SUCCESS",
+  "ipAddress": "10.0.0.15",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+  "correlationId": "6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b",
+  "createdAt": "2026-08-27T01:23:45.678Z"
+}
+```
+
+### 8.2 Idempotency — mỗi event đúng một record
+
+- DB ràng buộc unique partial index `ux_audit_correlation_action (correlation_id, action) WHERE correlation_id IS NOT NULL` (migration 0003): một event mang `correlation_id` chỉ tạo đúng một record; retry/duplicate không nhân bản.
+- `PgAuditRepository` dùng `INSERT ... ON CONFLICT (correlation_id, action) WHERE correlation_id IS NOT NULL DO NOTHING` khi có `correlation_id`: insert trùng là no-op (rowCount 0), **không phải lỗi**. Event không có `correlation_id` (best-effort, ví dụ `AUTH_LOGIN_FAILED` cho user không tồn tại) luôn ghi mới.
+- `X-Correlation-Id` trên role-assignment phải là UUID (controller trả `400` nếu sai vì `audit_logs.correlation_id` là `uuid`).
+
+### 8.3 Append-only
+
+- `audit_logs` là append-only ở mức DB: trigger `audit_logs_append_only_rows` (BEFORE UPDATE/DELETE FOR EACH ROW) và `audit_logs_append_only_truncate` (BEFORE TRUNCATE) raise exception — chỉ INSERT được phép (migration 0003). Integration test chứng minh UPDATE/DELETE/TRUNCATE bị từ chối.
+
+### 8.4 Reliability policy
+
+- **Tx-embedded mandatory** (status change, role change): audit chạy trong cùng transaction nghiệp vụ qua `logWithClient`; audit thất bại thật = business failure (500, rollback nguyên tử). Dedup không phải thất bại — business write vẫn commit. Không retry bên trong transaction (tx đã aborted sau một statement lỗi).
+- **Non-tx best-effort** (login/logout/password flows): audit không bao giờ phá business flow. `PgAuditRepository.log()` retry đúng 1 lần cho lỗi transient (connection/network, serialization failure, deadlock, pool exhaustion, server shutdown) sau 100ms; thất bại cuối cùng ghi một dòng structured error gồm `correlationId` + `action` + driver code rồi trả về bình thường — không throw về producer.
+
+### 8.5 No-secrets
+
+- Write path không nhận secret: `beforeData`/`afterData` chỉ chứa dữ liệu public profile; `AuditLogEntity.isSanitized()` chặn key `password`/`passwd`/`pwd`/`password_hash`/`secret`/`resetCode`/`reset_code`/`token`/`jwt`/`hash` (kể cả lồng nhau). Read path đối chiếu cùng key set qua leak guard (8.1). Structured error log của audit không bao giờ chứa payload/secret.
+
+### 8.6 Retention
+
+- Retention/rotation **deferred** chờ owner confirm — không có con số hay chính sách được công bố ở đây. Khi chốt, phải đi qua owner document/migration riêng và tạm gỡ append-only trigger một cách kiểm soát (không thao tác thủ công).
+
+## 9. Domain và application conventions
 
 - Tên use case là động từ nghiệp vụ (`CreateX`, `RegisterY`), không phải tên CRUD chung chung nếu domain có ngôn ngữ chính xác hơn.
 - Entity bảo vệ invariant bằng method có ý nghĩa; không public mutable field để controller tự sửa state.
@@ -158,7 +216,7 @@ Quy tắc nghiệp vụ:
 - DTO transport và domain type là hai interface khác nhau; mapper là seam, không dùng `as` để bỏ qua mapping.
 - Không đưa `any`, ORM decorator hoặc Nest decorator vào domain.
 
-## 9. Test và proof
+## 10. Test và proof
 
 | Phạm vi | Kiểm tra | Adapter |
 | --- | --- | --- |
@@ -169,7 +227,7 @@ Quy tắc nghiệp vụ:
 
 Test phải bảo vệ observable outcome qua interface. Không giữ production API/state chỉ để test gọi private implementation. Khi có contract hard cut, audit producer, consumer, generated artifact, fixture và snapshot cùng lúc. Data integration test phải có PostgreSQL readiness/migration proof và Redis TTL/cache-miss/outage proof khi adapter bị ảnh hưởng.
 
-## 10. Cross-cutting tối thiểu
+## 11. Cross-cutting tối thiểu
 
 Các concern sau được bootstrap một lần ở composition root, nhưng policy chi tiết vẫn thuộc owner thích hợp:
 
@@ -183,7 +241,7 @@ Các concern sau được bootstrap một lần ở composition root, nhưng pol
 
 PostgreSQL và Redis được chọn cho data baseline; chi tiết Docker/Compose, persistence, TTL/eviction, migration và production topology thuộc [`DATA.md`](DATA.md). ORM, auth provider và production hosting chưa được chốt.
 
-## 11. Checklist thêm module
+## 12. Checklist thêm module
 
 - [ ] Context/feature và owner đã được gọi tên bằng domain language.
 - [ ] Invariant nằm ở domain, không nằm ở controller.

@@ -12,6 +12,7 @@ function makeLog(overrides: Partial<AuditLogProps> = {}): AuditLogEntity {
     entityId: 'user-1',
     beforeData: null,
     afterData: { email: 'a@b.com', roles: ['WORKER'] },
+    reason: null,
     result: 'SUCCESS',
     ipAddress: '1.2.3.4',
     userAgent: 'jest',

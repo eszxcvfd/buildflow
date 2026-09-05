@@ -11,6 +11,7 @@ export function toAuditLogResponse(entity: AuditLogEntity): AuditLogResponseDto 
     entityId: p.entityId,
     beforeData: p.beforeData,
     afterData: p.afterData,
+    reason: p.reason ?? null,
     result: p.result,
     ipAddress: p.ipAddress,
     userAgent: p.userAgent,
