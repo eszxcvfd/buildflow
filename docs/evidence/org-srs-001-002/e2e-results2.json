@@ -1,0 +1,22 @@
+[
+  {
+    "id": "A6",
+    "ok": true,
+    "note": "đổi tên thành công, list hiển thị"
+  },
+  {
+    "id": "A7",
+    "ok": true,
+    "note": "deactivate có confirm, list hiển thị INACTIVE"
+  },
+  {
+    "id": "A8",
+    "ok": true,
+    "note": "reactivate thành công, list ACTIVE"
+  },
+  {
+    "id": "B2",
+    "ok": true,
+    "note": "edit contact/scope lưu, detail hiển thị"
+  }
+]

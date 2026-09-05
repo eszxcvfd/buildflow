@@ -1,0 +1,17 @@
+[
+  {
+    "id": "B1",
+    "ok": true,
+    "note": "tạo contractor P2, list hiển thị"
+  },
+  {
+    "id": "B2",
+    "ok": true,
+    "note": "edit P2 contact/scope xong, DB kiểm tra riêng"
+  },
+  {
+    "id": "B3",
+    "ok": true,
+    "note": "deactivate P2 có confirm xong, DB kiểm tra riêng"
+  }
+]

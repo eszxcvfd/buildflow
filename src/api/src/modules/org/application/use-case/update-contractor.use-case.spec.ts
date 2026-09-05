@@ -1,9 +1,10 @@
-import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, ConflictException } from '@nestjs/common';
 import { UpdateContractorUseCase } from './update-contractor.use-case';
 import { ContractorRepositoryPort } from '../../domain/repository/contractor-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
 import { ContractorEntity } from '../../domain/entity/contractor.entity';
+import { AuditLogEntity } from '../../../iam/domain/entity/audit-log.entity';
 
 function makeContractor(status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE'): ContractorEntity {
   return new ContractorEntity({
@@ -67,8 +68,70 @@ describe('UpdateContractorUseCase ORG-SRS-002', () => {
     expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_STATUS_CHANGED' }));
   });
 
-  it('trùng status bị reject', async () => {
-    await expect(useCase.execute({ contractorId: '11111111-1111-4111-8111-111111111111', status: 'ACTIVE', actorUserId })).rejects.toThrow(BadRequestException);
+  it('audit beforeData/afterData phản ánh đúng nội dung trước/sau khi đổi trạng thái', async () => {
+    await useCase.execute({
+      contractorId: '11111111-1111-4111-8111-111111111111',
+      status: 'INACTIVE',
+      actorUserId,
+    });
+    const call = (audit.logWithClient as jest.Mock).mock.calls[0][1] as {
+      action: string;
+      beforeData: { status: string; contactName: string; code: string };
+      afterData: { status: string; contactName: string; code: string };
+    };
+    expect(call.beforeData.status).toBe('ACTIVE');
+    expect(call.afterData.status).toBe('INACTIVE');
+    // public fields giữ nguyên qua status change
+    expect(call.beforeData.code).toBe('CTR-001');
+    expect(call.afterData.code).toBe('CTR-001');
+    expect(call.beforeData.contactName).toBe('A');
+    expect(call.afterData.contactName).toBe('A');
+  });
+
+  it('hasHistory=true khi ngừng hoạt động: afterData có _warning và payload vẫn sạch', async () => {
+    (repo.hasHistory as jest.Mock).mockResolvedValue(true);
+    await useCase.execute({
+      contractorId: '11111111-1111-4111-8111-111111111111',
+      status: 'INACTIVE',
+      actorUserId,
+    });
+    const call = (audit.logWithClient as jest.Mock).mock.calls[0][1] as {
+      action: string;
+      beforeData: { status: string };
+      afterData: { status: string; _warning?: string };
+    };
+    expect(call.beforeData.status).toBe('ACTIVE');
+    expect(call.afterData.status).toBe('INACTIVE');
+    expect(call.afterData._warning).toBe('Nhà thầu có lịch sử công việc, không xóa liên kết');
+    // isSanitized không cho phép key nhạy cảm ở mọi độ sâu — _warning và text tiếng Việt phải pass
+    expect(AuditLogEntity.isSanitized(call.beforeData)).toBe(true);
+    expect(AuditLogEntity.isSanitized(call.afterData)).toBe(true);
+  });
+
+  it('PATCH same-status + đổi contact/scope thành công — no-op status, audit ORG_CONTRACTOR_UPDATED, saveWithClient được gọi', async () => {
+    const { entity } = await useCase.execute({
+      contractorId: '11111111-1111-4111-8111-111111111111',
+      contactName: 'Tran B',
+      scope: 'Hoan thien',
+      status: 'ACTIVE', // cùng status hiện tại — không được reject (#25)
+      actorUserId,
+    });
+    expect(entity.contactName).toBe('Tran B');
+    expect(entity.scope).toBe('Hoan thien');
+    expect(entity.isActive()).toBe(true);
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_UPDATED' }));
+    expect(repo.saveWithClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('PATCH chỉ same-status (không field khác) thành công — idempotent no-op, saveWithClient vẫn gọi', async () => {
+    const { entity } = await useCase.execute({
+      contractorId: '11111111-1111-4111-8111-111111111111',
+      status: 'ACTIVE',
+      actorUserId,
+    });
+    expect(entity.isActive()).toBe(true);
+    expect(entity.name).toBe('Alpha');
+    expect(repo.saveWithClient).toHaveBeenCalledTimes(1);
   });
 
   it('không tìm thấy contractor -> NotFound', async () => {

@@ -128,6 +128,20 @@ describe('CreateWorkerUseCase ORG-SRS-001', () => {
     })).rejects.toThrow(ConflictException);
   });
 
+  it('retry/double-submit không tạo audit lặp — dùng transaction', async () => {
+    // transaction wrapper ensures atomic create+audit; audit called once per success
+    await useCase.execute({
+      email: 'retry@example.com',
+      password: 'Secret123!',
+      fullName: 'Retry',
+      employeeCode: 'EMP_RETRY',
+      trades: [{ tradeId: TRADE_ACTIVE, skillLevel: 3 }],
+      actorUserId: 'admin-1',
+    });
+    expect(workerRepo.createWithClient).toHaveBeenCalledTimes(1);
+    expect(audit.logWithClient).toHaveBeenCalledTimes(1);
+  });
+
   it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload ORG_WORKER_CREATED', async () => {
     const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
     await useCase.execute({

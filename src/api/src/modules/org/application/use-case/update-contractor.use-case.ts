@@ -94,6 +94,9 @@ export class UpdateContractorUseCase {
           }
         }
 
+        // ORG-SRS-002 fix (#25): same-status PATCH is a no-op, không reject —
+        // form edit luôn kèm status hiện tại và chỉ sửa contact/scope vẫn phải thành công.
+        // changeStatus chỉ chạy khi status thực sự đổi; audit action tự tính theo before.status (dòng payload bên dưới).
         if (input.status !== undefined && input.status !== contractor.status) {
           try {
             contractor.changeStatus(input.status as 'ACTIVE' | 'INACTIVE', new Date());
@@ -101,8 +104,6 @@ export class UpdateContractorUseCase {
             const msg = e instanceof Error ? e.message : 'Trạng thái không hợp lệ';
             throw new BadRequestException(msg);
           }
-        } else if (input.status !== undefined && input.status === contractor.status) {
-          throw new BadRequestException(`Nhà thầu đã ở trạng thái ${input.status}`);
         }
       } catch (e) {
         if (e instanceof BadRequestException || e instanceof ConflictException || e instanceof NotFoundException) throw e;

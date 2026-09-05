@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { createContractor, updateContractor, type Contractor } from '@/lib/api/contractors';
+import { createContractor, updateContractor, type Contractor, type UpdateContractorPayload } from '@/lib/api/contractors';
 import type { ApiError } from '@/lib/api/contractors';
 import { validateContractorCreate } from '@/features/contractors/schemas/contractor.schema';
 import { Input } from '@/components/ui/input/Input';
@@ -25,24 +25,48 @@ export function ContractorForm({ mode, initial }: Props) {
   const [scope, setScope] = React.useState(initial?.scope ?? '');
   const [status, setStatus] = React.useState(initial?.status ?? 'ACTIVE');
   const [showStatusConfirm, setShowStatusConfirm] = React.useState(false);
-  const [pendingStatus, setPendingStatus] = React.useState<'ACTIVE' | 'INACTIVE' | null>(null);
+  const statusConfirmedRef = React.useRef(false);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
   const [globalError, setGlobalError] = React.useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setGlobalError(null);
-    setGlobalSuccess(null);
+  // PATCH payload theo mode: edit chỉ gửi status khi nó THỰC SỰ đổi so với initial (#25).
+  function buildPayload(): UpdateContractorPayload {
+    const isStatusChange = mode === 'edit' && !!initial && status !== initial.status;
+    const payload: UpdateContractorPayload = {
+      code: code.trim() || undefined,
+      name: name.trim() || undefined,
+      contactName: contactName.trim(),
+      phone: phone.trim() || null,
+      email: email.trim() || null,
+      scope: scope.trim(),
+      ...(isStatusChange ? { status: status as 'ACTIVE' | 'INACTIVE' } : {}),
+    };
+    return payload;
+  }
 
-    const validation = validateContractorCreate({ code, name, contactName, phone, email, scope, status });
-    // For edit, allow partial but we still validate required fields
-    if (!validation.valid) {
-      setFieldErrors(validation.fieldErrors);
-      return;
+  function setFormError(e: unknown) {
+    const err = e as ApiError;
+    if (err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+      const fe: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(err.fieldErrors)) {
+        if (k === '_global') continue;
+        fe[k] = v;
+      }
+      setFieldErrors(fe);
+      if (err.fieldErrors._global?.length) setGlobalError(err.fieldErrors._global.join(' '));
+      else if (Object.keys(fe).length === 0) setGlobalError(err.message);
+      else setGlobalError(err.message);
+    } else {
+      if (err.status === 401) setGlobalError('Phiên hết hạn, vui lòng đăng nhập lại');
+      else if (err.status === 403) setGlobalError('Không có quyền — cần ADMIN');
+      else if (err.status === 409) setGlobalError(err.message);
+      else setGlobalError(err.message || 'Yêu cầu thất bại');
     }
-    setFieldErrors({});
+  }
+
+  async function save() {
     setLoading(true);
     try {
       if (mode === 'create') {
@@ -58,61 +82,50 @@ export function ContractorForm({ mode, initial }: Props) {
         setGlobalSuccess('Tạo nhà thầu thành công');
         setTimeout(() => router.push('/contractors'), 800);
       } else if (initial) {
-        // Status transition requires confirmation if changing to INACTIVE
-        const isStatusChange = status !== initial.status;
-        if (isStatusChange && status === 'INACTIVE' && !showStatusConfirm) {
-          setPendingStatus(status as 'ACTIVE' | 'INACTIVE');
-          setShowStatusConfirm(true);
-          setLoading(false);
-          return;
-        }
-        await updateContractor(initial.id, {
-          code: code.trim() || undefined,
-          name: name.trim() || undefined,
-          contactName: contactName.trim(),
-          phone: phone.trim() || null,
-          email: email.trim() || null,
-          scope: scope.trim(),
-          status: status as 'ACTIVE' | 'INACTIVE',
-        });
+        await updateContractor(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật nhà thầu thành công');
         setShowStatusConfirm(false);
-        setPendingStatus(null);
+        statusConfirmedRef.current = false;
         setTimeout(() => router.push(`/contractors/${initial.id}`), 800);
       }
-    } catch (err) {
-      const e = err as ApiError;
-      if (e.fieldErrors && Object.keys(e.fieldErrors).length > 0) {
-        const fe: Record<string, string[]> = {};
-        for (const [k, v] of Object.entries(e.fieldErrors)) {
-          if (k === '_global') continue;
-          fe[k] = v;
-        }
-        setFieldErrors(fe);
-        if (e.fieldErrors._global?.length) setGlobalError(e.fieldErrors._global.join(' '));
-        else if (Object.keys(fe).length === 0) setGlobalError(e.message);
-        else setGlobalError(e.message);
-      } else {
-        if (e.status === 401) setGlobalError('Phiên hết hạn, vui lòng đăng nhập lại');
-        else if (e.status === 403) setGlobalError('Không có quyền — cần ADMIN');
-        else if (e.status === 409) setGlobalError(e.message);
-        else setGlobalError(e.message || 'Yêu cầu thất bại');
-      }
+    } catch (e) {
+      setFormError(e);
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setGlobalError(null);
+    setGlobalSuccess(null);
+
+    const validation = validateContractorCreate({ code, name, contactName, phone, email, scope, status });
+    // For edit, allow partial but we still validate required fields
+    if (!validation.valid) {
+      setFieldErrors(validation.fieldErrors);
+      return;
+    }
+    setFieldErrors({});
+    // ACTIVE -> INACTIVE (thực sự đổi) cần confirm trước khi ghi (#25: giữ confirm dialog khi đổi status).
+    const isStatusChange = mode === 'edit' && !!initial && status !== initial.status;
+    if (isStatusChange && status === 'INACTIVE' && !statusConfirmedRef.current) {
+      setShowStatusConfirm(true);
+      return;
+    }
+    await save();
+  }
+
   function handleStatusChange(newStatus: string) {
-    if (mode === 'edit' && initial && newStatus !== initial.status && newStatus === 'INACTIVE') {
-      // Show confirmation dialog for ACTIVE -> INACTIVE
-      setPendingStatus(newStatus as 'ACTIVE' | 'INACTIVE');
+    const changed = mode === 'edit' && !!initial && newStatus !== initial.status;
+    if (changed && newStatus === 'INACTIVE') {
+      // Show confirmation dialog for ACTIVE -> INACTIVE; dialog confirm sẽ ghi thật.
       setShowStatusConfirm(true);
       setStatus(newStatus);
     } else {
+      // ACTIVE <- INACTIVE (reactivate) hoặc chọn lại giá trị cũ: không cần confirm.
       setStatus(newStatus);
       setShowStatusConfirm(false);
-      setPendingStatus(null);
     }
   }
 
@@ -139,8 +152,8 @@ export function ContractorForm({ mode, initial }: Props) {
           <p style={{ margin: 0, fontWeight: 600, color: '#92400e' }}>Xác nhận đổi trạng thái sang INACTIVE?</p>
           <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>Nhà thầu ngừng hoạt động sẽ không được chọn cho phân công mới nhưng lịch sử cũ vẫn được giữ. Hành động này sẽ được audit.</p>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-            <Button variant="secondary" onClick={() => { setShowStatusConfirm(false); setPendingStatus(null); setStatus(initial?.status ?? 'ACTIVE'); }}>Hủy</Button>
-            <Button onClick={() => { setShowStatusConfirm(false); if (pendingStatus) setStatus(pendingStatus); }}>Xác nhận INACTIVE</Button>
+            <Button type="button" variant="secondary" onClick={() => { setShowStatusConfirm(false); setStatus(initial?.status ?? 'ACTIVE'); }}>Hủy</Button>
+            <Button type="button" onClick={() => { setShowStatusConfirm(false); statusConfirmedRef.current = true; void save(); }}>Xác nhận INACTIVE</Button>
           </div>
         </div>
       ) : null}

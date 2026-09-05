@@ -1,0 +1,17 @@
+[
+  {
+    "id": "B4",
+    "ok": true,
+    "note": "eligibleOnly ẩn INACTIVE=true"
+  },
+  {
+    "id": "B5",
+    "ok": true,
+    "note": "detail contractor INACTIVE mở bình thường (không hard delete)"
+  },
+  {
+    "id": "A9",
+    "ok": true,
+    "note": "audit-logs xem được filter action"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "status": 200,
+    "url": "http://localhost:3000/api/v1/contractors/3a09498e-42f2-4146-8f0c-a9e6305d6332",
+    "body": "{\"id\":\"3a09498e-42f2-4146-8f0c-a9e6305d6332\",\"code\":\"E2EFXOMCZUC\",\"name\":\"E2E Fix Active OMCZUC\",\"contactName\":\"Nguyễn E2E Fix Mới\",\"phone\":\"0912345678\",\"email\":\"e2efix.omczuc@example.com\",\"status\":\"ACTIVE\",\"scope\":\"E2E fix: phần thô + hoàn thiện\",\"eligible\":true,\"createdBy\":\"11111111-1111-4111-8111"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:3000/api/v1/contractors/13873e6b-5e8e-4334-9b4e-95962631492e",
+    "body": "{\"id\":\"13873e6b-5e8e-4334-9b4e-95962631492e\",\"code\":\"E2EFX2OMCZUC\",\"name\":\"E2E Fix Inactive OMCZUC\",\"contactName\":\"Nguyễn E2E Fix\",\"phone\":\"0912345678\",\"email\":\"e2efix.omczuc@example.com\",\"status\":\"INACTIVE\",\"scope\":\"E2E fix: thi công phần thô\",\"eligible\":false,\"createdBy\":\"11111111-1111-4111-8111-1"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:3000/api/v1/contractors/13873e6b-5e8e-4334-9b4e-95962631492e",
+    "body": "{\"id\":\"13873e6b-5e8e-4334-9b4e-95962631492e\",\"code\":\"E2EFX2OMCZUC\",\"name\":\"E2E Fix Inactive OMCZUC\",\"contactName\":\"Nguyễn E2E Fix Inactive Mới\",\"phone\":\"0912345678\",\"email\":\"e2efix.omczuc@example.com\",\"status\":\"INACTIVE\",\"scope\":\"E2E fix: cốp pha + cốt thép\",\"eligible\":false,\"createdBy\":\"11111111-11"
+  }
+]

@@ -1,0 +1,125 @@
+[
+  {
+    "id": "A1",
+    "ok": true,
+    "note": "redirect /dashboard"
+  },
+  {
+    "id": "A2",
+    "ok": true,
+    "note": "thấy worker trong list"
+  },
+  {
+    "id": "A3",
+    "ok": true,
+    "note": "báo \"Email đã tồn tại\""
+  },
+  {
+    "id": "A3b",
+    "ok": true,
+    "note": "báo \"Mã nhân viên đã tồn tại\""
+  },
+  {
+    "id": "A4",
+    "ok": true,
+    "note": "báo \"Trade không tồn tại...\""
+  },
+  {
+    "id": "A5",
+    "ok": true,
+    "note": "chỉ 1 worker khớp"
+  },
+  {
+    "id": "A6",
+    "name": "edit đổi tên worker",
+    "ok": false,
+    "note": "page.fill: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('#fullName')\n",
+    "err": {
+      "log": [
+        "  - waiting for locator('#fullName')"
+      ],
+      "name": "TimeoutError"
+    }
+  },
+  {
+    "id": "A6-DB",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "id": "A7",
+    "name": "deactivate worker (confirm dialog)",
+    "ok": false,
+    "note": "locator.click: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('div:has-text(\"E2E Worker Renamed ol9ob9\")').first().locator('button:has-text(\"Ngừng hoạt động\")')\n",
+    "err": {
+      "log": [
+        "  - waiting for locator('div:has-text(\"E2E Worker Renamed ol9ob9\")').first().locator('button:has-text(\"Ngừng hoạt động\")')"
+      ],
+      "name": "TimeoutError"
+    }
+  },
+  {
+    "id": "A7-DB",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "id": "A7-DB2",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "id": "A8",
+    "name": "reactivate worker",
+    "ok": false,
+    "note": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator('button:has-text(\"Kích hoạt lại\")') to be visible\n",
+    "err": {
+      "log": [
+        "  - waiting for locator('button:has-text(\"Kích hoạt lại\")') to be visible"
+      ],
+      "name": "TimeoutError"
+    }
+  },
+  {
+    "id": "A9",
+    "ok": true,
+    "note": "thấy IAM_USER_DEACTIVATED / ORG_WORKER_CREATED"
+  },
+  {
+    "id": "B1",
+    "ok": true,
+    "note": "tạo xong, list hiển thị"
+  },
+  {
+    "id": "B2",
+    "name": "edit contact/scope contractor",
+    "ok": false,
+    "note": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator('a[href*=\"/contractors/\"]:has-text(\"E2E Nhà thầu ol9ob9\")') to be visible\n",
+    "err": {
+      "log": [
+        "  - waiting for locator('a[href*=\"/contractors/\"]:has-text(\"E2E Nhà thầu ol9ob9\")') to be visible"
+      ],
+      "name": "TimeoutError"
+    }
+  },
+  {
+    "id": "B3",
+    "ok": true,
+    "note": "status INACTIVE"
+  },
+  {
+    "id": "B3-DB",
+    "ok": true,
+    "note": ""
+  },
+  {
+    "id": "B4",
+    "ok": true,
+    "note": "eligibleOnly ẩn INACTIVE; status=INACTIVE hiện đúng"
+  },
+  {
+    "id": "B5",
+    "ok": true,
+    "note": "detail render (không 404/hard delete)"
+  }
+]
