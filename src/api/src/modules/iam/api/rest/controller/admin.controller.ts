@@ -65,6 +65,14 @@ export class AdminController {
   async create(@Body() dto: CreateUserDto, @Req() req: Request) {
     const actor = assertAdmin(req);
     const meta = getRequestMeta(req);
+    // correlation_id in audit_logs is uuid-typed: a non-UUID header must be rejected
+    // as 400 with an actionable message instead of surfacing as a 500 audit-insert
+    // failure (same strict pattern as admin-roles.controller.ts / updateStatus below).
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const { entity } = await this.createUser.execute({
       email: dto.email,
       password: dto.password,
@@ -77,6 +85,7 @@ export class AdminController {
       actorUserId: actor.sub,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return toAdminUserResponse(entity);
   }
@@ -133,6 +142,13 @@ export class AdminController {
   ) {
     const actor = assertAdmin(req);
     const meta = getRequestMeta(req);
+    // Strict policy (same as create/updateStatus): non-UUID X-Correlation-Id →
+    // 400 actionable before the use case runs (audit_logs.correlation_id is uuid-typed).
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const { entity } = await this.updateUser.execute({
       targetUserId: id,
       email: dto.email,
@@ -145,6 +161,7 @@ export class AdminController {
       actorUserId: actor.sub,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return toAdminUserResponse(entity);
   }

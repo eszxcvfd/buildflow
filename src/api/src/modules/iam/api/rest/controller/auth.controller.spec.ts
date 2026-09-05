@@ -12,8 +12,9 @@ import { JwtTokenService } from '../../../infrastructure/security/jwt-token.serv
 
 const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
 
-describe('AuthController POST /api/v1/auth/login', () => {
+describe('AuthController POST /api/v1/auth/login + POST /api/v1/auth/logout (IAM-SRS-002/008)', () => {
   let mockUseCase: { execute: jest.Mock };
+  let mockLogout: { execute: jest.Mock };
   let ctrl: AuthController;
 
   beforeEach(async () => {
@@ -26,12 +27,13 @@ describe('AuthController POST /api/v1/auth/login', () => {
         projectIds: ['p1'],
       })),
     };
+    mockLogout = { execute: jest.fn(async () => undefined) };
 
     const module = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
         { provide: LoginUseCase, useValue: mockUseCase },
-        { provide: LogoutUseCase, useValue: { execute: jest.fn() } },
+        { provide: LogoutUseCase, useValue: mockLogout },
         { provide: USER_REPOSITORY, useValue: {} },
         { provide: HASHER_PORT, useValue: {} },
         { provide: TOKEN_PORT, useValue: {} },
@@ -78,5 +80,22 @@ describe('AuthController POST /api/v1/auth/login', () => {
       { headers: {}, ip: '127.0.0.1' } as unknown as never,
     );
     expect(mockUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+  });
+
+  describe('logout X-Correlation-Id lenient wiring (IAM-SRS-008)', () => {
+    it('X-Correlation-Id hợp lệ được truyền vào logout use case (dedup theo (correlationId, action))', async () => {
+      await ctrl.logout({ headers: { authorization: 'Bearer abc', 'x-correlation-id': VALID_CORR }, ip: '127.0.0.1' } as never);
+      expect(mockLogout.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+    });
+
+    it('PUBLIC policy: X-Correlation-Id không phải UUID → correlationId undefined, KHÔNG 400/block logout', async () => {
+      await ctrl.logout({ headers: { authorization: 'Bearer abc', 'x-correlation-id': 'not-a-uuid-123' }, ip: '127.0.0.1' } as never);
+      expect(mockLogout.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+    });
+
+    it('thiếu X-Correlation-Id → correlationId undefined (best-effort, không block)', async () => {
+      await ctrl.logout({ headers: { authorization: 'Bearer abc' }, ip: '127.0.0.1' } as never);
+      expect(mockLogout.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+    });
   });
 });

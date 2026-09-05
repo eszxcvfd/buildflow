@@ -151,6 +151,19 @@ describe('UpdateUserUseCase IAM-SRS-004', () => {
     await expect(uc.execute({ targetUserId: 'user-1', fullName: 'Fail', actorUserId: 'admin-1' })).rejects.toThrow(InternalServerErrorException);
   });
 
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload IAM_USER_UPDATED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const { uc, audit } = build();
+    await uc.execute({ targetUserId: 'user-1', fullName: 'Bob Tran', actorUserId: 'admin-1', correlationId: corr });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_USER_UPDATED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent (controller strict cho phép null) → audit payload correlationId null', async () => {
+    const { uc, audit } = build();
+    await uc.execute({ targetUserId: 'user-1', fullName: 'Bob Tran', actorUserId: 'admin-1' });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_USER_UPDATED', correlationId: null }));
+  });
+
   it('audit failure rolls back repository state — atomically unchanged', async () => {
     const { uc, audit, getStored } = build();
     const beforeFullName = getStored().fullName;

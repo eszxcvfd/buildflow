@@ -187,6 +187,60 @@ describe('AdminController IAM-SRS-004 contract', () => {
     });
   });
 
+  describe('POST / and PATCH :id X-Correlation-Id strict validation (IAM-SRS-008)', () => {
+    function badHeaderReq(): unknown {
+      return {
+        user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+        headers: { 'user-agent': 'jest', 'x-correlation-id': 'not-a-uuid-123' },
+        ip: '127.0.0.1',
+      } as unknown as never;
+    }
+
+    it('create: X-Correlation-Id hợp lệ được truyền vào createUser use case', async () => {
+      const req = {
+        user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+        headers: { 'user-agent': 'jest', 'x-correlation-id': VALID_CORR },
+        ip: '127.0.0.1',
+      } as unknown as never;
+      await controller.create({ email: 'new@example.com', password: 'Secret123!', fullName: 'New User' } as never, req);
+      expect(createMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+    });
+
+    it('create: X-Correlation-Id không phải UUID → 400 actionable, không gọi use case', async () => {
+      await expect(
+        controller.create({ email: 'new@example.com', password: 'Secret123!', fullName: 'New User' } as never, badHeaderReq() as never),
+      ).rejects.toThrow(new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'));
+      expect(createMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('create: thiếu X-Correlation-Id → correlationId null truyền xuống use case (không block)', async () => {
+      await controller.create({ email: 'new@example.com', password: 'Secret123!', fullName: 'New User' } as never, adminReq() as never);
+      expect(createMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
+
+    it('update: X-Correlation-Id hợp lệ được truyền vào updateUser use case', async () => {
+      const req = {
+        user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+        headers: { 'user-agent': 'jest', 'x-correlation-id': VALID_CORR },
+        ip: '127.0.0.1',
+      } as unknown as never;
+      await controller.update('user-1', { fullName: 'Updated' } as never, req);
+      expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+    });
+
+    it('update: X-Correlation-Id không phải UUID → 400 actionable, không gọi use case', async () => {
+      await expect(
+        controller.update('user-1', { fullName: 'Updated' } as never, badHeaderReq() as never),
+      ).rejects.toThrow(new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'));
+      expect(updateMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('update: thiếu X-Correlation-Id → correlationId null truyền xuống use case (không block)', async () => {
+      await controller.update('user-1', { fullName: 'Updated' } as never, adminReq() as never);
+      expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
+  });
+
   describe('no hard delete', () => {
     it('controller does not expose DELETE method', () => {
       const proto = Object.getOwnPropertyNames(AdminController.prototype);

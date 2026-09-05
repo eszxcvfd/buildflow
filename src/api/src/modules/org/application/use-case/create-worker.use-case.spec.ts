@@ -127,4 +127,21 @@ describe('CreateWorkerUseCase ORG-SRS-001', () => {
       actorUserId: 'admin-1',
     })).rejects.toThrow(ConflictException);
   });
+
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload ORG_WORKER_CREATED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    await useCase.execute({
+      email: 'corr@example.com', password: 'Secret123!', fullName: 'Corr', trades: [{ tradeId: TRADE_ACTIVE, skillLevel: 3 }],
+      actorUserId: 'admin-1', correlationId: corr,
+    });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_WORKER_CREATED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → audit payload correlationId null', async () => {
+    await useCase.execute({
+      email: 'nocorr@example.com', password: 'Secret123!', fullName: 'No Corr', trades: [{ tradeId: TRADE_ACTIVE, skillLevel: 3 }],
+      actorUserId: 'admin-1',
+    });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_WORKER_CREATED', correlationId: null }));
+  });
 });

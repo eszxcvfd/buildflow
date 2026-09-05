@@ -7,6 +7,8 @@ import { UpdateProfileDto } from '../presentation/dto/profile.dto';
 import { toProfileResponse } from '../presentation/mapper/profile.mapper';
 import { TokenPayload } from '../../../application/port/token.port';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Controller('api/v1/me')
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
@@ -28,6 +30,12 @@ export class ProfileController {
     const user = (req as unknown as { user: TokenPayload }).user;
     const ip = (req.headers['x-forwarded-for'] as string) || req.ip || null;
     const userAgent = (req.headers['user-agent'] as string) || null;
+    // Authenticated self-service policy: lenient like login/logout — an absent or
+    // malformed X-Correlation-Id must NEVER block a profile update, it just yields
+    // an audit row without correlation (no dedup).
+    const rawCorrelationId = (req.headers['x-correlation-id'] as string | undefined) ?? null;
+    const correlationId = rawCorrelationId ? String(rawCorrelationId).trim() : null;
+    const validCorrelationId = correlationId && UUID_RE.test(correlationId) ? correlationId : undefined;
 
     const { entity } = await this.updateProfile.execute({
       userId: user.sub,
@@ -36,6 +44,7 @@ export class ProfileController {
       avatarUrl: dto.avatarUrl,
       ipAddress: ip ? String(ip).split(',')[0].trim() : null,
       userAgent: userAgent ?? null,
+      correlationId: validCorrelationId,
     });
 
     return toProfileResponse(entity);

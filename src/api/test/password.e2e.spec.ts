@@ -177,7 +177,7 @@ describe('IAM-SRS-007 password endpoints (HTTP contract, no real DB)', () => {
       .overrideProvider(PASSWORD_RESET_REPOSITORY).useValue(resetRepo)
       .overrideProvider(HASHER_PORT).useValue(mockHasher)
       .overrideProvider(TRANSACTION_PORT).useValue(fakeTx)
-      .overrideProvider(AUDIT_PORT).useValue({ log: auditLog })
+      .overrideProvider(AUDIT_PORT).useValue({ log: auditLog, logWithClient: auditLog })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -370,6 +370,74 @@ describe('IAM-SRS-007 password endpoints (HTTP contract, no real DB)', () => {
         .send({ token: raw, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.', reauthRequired: true });
+    });
+  });
+
+  describe('X-Correlation-Id lenient wiring qua HTTP (IAM-SRS-008)', () => {
+    const CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+
+    function lastAuditCall(action: string): Record<string, unknown> {
+      const calls = (auditLog as unknown as jest.Mock).mock.calls as unknown as Array<[Record<string, unknown>]>;
+      const matched = calls.filter((c) => c[0].action === action);
+      return matched[matched.length - 1][0];
+    }
+
+    it('reset-request (email tồn tại) với header hợp lệ → audit IAM_PASSWORD_RESET_REQUESTED mang correlationId', async () => {
+      (auditLog as unknown as jest.Mock).mockClear();
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/password-reset/request')
+        .set('X-Correlation-Id', CORR)
+        .send({ email: 'e2e@example.com' })
+        .expect(200);
+      expect(lastAuditCall('IAM_PASSWORD_RESET_REQUESTED').correlationId).toBe(CORR);
+    });
+
+    it('reset-request header không phải UUID → vẫn 200, correlationId null (lenient, không block public flow)', async () => {
+      (auditLog as unknown as jest.Mock).mockClear();
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/password-reset/request')
+        .set('X-Correlation-Id', 'not-a-uuid')
+        .send({ email: 'ghost@example.com' })
+        .expect(200);
+      expect(res.body.message).toContain('Nếu email tồn tại');
+      expect(lastAuditCall('IAM_PASSWORD_RESET_REQUESTED').correlationId).toBeNull();
+    });
+
+    it('confirm thành công với header hợp lệ → audit IAM_PASSWORD_RESET_COMPLETED mang correlationId', async () => {
+      claimCount = 0;
+      (auditLog as unknown as jest.Mock).mockClear();
+      const raw = await issueTokenForUser(USER_ID);
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/password-reset/confirm')
+        .set('X-Correlation-Id', CORR)
+        .send({ token: raw, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD })
+        .expect(200);
+      const calls = (auditLog as unknown as jest.Mock).mock.calls as unknown as Array<[unknown, Record<string, unknown>]>;
+      const completed = calls.filter((c) => c[1] && c[1].action === 'IAM_PASSWORD_RESET_COMPLETED');
+      expect(completed[completed.length - 1][1].correlationId).toBe(CORR);
+    });
+
+    it('confirm token sai với header không phải UUID → 401 (không 400) và FAILED audit correlationId null', async () => {
+      (auditLog as unknown as jest.Mock).mockClear();
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/password-reset/confirm')
+        .set('X-Correlation-Id', 'not-a-uuid')
+        .send({ token: 'does-not-exist-anywhere', newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+      expect(res.status).toBe(401);
+      expect(lastAuditCall('IAM_PASSWORD_RESET_FAILED').correlationId).toBeNull();
+    });
+
+    it('change-password (PATCH /me/password) header hợp lệ → audit IAM_PASSWORD_CHANGED mang correlationId', async () => {
+      (auditLog as unknown as jest.Mock).mockClear();
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/me/password')
+        .set('Authorization', await authHeader(USER2_ID))
+        .set('X-Correlation-Id', CORR)
+        .send({ currentPassword: CURRENT_PASSWORD, newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+      expect(res.status).toBe(200);
+      const calls = (auditLog as unknown as jest.Mock).mock.calls as unknown as Array<[unknown, Record<string, unknown>]>;
+      const changed = calls.filter((c) => c[1] && c[1].action === 'IAM_PASSWORD_CHANGED');
+      expect(changed[changed.length - 1][1].correlationId).toBe(CORR);
     });
   });
 });

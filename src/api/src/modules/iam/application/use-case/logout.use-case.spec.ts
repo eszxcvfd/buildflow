@@ -68,4 +68,19 @@ describe('LogoutUseCase IAM-SRS-002', () => {
     expect(revocation.size()).toBe(0);
     expect(audit.log).not.toHaveBeenCalled();
   });
+
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload AUTH_LOGOUT (dedup theo (correlationId, action))', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const { token } = await tokenService.sign({ sub: 'user-1', email: 'a@b.com', roles: ['WORKER'] });
+    audit.log.mockClear();
+    await useCase.execute({ token, correlationId: corr });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'AUTH_LOGOUT', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent (controller lenient → undefined) → audit payload correlationId null', async () => {
+    const { token } = await tokenService.sign({ sub: 'user-1', email: 'a@b.com', roles: ['WORKER'] });
+    audit.log.mockClear();
+    await useCase.execute({ token, correlationId: undefined });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'AUTH_LOGOUT', correlationId: null }));
+  });
 });

@@ -8,6 +8,7 @@ export interface LogoutInput {
   token: string;
   ipAddress?: string;
   userAgent?: string;
+  correlationId?: string | null;
 }
 
 @Injectable()
@@ -56,6 +57,7 @@ export class LogoutUseCase {
         result: 'SUCCESS',
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
+        correlationId: input.correlationId ?? null,
       });
     } catch (_e) { void _e; }
 
