@@ -211,10 +211,8 @@ describe('GET /api/v1/audit-logs (e2e IAM-SRS-008)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
     expect(auditLogFindMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      filter: expect.objectContaining({
-        from: new Date('2026-08-27T00:00:00.000Z'),
-        to: new Date('2026-08-27T23:59:59.999Z'),
-      }),
+      from: new Date('2026-08-27T00:00:00.000Z'),
+      to: new Date('2026-08-27T23:59:59.999Z'),
     }));
   });
 
