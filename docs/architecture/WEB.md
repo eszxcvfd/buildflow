@@ -71,6 +71,8 @@ src/app/
 ├── (auth)/forgot-password/page.tsx   → /forgot-password
 ├── (auth)/reset-password/page.tsx    → /reset-password?token=...
 ├── (app)/dashboard/page.tsx          → /dashboard
+├── (app)/admin/users/page.tsx        → /admin/users (quản trị tài khoản)
+├── (app)/admin/audit-logs/page.tsx   → /admin/audit-logs (IAM-SRS-008: nhật ký thao tác, admin-only)
 ├── (app)/profile/page.tsx            → /profile (gồm form đổi mật khẩu)
 └── (app)/items/[itemId]/page.tsx     → /items/:itemId
 ```

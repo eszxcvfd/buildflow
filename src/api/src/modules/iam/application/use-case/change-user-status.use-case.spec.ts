@@ -149,6 +149,17 @@ describe('ChangeUserStatusUseCase IAM-SRS-004 audit + transitions', () => {
     expect(getStored2().status).toBe('LOCKED');
   });
 
+  it('IAM-SRS-008: dedup (ON CONFLICT DO NOTHING) không phải lỗi — business write vẫn commit', async () => {
+    const { uc, audit, getStored } = build(makeUser('ACTIVE'));
+    // PgAuditRepository với dedup resolve bình thường (rowCount 0, không throw):
+    // retry/duplicate event không được abort mutation bắt buộc.
+    (audit.logWithClient as jest.Mock) = jest.fn(async () => { /* dedup no-op */ });
+    const { entity } = await uc.execute({ targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-1' });
+    expect(entity.status).toBe('LOCKED');
+    expect(getStored().status).toBe('LOCKED');
+    expect(audit.logWithClient).toHaveBeenCalled();
+  });
+
   it('audit payload contains actor + before/after and no passwordHash', async () => {
     const { uc, audit } = build(makeUser('ACTIVE'));
     await uc.execute({ targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-99' });

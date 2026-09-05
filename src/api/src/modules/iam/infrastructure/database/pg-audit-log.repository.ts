@@ -21,6 +21,7 @@ function mapRow(row: Record<string, unknown>): AuditLogEntity {
     entityId: (row['entity_id'] as string | null) ?? null,
     beforeData: row['before_data'] ?? null,
     afterData: row['after_data'] ?? null,
+    reason: (row['reason'] as string | null) ?? null,
     result: row['result'] as 'SUCCESS' | 'FAILED',
     ipAddress: (row['ip_address'] as string | null) ?? null,
     userAgent: (row['user_agent'] as string | null) ?? null,
@@ -80,7 +81,7 @@ export class PgAuditLogRepository implements AuditLogRepositoryPort {
     const total = Number(countResult.rows[0].count);
 
     const dataResult = await this.pool().query(
-      `SELECT id, actor_user_id, action, entity_type, entity_id, before_data, after_data, result, ip_address, user_agent, correlation_id, created_at
+      `SELECT id, actor_user_id, action, entity_type, entity_id, before_data, after_data, reason, result, ip_address, user_agent, correlation_id, created_at
        FROM public.audit_logs ${where}
        ORDER BY created_at DESC
        LIMIT $${idx++} OFFSET $${idx++}`,
@@ -93,7 +94,7 @@ export class PgAuditLogRepository implements AuditLogRepositoryPort {
 
   async findById(id: string): Promise<AuditLogEntity | null> {
     const result = await this.pool().query(
-      `SELECT id, actor_user_id, action, entity_type, entity_id, before_data, after_data, result, ip_address, user_agent, correlation_id, created_at
+      `SELECT id, actor_user_id, action, entity_type, entity_id, before_data, after_data, reason, result, ip_address, user_agent, correlation_id, created_at
        FROM public.audit_logs WHERE id = $1 LIMIT 1`,
       [id],
     );

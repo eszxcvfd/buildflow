@@ -82,13 +82,14 @@ export class QueryAuditLogsUseCase {
       offset: f.offset,
     });
 
-    // Post-read sanitization guard: ensure no entity contains secret before returning
-    // If any record violates, we strip forbidden keys (never expose)
+    // Post-read sanitization guard: reject the listing if any record contains a
+    // secret — secrets must never be exposed (IAM-SRS-008). The write path should
+    // have prevented this; append-only storage means a poisoned record can only
+    // be removed via an owner-approved migration, not deleted ad hoc.
     for (const e of result.entities) {
       const before = e.beforeData as Record<string, unknown> | null;
       const after = e.afterData as Record<string, unknown> | null;
       if (before && !AuditLogEntity.isSanitized(before)) {
-        // Strip secrets defensively (should not happen if write path is correct)
         throw new BadRequestException('Dữ liệu audit chứa bí mật không hợp lệ');
       }
       if (after && !AuditLogEntity.isSanitized(after)) {
