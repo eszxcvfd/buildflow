@@ -186,8 +186,9 @@ Ví dụ một item trong `data[]`:
 ### 8.2 Idempotency — mỗi event đúng một record
 
 - DB ràng buộc unique partial index `ux_audit_correlation_action (correlation_id, action) WHERE correlation_id IS NOT NULL` (migration 0003): một event mang `correlation_id` chỉ tạo đúng một record; retry/duplicate không nhân bản.
-- `PgAuditRepository` dùng `INSERT ... ON CONFLICT (correlation_id, action) WHERE correlation_id IS NOT NULL DO NOTHING` khi có `correlation_id`: insert trùng là no-op (rowCount 0), **không phải lỗi**. Event không có `correlation_id` (best-effort, ví dụ `AUTH_LOGIN_FAILED` cho user không tồn tại) luôn ghi mới.
-- `X-Correlation-Id` trên role-assignment phải là UUID (controller trả `400` nếu sai vì `audit_logs.correlation_id` là `uuid`).
+- `PgAuditRepository` dùng `INSERT ... ON CONFLICT (correlation_id, action) WHERE correlation_id IS NOT NULL DO NOTHING` khi có `correlation_id`: insert trùng là no-op (rowCount 0), **không phải lỗi**. Event không có `correlation_id` luôn ghi mới.
+- **Producer coverage (đầy đủ):** mọi audit producer đều đọc `X-Correlation-Id` từ request và đưa vào audit payload — role assignment (strict), status change `PATCH /api/v1/admin/users/:id/status` (strict) và login (lenient). Retry cùng header: `AUTH_LOGIN_*` dedup thành đúng một record; audit của status change bị dedup thành no-op — business write vẫn commit, không abort (xem 8.4).
+- **Policy header phân theo loại endpoint:** `X-Correlation-Id` trên các endpoint **admin** (role assignment, status change) phải là UUID — controller trả `400` nếu sai vì `audit_logs.correlation_id` là `uuid` (message actionable: `X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)`). Login là endpoint **public** nên xử lý **lenient**: header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai **không bao giờ** block/400 login.
 
 ### 8.3 Append-only
 
@@ -204,7 +205,10 @@ Ví dụ một item trong `data[]`:
 
 ### 8.6 Retention
 
-- Retention/rotation **deferred** chờ owner confirm — không có con số hay chính sách được công bố ở đây. Khi chốt, phải đi qua owner document/migration riêng và tạm gỡ append-only trigger một cách kiểm soát (không thao tác thủ công).
+- Retention **owner-approved** (session 2026-09-05): **default 365 ngày**, cấu hình qua env `AUDIT_RETENTION_DAYS` (integer > 0, giá trị sai fallback về default kèm warn; app config `auditRetentionDays`).
+- Purge theo tuổi chạy qua operator script — trong `src/api`: `npm run db:purge-audit` (dry-run: in số record sẽ xóa, không xóa gì, exit 0) hoặc `npm run db:purge-audit -- --yes` (xóa thật); retention cụ thể qua `--days N` hoặc env. Script mở transaction riêng và dùng `SET LOCAL audit.purge_enabled = 'on'` — GUC session (migration 0004) là điều kiện duy nhất để row-level DELETE trên `audit_logs` được trigger `audit_logs_append_only_rows` cho phép. Không bao giờ dùng TRUNCATE cho purge: `audit_logs_append_only_truncate` vẫn chặn statement-level.
+- UPDATE trên `audit_logs` bị chặn **tuyệt đối**, kể cả khi `audit.purge_enabled` đang bật. Append-only giữ nguyên cho mọi đường ghi khác.
+- Residual risk (xem [`DATA.md`](DATA.md) §7): purge dựa trên mô hình tin cậy app DB role là owner của trigger/function; production nên chạy migration + purge bằng owner role riêng và connect app bằng non-owner role.
 
 ## 9. Domain và application conventions
 

@@ -114,7 +114,14 @@ export class RedisTokenRevocationService implements TokenRevocationPort, OnModul
       // pre-Redis semantics) — the guard still enforces users.password_changed_at.
       this.warnThrottled('read-user', `Redis GET failed for user cutoff (DB fallback): ${(err as Error).message}`);
     }
-    return iat * 1000 < effective;
+    // 1-second acceptance window: JWT `iat` has whole-second precision, so a token is
+    // only rejected when its whole second is strictly BEFORE the cutoff's whole second.
+    // A token minted in the same second as the cutoff is accepted even though the ms
+    // may predate the cutoff — this avoids wrongly rejecting the very tokens minted
+    // right after a password change within the same second. This is safe because the
+    // per-jti denylist still covers genuinely revoked sessions; the cutoff is only a
+    // backstop for tokens issued before the change, not the revocation mechanism.
+    return iat < Math.floor(effective / 1000);
   }
 
   private warnThrottled(code: string, message: string): void {

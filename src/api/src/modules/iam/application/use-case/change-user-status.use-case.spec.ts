@@ -160,6 +160,42 @@ describe('ChangeUserStatusUseCase IAM-SRS-004 audit + transitions', () => {
     expect(audit.logWithClient).toHaveBeenCalled();
   });
 
+  it('IAM-SRS-008: correlationId đi vào audit payload trong tx (dedup theo (correlationId, action))', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const { uc, audit } = build(makeUser('ACTIVE'));
+    await uc.execute({ targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-1', correlationId: corr });
+    expect(audit.logWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: 'IAM_USER_LOCKED', correlationId: corr }),
+    );
+  });
+
+  it('IAM-SRS-008: dedup no-op khi có correlationId (retry cùng header) không abort business write', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const { uc, audit, getStored } = build(makeUser('ACTIVE'));
+    // Dedup insert (retry cùng (correlationId, action)): rowCount 0, không throw —
+    // giống assign-roles, mutation vẫn commit dù audit record không được ghi mới.
+    (audit.logWithClient as jest.Mock) = jest.fn(async () => { /* dedup no-op */ });
+    const { entity } = await uc.execute({
+      targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-1', correlationId: corr,
+    });
+    expect(entity.status).toBe('LOCKED');
+    expect(getStored().status).toBe('LOCKED');
+    expect(audit.logWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ correlationId: corr, action: 'IAM_USER_LOCKED' }),
+    );
+  });
+
+  it('correlationId absent → audit payload correlationId null', async () => {
+    const { uc, audit } = build(makeUser('ACTIVE'));
+    await uc.execute({ targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-1' });
+    expect(audit.logWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ correlationId: null }),
+    );
+  });
+
   it('audit payload contains actor + before/after and no passwordHash', async () => {
     const { uc, audit } = build(makeUser('ACTIVE'));
     await uc.execute({ targetUserId: 'user-1', status: 'LOCKED', actorUserId: 'admin-99' });

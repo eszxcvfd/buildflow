@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../guard/jwt-auth.guard';
 import { LoginRequestDto } from '../presentation/dto/login.dto';
 import { toLoginResponse } from '../presentation/mapper/auth.mapper';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(
@@ -19,12 +21,21 @@ export class AuthController {
   async login(@Body() dto: LoginRequestDto, @Req() req: Request) {
     const ip = (req.headers['x-forwarded-for'] as string) || req.ip || null;
     const userAgent = (req.headers['user-agent'] as string) || null;
+    // Public endpoint policy: correlationId is best-effort here — an absent or
+    // malformed X-Correlation-Id must NEVER block/400 a login, it just yields an
+    // audit row without correlation (no dedup). Admin endpoints validate strictly
+    // (400) because audit_logs.correlation_id is uuid-typed; login stays lenient
+    // (see docs/architecture/API.md §8.2).
+    const rawCorrelationId = (req.headers['x-correlation-id'] as string | undefined) ?? null;
+    const correlationId = rawCorrelationId ? String(rawCorrelationId).trim() : null;
+    const validCorrelationId = correlationId && UUID_RE.test(correlationId) ? correlationId : undefined;
 
     const result = await this.loginUseCase.execute({
       email: dto.email,
       password: dto.password,
       ipAddress: ip ? String(ip).split(',')[0].trim() : undefined,
       userAgent: userAgent ?? undefined,
+      correlationId: validCorrelationId,
     });
 
     return toLoginResponse(result);

@@ -15,11 +15,22 @@ describe('InMemoryTokenRevocationService — user cutoff (IAM-SRS-007)', () => {
       await expect(svc.isUserRevokedBefore('u1', iat, cutoff)).resolves.toBe(true);
     });
 
-    it('iat cùng giây nhưng trước cutoff theo ms (password_changed_at có ms precision) → true', async () => {
-      // token phát tại giây X, mật khẩu đổi tại X.500ms → phiên cũ phải chết
+    it('iat một giây trước cutoff (đúng second-precision biên) → true', async () => {
+      // iat = giây (cutoffSec - 1) < floor(cutoffMs/1000) = cutoffSec → bị từ chối
+      const cutoffSec = Math.floor(cutoff.getTime() / 1000);
+      const iat = cutoffSec - 1;
+      await expect(svc.isUserRevokedBefore('u1', iat, cutoff)).resolves.toBe(true);
+    });
+
+    it('iat cùng giây với cutoff (kể cả ms cutoff muộn hơn iat) → false (1-giây acceptance window)', async () => {
+      // JWT iat có second-precision; token đúc cùng giây với cutoff (dù ms sớm hơn
+      // password_changed_at) KHÔNG bị từ chối — fix race đúc token trong cùng giây.
+      const cutoffSec = Math.floor(cutoff.getTime() / 1000);
+      const iatSameSecond = cutoffSec;
+      await expect(svc.isUserRevokedBefore('u1', iatSameSecond, cutoff)).resolves.toBe(false);
+      // token phát tại giây X, mật khẩu đổi tại X.500ms → cùng giây → chấp nhận
       const cutoffWithMs = new Date(cutoff.getTime() + 500);
-      const iat = Math.floor(cutoff.getTime() / 1000);
-      await expect(svc.isUserRevokedBefore('u1', iat, cutoffWithMs)).resolves.toBe(true);
+      await expect(svc.isUserRevokedBefore('u1', iatSameSecond, cutoffWithMs)).resolves.toBe(false);
     });
 
     it('iat*1000 trùng chính xác cutoff ms (biên equality) → false (chỉ token phát TRƯỚC cutoff bị chặn)', async () => {

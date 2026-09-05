@@ -10,6 +10,7 @@ export interface LoginInput {
   password: string;
   ipAddress?: string;
   userAgent?: string;
+  correlationId?: string | null;
 }
 
 export interface LoginOutput {
@@ -58,6 +59,7 @@ export class LoginUseCase {
           result: 'FAILED',
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch (_e) { void _e; }
       throw new UnauthorizedException(GENERIC_INVALID_MSG);
@@ -75,6 +77,7 @@ export class LoginUseCase {
           result: 'FAILED',
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch (_e) { void _e; }
       throw new ForbiddenException(INACTIVE_MSG);
@@ -97,6 +100,7 @@ export class LoginUseCase {
           result: 'FAILED',
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch (_e) { void _e; }
       throw new ForbiddenException(LOCKED_MSG);
@@ -122,6 +126,7 @@ export class LoginUseCase {
           result: 'FAILED',
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch (_e) { void _e; }
       // If just got locked, return locked message per alternate flow
@@ -156,6 +161,7 @@ export class LoginUseCase {
         result: 'SUCCESS',
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
+        correlationId: input.correlationId ?? null,
       });
     } catch (_e) { void _e; }
 

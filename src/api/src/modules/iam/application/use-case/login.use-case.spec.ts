@@ -115,6 +115,7 @@ describe('LoginUseCase IAM-SRS-001', () => {
     expect(call.entityId).toBeNull();
     expect(call.result).toBe('FAILED');
     expect(call.afterData).toEqual({ email: 'ghost@example.com', reason: 'user_not_found' });
+    expect(call.correlationId).toBeNull();
     // the attempted password and any password key must never reach audit metadata
     const serialized = JSON.stringify(call);
     expect(serialized).not.toContain('PlaintextLeak123!');
@@ -210,5 +211,38 @@ describe('LoginUseCase IAM-SRS-001', () => {
     expect(expired.status).toBe('ACTIVE');
     expect(expired.lockedUntil).toBeNull();
     expect(expired.failedLoginCount).toBe(0);
+  });
+
+  it('IAM-SRS-008: correlationId hợp lệ được đưa vào audit payload AUTH_LOGIN_SUCCESS và AUTH_LOGIN_FAILED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    userEntity = makeUser();
+    await useCase.execute({ email: 'alice@example.com', password: 'Secret123!', correlationId: corr });
+    expect(audit.log).toHaveBeenCalledTimes(1);
+    const success = (audit.log as jest.Mock).mock.calls[0][0];
+    expect(success.action).toBe('AUTH_LOGIN_SUCCESS');
+    expect(success.correlationId).toBe(corr);
+
+    // failed branch (sai mật khẩu) cũng mang cùng correlationId
+    (audit.log as jest.Mock).mockClear();
+    await expect(
+      useCase.execute({ email: 'alice@example.com', password: 'wrong', correlationId: corr }),
+    ).rejects.toThrow(UnauthorizedException);
+    const failed = (audit.log as jest.Mock).mock.calls[0][0];
+    expect(failed.action).toBe('AUTH_LOGIN_FAILED');
+    expect(failed.correlationId).toBe(corr);
+  });
+
+  it('IAM-SRS-008: correlationId không hợp lệ/absent ở controller → undefined → audit payload correlationId null', async () => {
+    // Absent
+    userEntity = makeUser();
+    await useCase.execute({ email: 'alice@example.com', password: 'Secret123!' });
+    let call = (audit.log as jest.Mock).mock.calls[0][0];
+    expect(call.correlationId).toBeNull();
+
+    // Invalid (controller lenient: không 400, truyền undefined xuống use case)
+    (audit.log as jest.Mock).mockClear();
+    await useCase.execute({ email: 'alice@example.com', password: 'Secret123!', correlationId: undefined });
+    call = (audit.log as jest.Mock).mock.calls[0][0];
+    expect(call.correlationId).toBeNull();
   });
 });

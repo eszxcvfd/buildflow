@@ -132,6 +132,87 @@ describeIntegration('PgAuditRepository integration (IAM-SRS-008, DATABASE_URL-ga
     await expect(pool.query(`TRUNCATE public.audit_logs`)).rejects.toThrow(APPEND_ONLY_RE);
   });
 
+  itIntegration('retention (migration 0004): DELETE without audit.purge_enabled is still rejected', async () => {
+    const inserted = await pool.query(
+      `INSERT INTO public.audit_logs (action, entity_type, result) VALUES ('ITEST_RET_DELETE_NO_GUC', 'USER', 'SUCCESS') RETURNING id`,
+    );
+    const id = inserted.rows[0].id as string;
+    await expect(
+      pool.query(`DELETE FROM public.audit_logs WHERE id = $1`, [id]),
+    ).rejects.toThrow(APPEND_ONLY_RE);
+    const still = await pool.query(`SELECT 1 FROM public.audit_logs WHERE id = $1`, [id]);
+    expect(still.rowCount).toBe(1);
+  });
+
+  itIntegration('retention (migration 0004): purge DELETE with SET LOCAL audit.purge_enabled=on removes only rows older than the cutoff', async () => {
+    const oldRow = await pool.query(
+      `INSERT INTO public.audit_logs (action, entity_type, result, created_at)
+       VALUES ('ITEST_RET_OLD', 'USER', 'SUCCESS', now() - interval '400 days') RETURNING id`,
+    );
+    const freshRow = await pool.query(
+      `INSERT INTO public.audit_logs (action, entity_type, result, created_at)
+       VALUES ('ITEST_RET_FRESH', 'USER', 'SUCCESS', now() - interval '10 days') RETURNING id`,
+    );
+    expect(oldRow.rowCount).toBe(1);
+    expect(freshRow.rowCount).toBe(1);
+    const oldId = oldRow.rows[0].id as string;
+    const freshId = freshRow.rows[0].id as string;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL audit.purge_enabled = 'on'");
+      const deleted = await client.query(
+        `DELETE FROM public.audit_logs WHERE created_at < now() - interval '365 days' RETURNING id`,
+      );
+      await client.query('COMMIT');
+      const ids = deleted.rows.map((r: { id: string }) => r.id);
+      expect(ids).toContain(oldId);
+      expect(ids).not.toContain(freshId);
+    } finally {
+      client.release();
+    }
+
+    const still = await pool.query(`SELECT id FROM public.audit_logs WHERE id = ANY($1)`, [[oldId, freshId]]);
+    const remainingIds = still.rows.map((r: { id: string }) => r.id);
+    expect(remainingIds).not.toContain(oldId);
+    expect(remainingIds).toContain(freshId);
+  });
+
+  itIntegration('retention (migration 0004): UPDATE stays rejected even with audit.purge_enabled on', async () => {
+    const inserted = await pool.query(
+      `INSERT INTO public.audit_logs (action, entity_type, result) VALUES ('ITEST_RET_UPDATE_GUC', 'USER', 'SUCCESS') RETURNING id`,
+    );
+    const id = inserted.rows[0].id as string;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL audit.purge_enabled = 'on'");
+      await expect(
+        client.query(`UPDATE public.audit_logs SET result = 'FAILED' WHERE id = $1`, [id]),
+      ).rejects.toThrow(APPEND_ONLY_RE);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    const still = await pool.query(`SELECT result FROM public.audit_logs WHERE id = $1`, [id]);
+    expect(still.rows[0].result).toBe('SUCCESS');
+  });
+
+  itIntegration('retention (migration 0004): TRUNCATE stays rejected even with audit.purge_enabled on', async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL audit.purge_enabled = 'on'");
+      await expect(client.query(`TRUNCATE public.audit_logs`)).rejects.toThrow(APPEND_ONLY_RE);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+  });
+
   itIntegration('logWithClient inside a business tx: dedup is a no-op and the write commits atomically', async () => {
     const repo = new PgAuditRepository();
     const correlationId = randomUUID();
