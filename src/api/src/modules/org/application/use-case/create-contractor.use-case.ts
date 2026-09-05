@@ -17,6 +17,7 @@ export interface CreateContractorInput {
   actorUserId: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 export interface CreateContractorOutput {
@@ -117,6 +118,7 @@ export class CreateContractorUseCase {
           result: 'SUCCESS' as const,
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         };
         if (this.audit.logWithClient) await this.audit.logWithClient(client, payload);
         else await this.audit.log(payload);

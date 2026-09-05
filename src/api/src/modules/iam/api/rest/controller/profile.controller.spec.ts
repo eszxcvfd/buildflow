@@ -30,6 +30,27 @@ function makeUser(): UserEntity {
   } as ReturnType<UserEntity['getProps']>);
 }
 
+const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+
+/** Boot the module with a PATCH use case whose execute stays replaceable via the holder. */
+async function bootModule(user: UserEntity, holder: { execute: jest.Mock }) {
+  const module = await Test.createTestingModule({
+    controllers: [ProfileController],
+    providers: [
+      { provide: GetProfileUseCase, useValue: { execute: jest.fn() } },
+      { provide: UpdateProfileUseCase, useValue: holder },
+      { provide: USER_REPOSITORY, useValue: {} },
+      { provide: AUDIT_PORT, useValue: {} },
+      { provide: HASHER_PORT, useValue: {} },
+      { provide: TOKEN_PORT, useValue: {} },
+      { provide: TOKEN_REVOCATION_PORT, useValue: { isRevoked: jest.fn(async () => false) } },
+      { provide: JwtTokenService, useValue: { verify: jest.fn(async () => ({ sub: 'user-1', jti: 'jti1' })) } },
+      { provide: JwtAuthGuard, useValue: { canActivate: jest.fn(async () => true) } },
+    ],
+  }).compile();
+  return module.get(ProfileController);
+}
+
 describe('ProfileController GET+PATCH /api/v1/me/profile (IAM-SRS-003)', () => {
   it('GET returns public profile without passwordHash', async () => {
     const user = makeUser();
@@ -58,27 +79,43 @@ describe('ProfileController GET+PATCH /api/v1/me/profile (IAM-SRS-003)', () => {
   it('PATCH whitelists only fullName/phone/avatarUrl', async () => {
     const user = makeUser();
     const updateMock = jest.fn(async () => ({ entity: new UserEntity({ ...user.getProps(), fullName: 'Bob Tran' } as ReturnType<UserEntity['getProps']>) }));
-    const module = await Test.createTestingModule({
-      controllers: [ProfileController],
-      providers: [
-        { provide: GetProfileUseCase, useValue: { execute: jest.fn() } },
-        { provide: UpdateProfileUseCase, useValue: { execute: updateMock } },
-        { provide: USER_REPOSITORY, useValue: {} },
-        { provide: AUDIT_PORT, useValue: {} },
-        { provide: HASHER_PORT, useValue: {} },
-        { provide: TOKEN_PORT, useValue: {} },
-        { provide: TOKEN_REVOCATION_PORT, useValue: { isRevoked: jest.fn(async () => false) } },
-        { provide: JwtTokenService, useValue: { verify: jest.fn(async () => ({ sub: 'user-1', jti: 'jti1' })) } },
-        { provide: JwtAuthGuard, useValue: { canActivate: jest.fn(async () => true) } },
-      ],
-    }).compile();
-
-    const ctrl = module.get(ProfileController);
+    const holder = { execute: updateMock };
+    const ctrl = await bootModule(user, holder);
     const result = await ctrl.updateProfileHandler({ fullName: 'Bob Tran' } as never, { headers: {}, ip: '127.0.0.1', user: { sub: 'user-1' } } as never);
     expect(result.fullName).toBe('Bob Tran');
     expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ fullName: 'Bob Tran', userId: 'user-1' }));
     // ensure email/roles not in call
     const calls = updateMock.mock.calls as unknown as Array<[Record<string, unknown>]>;
     expect(calls[0][0].email).toBeUndefined();
+  });
+
+  describe('PATCH X-Correlation-Id lenient wiring (IAM-SRS-008)', () => {
+    function patchReq(headers: Record<string, string>): never {
+      return { headers, ip: '127.0.0.1', user: { sub: 'user-1', email: 'alice@example.com', roles: ['STAFF'] } } as unknown as never;
+    }
+
+    it('X-Correlation-Id hợp lệ được truyền vào updateProfile use case', async () => {
+      const user = makeUser();
+      const holder = { execute: jest.fn(async () => ({ entity: user })) };
+      const ctrl = await bootModule(user, holder);
+      await ctrl.updateProfileHandler({ fullName: 'Bob Tran' } as never, patchReq({ 'x-correlation-id': VALID_CORR }));
+      expect(holder.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+    });
+
+    it('self-service policy: X-Correlation-Id không phải UUID → correlationId undefined, KHÔNG 400/block', async () => {
+      const user = makeUser();
+      const holder = { execute: jest.fn(async () => ({ entity: user })) };
+      const ctrl = await bootModule(user, holder);
+      await ctrl.updateProfileHandler({ fullName: 'Bob Tran' } as never, patchReq({ 'x-correlation-id': 'not-a-uuid-123' }));
+      expect(holder.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+    });
+
+    it('thiếu X-Correlation-Id → correlationId undefined (best-effort, không block)', async () => {
+      const user = makeUser();
+      const holder = { execute: jest.fn(async () => ({ entity: user })) };
+      const ctrl = await bootModule(user, holder);
+      await ctrl.updateProfileHandler({ fullName: 'Bob Tran' } as never, patchReq({}));
+      expect(holder.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+    });
   });
 });

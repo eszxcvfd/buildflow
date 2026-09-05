@@ -16,6 +16,7 @@ export interface ChangePasswordInput {
   newPassword: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 export interface ChangePasswordOutput {
@@ -46,6 +47,7 @@ export class ChangePasswordUseCase {
           actorUserId: user.id, action: 'IAM_PASSWORD_CHANGE_FAILED', entityType: 'USER', entityId: user.id,
           afterData: { reason: 'wrong_current_password' }, result: 'FAILED',
           ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch { /* best-effort */ }
       // Contract IAM-SRS-007: 400 with a field error for currentPassword (never 401 —
@@ -80,9 +82,10 @@ export class ChangePasswordUseCase {
         await this.audit.logWithClient(client, {
           actorUserId: user.id, action: 'IAM_PASSWORD_CHANGED', entityType: 'USER', entityId: user.id,
           result: 'SUCCESS', ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } else {
-        await this.audit.log({ actorUserId: user.id, action: 'IAM_PASSWORD_CHANGED', entityType: 'USER', entityId: user.id, result: 'SUCCESS' });
+        await this.audit.log({ actorUserId: user.id, action: 'IAM_PASSWORD_CHANGED', entityType: 'USER', entityId: user.id, result: 'SUCCESS', correlationId: input.correlationId ?? null });
       }
     });
 

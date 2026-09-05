@@ -84,4 +84,15 @@ describe('CreateContractorUseCase ORG-SRS-002', () => {
     expect(contractorRepo.createWithClient).toHaveBeenCalledTimes(1);
     expect(audit.logWithClient).toHaveBeenCalledTimes(1);
   });
+
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload ORG_CONTRACTOR_CREATED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    await useCase.execute({ code: 'CTR-010', name: 'Corr', contactName: 'Nguyen C', scope: 'Thi cong', actorUserId, correlationId: corr });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_CREATED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → audit payload correlationId null', async () => {
+    await useCase.execute({ code: 'CTR-011', name: 'NoCorr', contactName: 'Nguyen N', scope: 'Thi cong', actorUserId });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_CREATED', correlationId: null }));
+  });
 });

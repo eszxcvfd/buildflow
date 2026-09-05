@@ -88,4 +88,22 @@ describe('UpdateContractorUseCase ORG-SRS-002', () => {
     expect(fetched?.isInactive()).toBe(true);
     expect(fetched?.id).toBe('11111111-1111-4111-8111-111111111111');
   });
+
+  it('IAM-SRS-008: correlationId đi vào audit payload — cả ORG_CONTRACTOR_UPDATED lẫn ORG_CONTRACTOR_STATUS_CHANGED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const logWithClient = audit.logWithClient as jest.Mock;
+    logWithClient.mockClear();
+    await useCase.execute({ contractorId: '11111111-1111-4111-8111-111111111111', contactName: 'Tran B', actorUserId, correlationId: corr });
+    expect(logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_UPDATED', correlationId: corr }));
+    logWithClient.mockClear();
+    await useCase.execute({ contractorId: '11111111-1111-4111-8111-111111111111', status: 'INACTIVE', actorUserId, correlationId: corr });
+    expect(logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_STATUS_CHANGED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → audit payload correlationId null', async () => {
+    const logWithClient = audit.logWithClient as jest.Mock;
+    logWithClient.mockClear();
+    await useCase.execute({ contractorId: '11111111-1111-4111-8111-111111111111', contactName: 'Tran B', actorUserId });
+    expect(logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'ORG_CONTRACTOR_UPDATED', correlationId: null }));
+  });
 });

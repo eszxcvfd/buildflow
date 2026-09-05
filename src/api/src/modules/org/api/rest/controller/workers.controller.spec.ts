@@ -32,6 +32,12 @@ function adminReq(): unknown {
   return { user: { sub: 'admin-1', roles: ['ADMIN'] }, headers: { 'user-agent': 'jest' }, ip: '127.0.0.1' } as unknown;
 }
 
+const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+
+function adminReqWithCorr(correlationId: string): unknown {
+  return { user: { sub: 'admin-1', roles: ['ADMIN'] }, headers: { 'user-agent': 'jest', 'x-correlation-id': correlationId }, ip: '127.0.0.1' } as unknown;
+}
+
 function workerReq(): unknown {
   return { user: { sub: 'user-1', roles: ['WORKER'] }, headers: {}, ip: '127.0.0.1' } as unknown;
 }
@@ -92,5 +98,38 @@ describe('WorkersController ORG-SRS-001', () => {
 
   it('sửa ID/URL không bypass — cần ADMIN', async () => {
     await expect(controller.getOne('w1', workerReq() as never)).rejects.toThrow(ForbiddenException);
+  });
+
+  describe('X-Correlation-Id strict validation trên create/update (IAM-SRS-008, admin endpoints)', () => {
+    const createDto = { email: 'a@b.com', password: 'Secret123!', fullName: 'Test' } as never;
+    const updateDto = { fullName: 'Updated' } as never;
+
+    it('create: hợp lệ → forwarded; sai → 400 actionable, không gọi use case; thiếu → null', async () => {
+      await controller.create(createDto, adminReqWithCorr(VALID_CORR) as never);
+      expect(createMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+      createMock.execute.mockClear();
+
+      await expect(controller.create(createDto, adminReqWithCorr('not-a-uuid') as never)).rejects.toThrow(
+        new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'),
+      );
+      expect(createMock.execute).not.toHaveBeenCalled();
+
+      await controller.create(createDto, adminReq() as never);
+      expect(createMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
+
+    it('update: hợp lệ → forwarded; sai → 400 actionable, không gọi use case; thiếu → null', async () => {
+      await controller.update('w1', updateDto, adminReqWithCorr(VALID_CORR) as never);
+      expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+      updateMock.execute.mockClear();
+
+      await expect(controller.update('w1', updateDto, adminReqWithCorr('bf20-test-corr-001') as never)).rejects.toThrow(
+        new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'),
+      );
+      expect(updateMock.execute).not.toHaveBeenCalled();
+
+      await controller.update('w1', updateDto, adminReq() as never);
+      expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
   });
 });

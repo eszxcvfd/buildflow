@@ -176,6 +176,17 @@ describe('CreateUserUseCase IAM-SRS-004', () => {
     expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ actorUserId: 'admin-99', ipAddress: '1.2.3.4', userAgent: 'jest' }));
   });
 
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload IAM_USER_CREATED', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    await useCase.execute({ email: 'corr@example.com', password: 'Secret123!', fullName: 'Corr', actorUserId: 'admin-1', correlationId: corr });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_USER_CREATED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent (controller strict cho phép null) → audit payload correlationId null', async () => {
+    await useCase.execute({ email: 'nocorr@example.com', password: 'Secret123!', fullName: 'No Corr', actorUserId: 'admin-1' });
+    expect(audit.logWithClient).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_USER_CREATED', correlationId: null }));
+  });
+
   it('employeeCode pre-check duplicate returns 409 before DB', async () => {
     const existing = new UserEntity({
       id: 'u2', email: 'other@example.com', passwordHash: 'h', fullName: 'Other', status: 'ACTIVE',

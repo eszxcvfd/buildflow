@@ -32,6 +32,20 @@ export function parseClientIp(xff: string | null | undefined): string | null {
   return null;
 }
 
+// Same UUID shape as auth.controller.ts (login/logout).
+const CORRELATION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Public/self-service policy: read X-Correlation-Id best-effort. Absent,
+ * empty or non-UUID → undefined (audit row without correlation, no dedup);
+ * NEVER throws/400s these flows.
+ */
+export function parseCorrelationId(req: Request): string | undefined {
+  const raw = (req.headers['x-correlation-id'] as string | undefined) ?? null;
+  const trimmed = raw ? String(raw).trim() : null;
+  return trimmed && CORRELATION_ID_RE.test(trimmed) ? trimmed : undefined;
+}
+
 @Controller()
 export class PasswordController {
   constructor(
@@ -46,6 +60,7 @@ export class PasswordController {
     return {
       ipAddress: parseClientIp(xff),
       userAgent: userAgent ?? null,
+      correlationId: parseCorrelationId(req),
     };
   }
 

@@ -9,6 +9,7 @@ export interface RequestPasswordResetInput {
   email: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 export interface RequestPasswordResetOutput {
@@ -58,6 +59,7 @@ export class RequestPasswordResetUseCase {
           actorUserId: user.id, action: 'IAM_PASSWORD_RESET_REQUESTED', entityType: 'USER', entityId: user.id,
           afterData: { expiresAt: expiresAt.toISOString() }, result: 'SUCCESS',
           ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch { /* best-effort */ }
     } else {
@@ -67,6 +69,7 @@ export class RequestPasswordResetUseCase {
           actorUserId: null, action: 'IAM_PASSWORD_RESET_REQUESTED', entityType: 'USER', entityId: null,
           afterData: { reason: 'unknown_or_inactive' }, result: 'SUCCESS',
           ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       } catch { /* best-effort */ }
 

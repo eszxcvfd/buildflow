@@ -153,6 +153,37 @@ describe('IAM-SRS-007 ChangePasswordUseCase', () => {
     expect(auditCallsJson(d)).not.toContain('IAM_PASSWORD_CHANGED');
     expect(auditCallsJson(d)).not.toContain(NEW_PASSWORD);
   });
+
+  it('IAM-SRS-008: correlationId đi vào audit FAILED (wrong_current_password) và SUCCESS (IAM_PASSWORD_CHANGED)', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    // FAILED branch
+    const dFail = makeDeps();
+    const ucFail = new ChangePasswordUseCase(dFail.userRepo as never, dFail.resetRepo as never, dFail.hasher as never, dFail.tokenPort as never, dFail.revocation as never, dFail.audit as never, dFail.tx as never);
+    await expect(ucFail.execute({ userId: 'u1', currentPassword: 'Wrong1x', newPassword: NEW_PASSWORD, correlationId: corr })).rejects.toThrow(BadRequestException);
+    const failLog = dFail.audit.log as unknown as jest.Mock;
+    expect(failLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_CHANGE_FAILED', result: 'FAILED', correlationId: corr }));
+
+    // SUCCESS branch (tx logWithClient)
+    const dOk = makeDeps();
+    const ucOk = new ChangePasswordUseCase(dOk.userRepo as never, dOk.resetRepo as never, dOk.hasher as never, dOk.tokenPort as never, dOk.revocation as never, dOk.audit as never, dOk.tx as never);
+    await ucOk.execute({ userId: 'u1', currentPassword: CURRENT_PASSWORD, newPassword: NEW_PASSWORD, correlationId: corr });
+    const okLog = dOk.audit.logWithClient as unknown as jest.Mock;
+    expect(okLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_PASSWORD_CHANGED', result: 'SUCCESS', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → payload correlationId null (cả FAILED lẫn SUCCESS)', async () => {
+    const dFail = makeDeps();
+    const ucFail = new ChangePasswordUseCase(dFail.userRepo as never, dFail.resetRepo as never, dFail.hasher as never, dFail.tokenPort as never, dFail.revocation as never, dFail.audit as never, dFail.tx as never);
+    await expect(ucFail.execute({ userId: 'u1', currentPassword: 'Wrong1x', newPassword: NEW_PASSWORD })).rejects.toThrow(BadRequestException);
+    const failLog = dFail.audit.log as unknown as jest.Mock;
+    expect(failLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_CHANGE_FAILED', correlationId: null }));
+
+    const dOk = makeDeps();
+    const ucOk = new ChangePasswordUseCase(dOk.userRepo as never, dOk.resetRepo as never, dOk.hasher as never, dOk.tokenPort as never, dOk.revocation as never, dOk.audit as never, dOk.tx as never);
+    await ucOk.execute({ userId: 'u1', currentPassword: CURRENT_PASSWORD, newPassword: NEW_PASSWORD });
+    const okLog = dOk.audit.logWithClient as unknown as jest.Mock;
+    expect(okLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_PASSWORD_CHANGED', correlationId: null }));
+  });
 });
 
 describe('IAM-SRS-007 RequestPasswordResetUseCase (anti-enumeration + timing)', () => {
@@ -231,6 +262,32 @@ describe('IAM-SRS-007 RequestPasswordResetUseCase (anti-enumeration + timing)', 
     expect(Object.keys(log.mock.calls[0][0].afterData)).toEqual(['expiresAt']);
     expect(auditCallsJson(d)).not.toContain('tokenHash');
   });
+
+  it('IAM-SRS-008: correlationId đi vào audit ở CẢ HAI nhánh — email tồn tại và email lạ (anti-enumeration)', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    // known email branch
+    const dKnown = makeDeps();
+    const ucKnown = new RequestPasswordResetUseCase(dKnown.userRepo as never, dKnown.resetRepo as never, dKnown.audit as never, dKnown.tx as never);
+    await ucKnown.execute({ email: 'admin@example.com', correlationId: corr });
+    const knownLog = dKnown.audit.log as unknown as jest.Mock;
+    expect(knownLog).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_REQUESTED', result: 'SUCCESS', correlationId: corr }));
+    // unknown/inactive branch
+    const dGhost = makeDeps({ userRepo: { findByEmail: async () => null } });
+    const ucGhost = new RequestPasswordResetUseCase(dGhost.userRepo as never, dGhost.resetRepo as never, dGhost.audit as never, dGhost.tx as never);
+    await ucGhost.execute({ email: 'ghost@example.com', correlationId: corr });
+    const ghostLog = dGhost.audit.log as unknown as jest.Mock;
+    expect(ghostLog).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'IAM_PASSWORD_RESET_REQUESTED', entityId: null, afterData: { reason: 'unknown_or_inactive' }, correlationId: corr,
+    }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → payload correlationId null (cả hai nhánh)', async () => {
+    const d = makeDeps();
+    const uc = new RequestPasswordResetUseCase(d.userRepo as never, d.resetRepo as never, d.audit as never, d.tx as never);
+    await uc.execute({ email: 'admin@example.com' });
+    const log = d.audit.log as unknown as jest.Mock;
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_REQUESTED', correlationId: null }));
+  });
 });
 
 describe('IAM-SRS-007 ResetPasswordUseCase (one-time + audit FAILED)', () => {
@@ -298,5 +355,48 @@ describe('IAM-SRS-007 ResetPasswordUseCase (one-time + audit FAILED)', () => {
       action: 'IAM_PASSWORD_RESET_FAILED', afterData: { reason: 'user_missing' },
     }));
     expect(auditCallsJson(d)).not.toContain(NEW_PASSWORD);
+  });
+
+  it('IAM-SRS-008: correlationId đi vào MỌI audit của reset — FAILED (invalid_or_expired, already_used, user_missing) và SUCCESS', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    // FAILED invalid_or_expired
+    const d1 = makeDeps({ resetRepo: { findLatestUsableByHash: async () => null } });
+    const uc1 = new ResetPasswordUseCase(d1.userRepo as never, d1.resetRepo as never, d1.hasher as never, d1.revocation as never, d1.audit as never, d1.tx as never);
+    await expect(uc1.execute({ token: 'bad-token', newPassword: NEW_PASSWORD, correlationId: corr })).rejects.toThrow(UnauthorizedException);
+    expect(d1.audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_FAILED', afterData: { reason: 'invalid_or_expired' }, correlationId: corr }));
+
+    // FAILED user_missing (rowCount 0 của updatePasswordHash trong tx)
+    const d2 = makeDeps({ userRepo: { updatePasswordHash: async () => 0 } });
+    const uc2 = new ResetPasswordUseCase(d2.userRepo as never, d2.resetRepo as never, d2.hasher as never, d2.revocation as never, d2.audit as never, d2.tx as never);
+    await expect(uc2.execute({ token: RESET_TOKEN, newPassword: NEW_PASSWORD, correlationId: corr })).rejects.toThrow(UnauthorizedException);
+    expect(d2.audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_FAILED', afterData: { reason: 'user_missing' }, correlationId: corr }));
+
+    // FAILED already_used (lose the claim race)
+    const d3 = makeDeps();
+    d3.tx.withTransaction.mockImplementation(async (fn: (c: { query: (q: string) => Promise<{ rowCount: number }> }) => Promise<unknown>) =>
+      fn({ query: async () => ({ rowCount: 0 }) }));
+    const uc3 = new ResetPasswordUseCase(d3.userRepo as never, d3.resetRepo as never, d3.hasher as never, d3.revocation as never, d3.audit as never, d3.tx as never);
+    await expect(uc3.execute({ token: RESET_TOKEN, newPassword: NEW_PASSWORD, correlationId: corr })).rejects.toThrow(UnauthorizedException);
+    expect(d3.audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_FAILED', afterData: { reason: 'already_used' }, correlationId: corr }));
+
+    // SUCCESS (tx logWithClient)
+    const d4 = makeDeps();
+    const uc4 = new ResetPasswordUseCase(d4.userRepo as never, d4.resetRepo as never, d4.hasher as never, d4.revocation as never, d4.audit as never, d4.tx as never);
+    await uc4.execute({ token: RESET_TOKEN, newPassword: NEW_PASSWORD, correlationId: corr });
+    const log4 = d4.audit.logWithClient as unknown as jest.Mock;
+    expect(log4).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_PASSWORD_RESET_COMPLETED', result: 'SUCCESS', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent → payload correlationId null (FAILED + SUCCESS)', async () => {
+    const d1 = makeDeps({ resetRepo: { findLatestUsableByHash: async () => null } });
+    const uc1 = new ResetPasswordUseCase(d1.userRepo as never, d1.resetRepo as never, d1.hasher as never, d1.revocation as never, d1.audit as never, d1.tx as never);
+    await expect(uc1.execute({ token: 'bad-token', newPassword: NEW_PASSWORD })).rejects.toThrow(UnauthorizedException);
+    expect(d1.audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PASSWORD_RESET_FAILED', correlationId: null }));
+
+    const d4 = makeDeps();
+    const uc4 = new ResetPasswordUseCase(d4.userRepo as never, d4.resetRepo as never, d4.hasher as never, d4.revocation as never, d4.audit as never, d4.tx as never);
+    await uc4.execute({ token: RESET_TOKEN, newPassword: NEW_PASSWORD });
+    const log4 = d4.audit.logWithClient as unknown as jest.Mock;
+    expect(log4).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: 'IAM_PASSWORD_RESET_COMPLETED', correlationId: null }));
   });
 });

@@ -16,6 +16,7 @@ export interface UpdateContractorInput {
   actorUserId: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 @Injectable()
@@ -133,6 +134,7 @@ export class UpdateContractorUseCase {
           result: 'SUCCESS' as const,
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         };
         if (hasHistoryWarning) {
           (payload.afterData as Record<string, unknown>)['_warning'] = 'Nhà thầu có lịch sử công việc, không xóa liên kết';

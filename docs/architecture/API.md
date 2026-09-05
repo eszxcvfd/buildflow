@@ -187,8 +187,23 @@ Ví dụ một item trong `data[]`:
 
 - DB ràng buộc unique partial index `ux_audit_correlation_action (correlation_id, action) WHERE correlation_id IS NOT NULL` (migration 0003): một event mang `correlation_id` chỉ tạo đúng một record; retry/duplicate không nhân bản.
 - `PgAuditRepository` dùng `INSERT ... ON CONFLICT (correlation_id, action) WHERE correlation_id IS NOT NULL DO NOTHING` khi có `correlation_id`: insert trùng là no-op (rowCount 0), **không phải lỗi**. Event không có `correlation_id` luôn ghi mới.
-- **Producer coverage (một phần, theo scope IAM-SRS-008):** 3 producer đọc `X-Correlation-Id` từ request và đưa vào audit payload — role assignment (strict), status change `PATCH /api/v1/admin/users/:id/status` (strict) và login (lenient). 7 producer còn lại (create/update user, logout, các password flow, profile) chưa wire header — event của họ luôn insert (không dedup); wire thêm là follow-up khi cần. Retry cùng header trên producer đã wire: `AUTH_LOGIN_*` dedup thành đúng một record; audit của status change bị dedup thành no-op — business write vẫn commit, không abort (xem 8.4).
-- **Policy header phân theo loại endpoint:** `X-Correlation-Id` trên các endpoint **admin** (role assignment, status change) phải là UUID — controller trả `400` nếu sai vì `audit_logs.correlation_id` là `uuid` (message actionable: `X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)`). Login là endpoint **public** nên xử lý **lenient**: header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai **không bao giờ** block/400 login.
+- **Producer coverage (đầy đủ):** mọi producer audit trong `src/api` đọc `X-Correlation-Id` từ request và đưa vào audit payload — index dedup `ux_audit_correlation_action` bao phủ tất cả audit actions. Retry cùng header trên một producer: `AUTH_LOGIN_*` dedup thành đúng một record; audit tx-embedded (status change, role assignment, create/update user, org create/update) bị dedup thành no-op — business write vẫn commit, không abort (xem 8.4).
+- **Policy header phân theo loại endpoint:**
+  - **Strict (admin/management — `X-Correlation-Id` phải là UUID; controller trả `400` nếu sai** vì `audit_logs.correlation_id` là `uuid`, message actionable: `X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)`; header thiếu/không gửi là hợp lệ → audit ghi `correlation_id` null, không dedup):
+    - `PUT /api/v1/admin/users/:id/roles` → `IAM_ROLE_ASSIGNED`
+    - `PATCH /api/v1/admin/users/:id/status` → `IAM_USER_STATUS_CHANGED`/`IAM_USER_LOCKED`/`IAM_USER_UNLOCKED`/`IAM_USER_DEACTIVATED`/`IAM_USER_REACTIVATED`
+    - `POST /api/v1/admin/users` → `IAM_USER_CREATED`
+    - `PATCH /api/v1/admin/users/:id` → `IAM_USER_UPDATED`
+    - `POST /api/v1/workers` → `ORG_WORKER_CREATED`; `PATCH /api/v1/workers/:id` → `ORG_WORKER_UPDATED`
+    - `POST /api/v1/contractors` → `ORG_CONTRACTOR_CREATED`; `PATCH /api/v1/contractors/:id` → `ORG_CONTRACTOR_UPDATED`/`ORG_CONTRACTOR_STATUS_CHANGED`
+  - **Lenient (public/self-service — header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai không bao giờ block/400):**
+    - `POST /api/v1/auth/login` → `AUTH_LOGIN_SUCCESS`/`AUTH_LOGIN_FAILED`
+    - `POST /api/v1/auth/logout` (authenticated self-service) → `AUTH_LOGOUT`
+    - `POST /api/v1/auth/password-reset/request` → `IAM_PASSWORD_RESET_REQUESTED` (cả nhánh email tồn tại lẫn unknown/inactive)
+    - `POST /api/v1/auth/password-reset/confirm` → `IAM_PASSWORD_RESET_COMPLETED`/`IAM_PASSWORD_RESET_FAILED` (mọi reason)
+    - `PATCH /api/v1/me/password` → `IAM_PASSWORD_CHANGED`/`IAM_PASSWORD_CHANGE_FAILED`
+    - `PATCH /api/v1/me/profile` → `IAM_PROFILE_UPDATED`
+- Ngoại lệ: không có. Toàn bộ producer audit hiện tại của `src/api` đều đã wire (không xét producer ngoài `src/api`).
 
 ### 8.3 Append-only
 

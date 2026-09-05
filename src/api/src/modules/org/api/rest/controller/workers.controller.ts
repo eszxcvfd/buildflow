@@ -31,11 +31,18 @@ function assertAdmin(req: Request): TokenPayload {
   return user;
 }
 
-function getMeta(req: Request): { ip: string | null; userAgent: string | null } {
+function getMeta(req: Request): { ip: string | null; userAgent: string | null; correlationId: string | null } {
   const ip = (req.headers['x-forwarded-for'] as string) || req.ip || null;
   const userAgent = (req.headers['user-agent'] as string) || null;
-  return { ip: ip ? String(ip).split(',')[0].trim() : null, userAgent: userAgent ?? null };
+  const correlationId = (req.headers['x-correlation-id'] as string) || null;
+  return {
+    ip: ip ? String(ip).split(',')[0].trim() : null,
+    userAgent: userAgent ?? null,
+    correlationId: correlationId ? String(correlationId).trim() : null,
+  };
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('api/v1/workers')
 @UseGuards(JwtAuthGuard)
@@ -52,6 +59,15 @@ export class WorkersController {
   async create(@Body() dto: CreateWorkerDto, @Req() req: Request) {
     const actor = assertAdmin(req);
     const meta = getMeta(req);
+    // Admin/management endpoint: strict X-Correlation-Id policy — a non-UUID header
+    // must be rejected as 400 with an actionable message instead of surfacing as a
+    // 500 audit-insert failure (audit_logs.correlation_id is uuid-typed; same
+    // pattern as admin-roles/admin user controllers).
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const { entity } = await this.createWorker.execute({
       email: dto.email,
       password: dto.password,
@@ -64,6 +80,7 @@ export class WorkersController {
       actorUserId: actor.sub,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return toWorkerResponse(entity);
   }
@@ -131,6 +148,11 @@ export class WorkersController {
   ) {
     const actor = assertAdmin(req);
     const meta = getMeta(req);
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const { entity } = await this.updateWorker.execute({
       workerId: id,
       fullName: dto.fullName,
@@ -142,6 +164,7 @@ export class WorkersController {
       actorUserId: actor.sub,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return toWorkerResponse(entity);
   }

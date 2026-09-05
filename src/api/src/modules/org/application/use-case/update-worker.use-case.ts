@@ -17,6 +17,7 @@ export interface UpdateWorkerInput {
   actorUserId: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 @Injectable()
@@ -117,6 +118,7 @@ export class UpdateWorkerUseCase {
           result: 'SUCCESS' as const,
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         };
         if (this.audit.logWithClient) await this.audit.logWithClient(client, payload);
         else await this.audit.log(payload);

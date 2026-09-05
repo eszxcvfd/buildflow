@@ -15,6 +15,7 @@ export interface ResetPasswordInput {
   newPassword: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 @Injectable()
@@ -71,6 +72,7 @@ export class ResetPasswordUseCase {
         await this.audit.logWithClient(client, {
           actorUserId: record.userId, action: 'IAM_PASSWORD_RESET_COMPLETED', entityType: 'USER', entityId: record.userId,
           result: 'SUCCESS', ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         });
       }
     });
@@ -94,6 +96,7 @@ export class ResetPasswordUseCase {
         actorUserId, action: 'IAM_PASSWORD_RESET_FAILED', entityType: 'USER', entityId: actorUserId,
         afterData: { reason }, result: 'FAILED',
         ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null,
+        correlationId: input.correlationId ?? null,
       });
     } catch { /* best-effort */ }
   }

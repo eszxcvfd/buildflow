@@ -10,6 +10,7 @@ export interface UpdateProfileInput {
   avatarUrl?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 export interface UpdateProfileOutput {
@@ -63,6 +64,7 @@ export class UpdateProfileUseCase {
         result: 'SUCCESS',
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
+        correlationId: input.correlationId ?? null,
       });
     } catch {
       // audit best-effort; profile update already succeeded

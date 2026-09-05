@@ -96,4 +96,17 @@ describe('UpdateProfileUseCase IAM-SRS-003', () => {
     expect(pub.passwordHash).toBeUndefined();
     expect(pub.fullName).toBe('OK Name');
   });
+
+  it('IAM-SRS-008: correlationId hợp lệ đi vào audit payload IAM_PROFILE_UPDATED (dedup theo (correlationId, action))', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    const { uc, audit } = build();
+    await uc.execute({ userId: 'user-1', fullName: 'Bob Tran', correlationId: corr });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PROFILE_UPDATED', correlationId: corr }));
+  });
+
+  it('IAM-SRS-008: correlationId absent (controller lenient → undefined) → audit payload correlationId null', async () => {
+    const { uc, audit } = build();
+    await uc.execute({ userId: 'user-1', fullName: 'Bob Tran', correlationId: undefined });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'IAM_PROFILE_UPDATED', correlationId: null }));
+  });
 });

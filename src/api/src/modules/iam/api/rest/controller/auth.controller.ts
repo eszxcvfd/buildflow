@@ -49,11 +49,18 @@ export class AuthController {
     const token = auth ? auth.slice(7) : '';
     const ip = (req.headers['x-forwarded-for'] as string) || req.ip || null;
     const userAgent = (req.headers['user-agent'] as string) || null;
+    // Authenticated self-service endpoint: same lenient policy as login — an
+    // absent or malformed X-Correlation-Id must NEVER block logout, it just
+    // yields an audit row without correlation (no dedup).
+    const rawCorrelationId = (req.headers['x-correlation-id'] as string | undefined) ?? null;
+    const correlationId = rawCorrelationId ? String(rawCorrelationId).trim() : null;
+    const validCorrelationId = correlationId && UUID_RE.test(correlationId) ? correlationId : undefined;
 
     await this.logoutUseCase.execute({
       token,
       ipAddress: ip ? String(ip).split(',')[0].trim() : undefined,
       userAgent: userAgent ?? undefined,
+      correlationId: validCorrelationId,
     });
 
     return { message: 'Đã đăng xuất' };

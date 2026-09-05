@@ -13,6 +13,7 @@ import { UserEntity } from '../src/modules/iam/domain/entity/user.entity';
 describe('IAM-SRS-002 Đăng xuất và hết phiên (e2e)', () => {
   let app: INestApplication;
   let userEntity: UserEntity;
+  let mockAudit: { log: jest.Mock };
 
   beforeAll(async () => {
     process.env.JWT_SECRET = 'test-e2e-logout-secret';
@@ -44,7 +45,7 @@ describe('IAM-SRS-002 Đăng xuất và hết phiên (e2e)', () => {
       compare: async (plain: string, hash: string) => bcrypt.compare(plain, hash),
     };
 
-    const mockAudit = { log: jest.fn(async () => {}) };
+    mockAudit = { log: jest.fn(async () => {}) };
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -106,5 +107,43 @@ describe('IAM-SRS-002 Đăng xuất và hết phiên (e2e)', () => {
   it('yêu cầu với phiên hết hạn/bị thu hồi bị từ chối 401 thống nhất', async () => {
     await request(app.getHttpServer()).get('/api/v1/auth/me').set('Authorization', 'Bearer invalid.token.here').expect(401);
     await request(app.getHttpServer()).get('/api/v1/auth/me').expect(401);
+  });
+
+  it('X-Correlation-Id hợp lệ → audit mock nhận correlationId (AUTH_LOGOUT, dedup theo (correlationId, action))', async () => {
+    const loginRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'logout-e2e@example.com', password: 'Password123!' })
+      .expect(200);
+    const token = loginRes.body.accessToken as string;
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    (mockAudit.log as jest.Mock).mockClear();
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Correlation-Id', corr)
+      .expect(200);
+    const calls = (mockAudit.log as jest.Mock).mock.calls.filter(
+      (c: Array<Record<string, unknown>>) => c[0].action === 'AUTH_LOGOUT',
+    );
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls[calls.length - 1][0].correlationId).toBe(corr);
+  });
+
+  it('PUBLIC policy: X-Correlation-Id không phải UUID → logout vẫn 200 và audit correlationId null (lenient)', async () => {
+    const loginRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: 'logout-e2e@example.com', password: 'Password123!' })
+      .expect(200);
+    const token = loginRes.body.accessToken as string;
+    (mockAudit.log as jest.Mock).mockClear();
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Correlation-Id', 'not-a-uuid-123')
+      .expect(200);
+    const calls = (mockAudit.log as jest.Mock).mock.calls.filter(
+      (c: Array<Record<string, unknown>>) => c[0].action === 'AUTH_LOGOUT',
+    );
+    expect(calls[calls.length - 1][0].correlationId).toBeNull();
   });
 });
