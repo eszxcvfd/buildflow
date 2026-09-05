@@ -203,7 +203,8 @@ Ví dụ một item trong `data[]`:
     - `POST /api/v1/auth/password-reset/confirm` → `IAM_PASSWORD_RESET_COMPLETED`/`IAM_PASSWORD_RESET_FAILED` (mọi reason)
     - `PATCH /api/v1/me/password` → `IAM_PASSWORD_CHANGED`/`IAM_PASSWORD_CHANGE_FAILED`
     - `PATCH /api/v1/me/profile` → `IAM_PROFILE_UPDATED`
-- Ngoại lệ: không có. Toàn bộ producer audit hiện tại của `src/api` đều đã wire (không xét producer ngoài `src/api`).
+    - Ngoài bảng (pre-existing): `GET /api/v1/projects/:id` → `PROJECT_SCOPE_ADMIN_BYPASS` — đã wire nhưng header đi qua **raw** (không trim/UUID check, không 400); normalize theo 2 policy trên là follow-up.
+- Ngoại lệ chưa wire: không có. Toàn bộ producer audit hiện tại của `src/api` đều đã wire (không xét producer ngoài `src/api`).
 
 ### 8.3 Append-only
 
