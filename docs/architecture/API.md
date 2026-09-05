@@ -2,6 +2,8 @@
 
 > **Status:** target design cho `src/api`; hiện chưa có source code hoặc package manifest.
 > **Owner:** API workspace và mọi thay đổi domain/transport của server.
+>
+> **Endpoint contract:** chi tiết endpoint nghiệp vụ đã implement (method/path/auth/body/response/lỗi) thuộc `docs/architecture/ENDPOINTS.md`; file này giữ policy kiến trúc và audit producer coverage.
 
 ## 1. Mục tiêu
 
@@ -196,6 +198,7 @@ Ví dụ một item trong `data[]`:
     - `PATCH /api/v1/admin/users/:id` → `IAM_USER_UPDATED`
     - `POST /api/v1/workers` → `ORG_WORKER_CREATED`; `PATCH /api/v1/workers/:id` → `ORG_WORKER_UPDATED`
     - `POST /api/v1/contractors` → `ORG_CONTRACTOR_CREATED`; `PATCH /api/v1/contractors/:id` → `ORG_CONTRACTOR_UPDATED`/`ORG_CONTRACTOR_STATUS_CHANGED`
+    - `POST /api/v1/trades` → `ORG_TRADE_CREATED`; `PATCH /api/v1/trades/:id` → `ORG_TRADE_UPDATED`; `PATCH /api/v1/trades/:id/status` → `ORG_TRADE_STATUS_CHANGED`
   - **Lenient (public/self-service — header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai không bao giờ block/400):**
     - `POST /api/v1/auth/login` → `AUTH_LOGIN_SUCCESS`/`AUTH_LOGIN_FAILED`
     - `POST /api/v1/auth/logout` (authenticated self-service) → `AUTH_LOGOUT`

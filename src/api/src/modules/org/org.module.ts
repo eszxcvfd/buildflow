@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WorkersController } from './api/rest/controller/workers.controller';
 import { ContractorsController } from './api/rest/controller/contractors.controller';
+import { TradesController } from './api/rest/controller/trades.controller';
 import { CreateWorkerUseCase } from './application/use-case/create-worker.use-case';
 import { UpdateWorkerUseCase } from './application/use-case/update-worker.use-case';
 import { GetWorkerUseCase } from './application/use-case/get-worker.use-case';
@@ -9,6 +10,11 @@ import { CreateContractorUseCase } from './application/use-case/create-contracto
 import { UpdateContractorUseCase } from './application/use-case/update-contractor.use-case';
 import { GetContractorUseCase } from './application/use-case/get-contractor.use-case';
 import { SearchContractorsUseCase } from './application/use-case/search-contractors.use-case';
+import { CreateTradeUseCase } from './application/use-case/create-trade.use-case';
+import { UpdateTradeUseCase } from './application/use-case/update-trade.use-case';
+import { ChangeTradeStatusUseCase } from './application/use-case/change-trade-status.use-case';
+import { GetTradeUseCase } from './application/use-case/get-trade.use-case';
+import { SearchTradesUseCase } from './application/use-case/search-trades.use-case';
 import { PgWorkerRepository } from './infrastructure/database/pg-worker.repository';
 import { PgTradeRepository } from './infrastructure/database/pg-trade.repository';
 import { PgContractorRepository } from './infrastructure/database/pg-contractor.repository';
@@ -28,7 +34,7 @@ import { PgUserRepository } from '../iam/infrastructure/database/pg-user.reposit
 import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
 
 @Module({
-  controllers: [WorkersController, ContractorsController],
+  controllers: [WorkersController, ContractorsController, TradesController],
   providers: [
     CreateWorkerUseCase,
     UpdateWorkerUseCase,
@@ -38,6 +44,11 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     UpdateContractorUseCase,
     GetContractorUseCase,
     SearchContractorsUseCase,
+    CreateTradeUseCase,
+    UpdateTradeUseCase,
+    ChangeTradeStatusUseCase,
+    GetTradeUseCase,
+    SearchTradesUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: WORKER_REPOSITORY, useClass: PgWorkerRepository },

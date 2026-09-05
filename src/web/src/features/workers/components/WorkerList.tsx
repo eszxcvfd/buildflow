@@ -4,9 +4,14 @@ import * as React from 'react';
 import { listWorkers, type Worker } from '@/lib/api/workers';
 import type { ApiError } from '@/lib/api/workers';
 import { updateAdminUserStatus } from '@/lib/api/admin-users';
+import { useTradeNames } from '@/features/workers/hooks/useTradeNames';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
+
+export function shortUuid(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
 
 function statusTone(status: string): { label: string; color: string } {
   switch (status) {
@@ -22,6 +27,7 @@ function statusTone(status: string): { label: string; color: string } {
 }
 
 export function WorkerList() {
+  const tradeNames = useTradeNames();
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
@@ -225,7 +231,14 @@ export function WorkerList() {
                       <span style={{ color: w.eligible ? '#065f46' : '#991b1b' }}>{w.eligible ? 'Đủ điều kiện phân công' : 'Không đủ điều kiện (inactive/locked)'}</span>
                     </div>
                     <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
-                      Ngành nghề: {w.trades.length ? w.trades.map((t) => `${t.tradeId.slice(0, 8)}… Lv${t.skillLevel}`).join(', ') : '—'} · Tạo: {new Date(w.createdAt).toLocaleDateString('vi-VN')}
+                      Ngành nghề: {w.trades.length
+                        ? w.trades
+                            .map((t) => {
+                              const label = tradeNames.names.get(t.tradeId);
+                              return label ? `${label} · Lv${t.skillLevel}` : `${shortUuid(t.tradeId)} Lv${t.skillLevel}`;
+                            })
+                            .join(', ')
+                        : '—'} · Tạo: {new Date(w.createdAt).toLocaleDateString('vi-VN')}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

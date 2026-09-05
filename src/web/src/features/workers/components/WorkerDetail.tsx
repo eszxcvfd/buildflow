@@ -4,6 +4,7 @@ import * as React from 'react';
 import { getWorker, updateWorker, type Worker } from '@/lib/api/workers';
 import type { ApiError } from '@/lib/api/workers';
 import { updateAdminUserStatus } from '@/lib/api/admin-users';
+import { useTradeNames } from '@/features/workers/hooks/useTradeNames';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
@@ -19,6 +20,7 @@ function statusLabel(status: string): string {
 }
 
 export function WorkerDetail({ id }: { id: string }) {
+  const tradeNames = useTradeNames();
   const [worker, setWorker] = React.useState<Worker | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -126,7 +128,12 @@ export function WorkerDetail({ id }: { id: string }) {
             <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Ngành nghề / kỹ năng</dt>
             <dd style={{ margin: 0 }}>
               {worker.trades.length
-                ? worker.trades.map((t) => `${t.tradeId} · Lv${t.skillLevel}`).join('; ')
+                ? worker.trades
+                    .map((t) => {
+                      const label = tradeNames.names.get(t.tradeId);
+                      return label ? `${label} · Lv${t.skillLevel}` : `${t.tradeId} · Lv${t.skillLevel}`;
+                    })
+                    .join('; ')
                 : '—'}
             </dd>
           </div>

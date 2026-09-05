@@ -74,10 +74,19 @@ src/app/
 ├── (app)/admin/users/page.tsx        → /admin/users (quản trị tài khoản)
 ├── (app)/admin/audit-logs/page.tsx   → /admin/audit-logs (IAM-SRS-008: nhật ký thao tác, admin-only)
 ├── (app)/profile/page.tsx            → /profile (gồm form đổi mật khẩu)
+├── (app)/contractors/page.tsx        → /contractors (ORG-SRS-002: danh sách nhà thầu)
+├── (app)/contractors/[id]/page.tsx   → /contractors/:id (chi tiết + trạng thái)
+├── (app)/workers/page.tsx            → /workers (ORG-SRS-001: danh sách công nhân)
+├── (app)/trades/page.tsx             → /trades (ORG-SRS-003: danh sách ngành nghề, admin-only)
+├── (app)/trades/new/page.tsx         → /trades/new (tạo ngành nghề)
+├── (app)/trades/[id]/page.tsx        → /trades/:id (chi tiết + deactivate/activate + warning)
+├── (app)/trades/[id]/edit/page.tsx   → /trades/:id/edit (sửa mã/tên/mô tả)
 └── (app)/items/[itemId]/page.tsx     → /items/:itemId
 ```
 
 Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): form đổi mật khẩu nằm trong `(app)/profile`; quên mật khẩu và đặt lại bằng token là hai route `(auth)` ở trên. Các màn hình này chỉ gọi ba endpoint password trong [`API.md`](API.md); vì session cũ bị cắt sau khi đổi/đặt lại thành công, luồng phải đưa người dùng về `/sign-in` để đăng nhập lại.
+
+Route `/trades/*` (ORG-SRS-003): danh mục ngành nghề/kỹ năng, admin-only, nav nhóm "Nguồn lực". Client gọi contract trong [`ENDPOINTS.md`](ENDPOINTS.md) §4 qua `lib/api/trades.ts`. Trạng thái (deactivate/activate) KHÔNG nằm trong form sửa — là action riêng `PATCH /trades/:id/status` có confirm dialog; khi deactivate danh mục đang được tham chiếu, API vẫn cho phép và trả `warning` (`'Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực'`) — UI hiển thị cảnh báo rõ. `WorkerForm` chọn ngành nghề từ select tải `listTrades({status:'ACTIVE'})` (label `code — name`); không chọn được trade INACTIVE cho assignment mới, nếu worker đang giữ trade INACTIVE thì giữ nguyên và chỉ gửi thay đổi khi admin thật sự sửa; `WorkerList`/`WorkerDetail` hiển thị tên trade thay UUID thô qua map id → `code — name`.
 
 ## 4. Server/Client boundary
 

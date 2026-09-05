@@ -27,7 +27,10 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   },
   {
     title: 'Nguồn lực',
-    items: [{ href: '/workers', label: 'Công nhân', adminOnly: true }],
+    items: [
+      { href: '/workers', label: 'Công nhân', adminOnly: true },
+      { href: '/trades', label: 'Ngành nghề', adminOnly: true },
+    ],
   },
   {
     title: 'Quản trị',
@@ -43,6 +46,7 @@ const TITLES: Array<[prefix: string, title: string]> = [
   ['/projects', 'Dự án'],
   ['/contractors', 'Nhà thầu'],
   ['/workers', 'Công nhân'],
+  ['/trades', 'Ngành nghề'],
   ['/admin/users', 'Tài khoản'],
   ['/admin/audit-logs', 'Nhật ký thao tác'],
   ['/profile', 'Hồ sơ cá nhân'],

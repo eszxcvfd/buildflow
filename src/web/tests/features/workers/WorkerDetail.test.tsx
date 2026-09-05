@@ -20,6 +20,12 @@ jest.mock('@/lib/api/admin-users', () => ({
   updateAdminUserStatus: jest.fn(),
 }));
 
+// #26: WorkerDetail hiển thị tên ngành nghề thay UUID thô qua useTradeNames.
+const tradeNames = new Map([['11111111-1111-4111-8111-111111111111', 'TR-001 — Tho xay']]);
+jest.mock('@/features/workers/hooks/useTradeNames', () => ({
+  useTradeNames: () => ({ names: tradeNames, loading: false, failed: false }),
+}));
+
 import { getWorker, updateWorker } from '@/lib/api/workers';
 import { updateAdminUserStatus } from '@/lib/api/admin-users';
 

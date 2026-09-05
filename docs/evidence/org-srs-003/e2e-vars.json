@@ -1,0 +1,91 @@
+{
+  "uniq": "OO1CBY",
+  "tradeCode": "E2E-TOO1CBY",
+  "tradeCode2": "E2E-T2OO1CBY",
+  "workerEmail": "e2e.t.oo1cby@example.com",
+  "tradeId": "85fc5da0-cb00-4650-9e3c-fae7a83ab656",
+  "workerId": "a2e62200-0305-4d33-a553-4f200859423e",
+  "correlationId": "b1f00000-0000-4000-8000-607828498562",
+  "results": [
+    {
+      "id": "B1",
+      "ok": true,
+      "note": "redirect dashboard"
+    },
+    {
+      "id": "B2",
+      "ok": true,
+      "note": "bảng render, 5 rows; row đầu: E2E Ngành nghề ONWFWD RENAMEDE2E-TONWFWDE2E mô tả: ONWFWDACTIVENgừng hoạt độngCh"
+    },
+    {
+      "id": "B3",
+      "ok": true,
+      "note": "DB row:\ncode     |         name          | is_active \n-------------+-----------------------+-----------\n E2E-TOO1CBY | E2E Ngành nghề OO1CBY | t\n(1 row)\naudit:\naction       | entity_type | result  \n-------------------+-------------+---------\n ORG_TRADE_CREATED | TRADE       | SUCCESS\n(1 row)"
+    },
+    {
+      "id": "B4",
+      "ok": true,
+      "note": "UI báo 'Mã ngành nghề đã tồn tại'; DB count=     1"
+    },
+    {
+      "id": "B5",
+      "ok": true,
+      "note": "validation hiển thị; DB không tạo row:      0"
+    },
+    {
+      "id": "B6",
+      "ok": true,
+      "note": "DB:\ncode     |             name              \n-------------+-------------------------------\n E2E-TOO1CBY | E2E Ngành nghề OO1CBY RENAMED\n(1 row)\naudit:\naction       |        b_name         |            a_name             \n-------------------+-----------------------+-------------------------------\n ORG_TRADE_UPDATED | E2E Ngành nghề OO1CBY | E2E Ngành nghề OO1CBY RENAMED\n(1 row)"
+    },
+    {
+      "id": "B7",
+      "ok": true,
+      "note": "worker=a2e62200-0305-4d33-a553-4f200859423e; DB:\ntrade_id               | skill_level | is_active |          email           \n--------------------------------------+-------------+-----------+--------------------------\n 85fc5da0-cb00-4650-9e3c-fae7a83ab656 |           3 | t         | e2e.t.oo1cby@example.com\n(1 row)"
+    },
+    {
+      "id": "B8",
+      "ok": true,
+      "note": "DB:\ncode     | is_active \n-------------+-----------\n E2E-TOO1CBY | f\n(1 row)\naudit:\naction          |                                      warning                                       \n--------------------------+------------------------------------------------------------------------------------\n ORG_TRADE_STATUS_CHANGED | Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực\n(1 row)"
+    },
+    {
+      "id": "B9",
+      "ok": true,
+      "note": "option hiện có: — Giữ nguyên ngành nghề hiện tại — | E2E-TONWFWD — E2E Ngành nghề ONWFWD RENAMED | E2E-TONZFUF — E2E Ngành nghề ONZFUF RENAMED | E2E-DUP-ONWFWD — E2E dup ONWFWD | E2E-DUP-ONZFUF — E2E dup ONZFUF | THO-CAT — Tho cat gach"
+    },
+    {
+      "id": "B10",
+      "ok": true,
+      "note": "HTTP 400 message=\"Trade không tồn tại hoặc đã ngừng hoạt động: 85fc5da0-cb00-4650-9e3c-fae7a83ab656\""
+    },
+    {
+      "id": "B11",
+      "ok": true,
+      "note": "HTTP 200; DB:\nfull_name      | active_trades \n--------------------+---------------\n E2E Worker Renamed |             1\n(1 row)"
+    },
+    {
+      "id": "B12",
+      "ok": true,
+      "note": "DB:\ncode     | is_active \n-------------+-----------\n E2E-TOO1CBY | t\n(1 row)\naudit:\naction          |    b     |   a    \n--------------------------+----------+--------\n ORG_TRADE_STATUS_CHANGED | INACTIVE | ACTIVE\n(1 row)"
+    },
+    {
+      "id": "B13",
+      "ok": true,
+      "note": "audit DB:\naction          | count \n--------------------------+-------\n ORG_TRADE_CREATED        |     1\n ORG_TRADE_STATUS_CHANGED |     2\n ORG_TRADE_UPDATED        |     1\n(3 rows)"
+    },
+    {
+      "id": "B14",
+      "ok": true,
+      "note": "API pm GET=403 POST=403; anon=401; UI sidebar ẩn + card 403"
+    },
+    {
+      "id": "B15",
+      "ok": true,
+      "note": "HTTP r1=201 r2=409 ({\"message\":\"Mã ngành nghề đã tồn tại\",\"error\":\"Conflict\",\"statusCode\":409}); DB rows=1; audit rows=1"
+    },
+    {
+      "id": "B16",
+      "ok": true,
+      "note": "HTTP 404 message=\"Không tìm thấy ngành nghề\""
+    }
+  ]
+}

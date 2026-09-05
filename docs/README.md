@@ -12,6 +12,7 @@
 | Current work queue | [`issues/ROADMAP.md`](issues/ROADMAP.md) |
 | Non-trivial plans and durable coordination | [`../PLANS.md`](../PLANS.md) |
 | API modular/clean architecture | [`architecture/API.md`](architecture/API.md) |
+| HTTP endpoint contract (ORG slices) | [`architecture/ENDPOINTS.md`](architecture/ENDPOINTS.md) |
 | Web routes, features and Ark UI | [`architecture/WEB.md`](architecture/WEB.md) |
 | Mobile React Native/Expo proposal | [`architecture/MOBILE.md`](architecture/MOBILE.md) |
 | Runtime lifecycle and environment boundaries | [`architecture/RUNTIME.md`](architecture/RUNTIME.md) |
