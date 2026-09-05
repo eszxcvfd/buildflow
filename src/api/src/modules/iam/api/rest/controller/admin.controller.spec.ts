@@ -46,6 +46,8 @@ function noUserReq(): unknown {
   return { headers: {}, ip: '127.0.0.1' } as unknown as never;
 }
 
+const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+
 describe('AdminController IAM-SRS-004 contract', () => {
   let createMock: jest.Mocked<CreateUserUseCase>;
   let updateMock: jest.Mocked<UpdateUserUseCase>;
@@ -153,6 +155,35 @@ describe('AdminController IAM-SRS-004 contract', () => {
       const result = await controller.getOne('user-1', adminReq() as never);
       expect((result as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
       expect(getMock.execute).toHaveBeenCalledWith({ userId: 'user-1' });
+    });
+  });
+
+  describe('PATCH :id/status X-Correlation-Id strict validation (IAM-SRS-008)', () => {
+    it('X-Correlation-Id hợp lệ được truyền vào changeStatus use case', async () => {
+      const req = {
+        user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+        headers: { 'user-agent': 'jest', 'x-correlation-id': VALID_CORR },
+        ip: '127.0.0.1',
+      } as unknown as never;
+      await controller.updateStatus('user-1', { status: 'LOCKED' } as never, req);
+      expect(statusMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+    });
+
+    it('X-Correlation-Id không phải UUID → 400 actionable, không gọi use case', async () => {
+      const badReq = {
+        user: { sub: 'admin-1', email: 'admin@example.com', roles: ['ADMIN'] },
+        headers: { 'user-agent': 'jest', 'x-correlation-id': 'bf20-test-corr-001' },
+        ip: '127.0.0.1',
+      } as unknown as never;
+      await expect(
+        controller.updateStatus('user-1', { status: 'LOCKED' } as never, badReq),
+      ).rejects.toThrow(new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'));
+      expect(statusMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('thiếu X-Correlation-Id → correlationId null truyền xuống use case (không block)', async () => {
+      await controller.updateStatus('user-1', { status: 'LOCKED' } as never, adminReq() as never);
+      expect(statusMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
     });
   });
 

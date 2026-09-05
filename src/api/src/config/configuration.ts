@@ -6,6 +6,19 @@ export interface AppConfig {
   jwtExpiresIn: string;
   loginMaxFailedAttempts: number;
   loginLockDurationMinutes: number;
+  auditRetentionDays: number;
+}
+
+/** @returns parsed positive integer; logs a warn and falls back on invalid input */
+function parseIntWithDefault(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    console.warn(`[config] invalid ${name}=${raw} (must be a positive integer); using default ${fallback}`);
+    return fallback;
+  }
+  return parsed;
 }
 
 export function loadConfig(): AppConfig {
@@ -27,5 +40,7 @@ export function loadConfig(): AppConfig {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '1h',
     loginMaxFailedAttempts: parseInt(process.env.LOGIN_MAX_FAILED_ATTEMPTS ?? '5', 10),
     loginLockDurationMinutes: parseInt(process.env.LOGIN_LOCK_DURATION_MINUTES ?? '15', 10),
+    // IAM-SRS-008 audit retention (owner-approved 2026-09-05): default 365 days.
+    auditRetentionDays: parseIntWithDefault('AUDIT_RETENTION_DAYS', 365),
   };
 }

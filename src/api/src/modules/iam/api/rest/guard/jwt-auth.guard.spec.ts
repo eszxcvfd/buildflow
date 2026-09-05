@@ -98,6 +98,26 @@ describe('JwtAuthGuard IAM-SRS-007 password-change cutoff', () => {
     expect(getPasswordChangedAt).toHaveBeenCalledWith('cut-1');
   });
 
+  it('regression: cutoff TRONG CÙNG GIÂY với iat (ms muộn hơn) → canActivate true (1-giây acceptance window)', async () => {
+    const { token } = await tokenService.sign({ sub: 'cut-same', email: 'a@b.com', roles: ['WORKER'] });
+    const payload = await tokenService.verify(token);
+    // password_changed_at = iat*1000 + 500ms: token đúc cùng giây, ngay trước cutoff
+    // theo ms — không được từ chối nhầm (fix race đúc token cùng giây đổi mật khẩu).
+    getPasswordChangedAt.mockResolvedValue(new Date(payload.iat! * 1000 + 500));
+    const ctx = mockContext(`Bearer ${token}`);
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+  });
+
+  it('regression: cutoff một giây SAU iat (second-precision biên) → canActivate false (401)', async () => {
+    const { token } = await tokenService.sign({ sub: 'cut-prev', email: 'a@b.com', roles: ['WORKER'] });
+    const payload = await tokenService.verify(token);
+    // password_changed_at = giây (iat+1): iat < floor(cutoffMs/1000) → phiên phát trước
+    // cutoff (đúng 1 giây) phải bị từ chối.
+    getPasswordChangedAt.mockResolvedValue(new Date((payload.iat! + 1) * 1000));
+    const ctx = mockContext(`Bearer ${token}`);
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
+  });
+
   it('cutoff TRƯỚC token iat (token phát sau khi đổi mật khẩu) → canActivate true', async () => {
     const { token } = await tokenService.sign({ sub: 'cut-2', email: 'a@b.com', roles: ['WORKER'] });
     const payload = await tokenService.verify(token);

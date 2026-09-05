@@ -10,9 +10,14 @@ import { AUDIT_PORT } from '../../../application/port/audit.port';
 import { JwtAuthGuard } from '../guard/jwt-auth.guard';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token.service';
 
+const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+
 describe('AuthController POST /api/v1/auth/login', () => {
-  it('returns 200 shape via use-case', async () => {
-    const mockUseCase = {
+  let mockUseCase: { execute: jest.Mock };
+  let ctrl: AuthController;
+
+  beforeEach(async () => {
+    mockUseCase = {
       execute: jest.fn(async () => ({
         accessToken: 'jwt-token',
         expiresAt: new Date('2026-08-27T13:00:00.000Z'),
@@ -37,7 +42,10 @@ describe('AuthController POST /api/v1/auth/login', () => {
       ],
     }).compile();
 
-    const ctrl = module.get(AuthController);
+    ctrl = module.get(AuthController);
+  });
+
+  it('returns 200 shape via use-case', async () => {
     const result = await ctrl.login(
       { email: 'a@b.com', password: 'Secret123!' } as unknown as never,
       { headers: {}, ip: '127.0.0.1' } as unknown as never,
@@ -46,5 +54,29 @@ describe('AuthController POST /api/v1/auth/login', () => {
     expect(result.accessToken).toBe('jwt-token');
     expect(result.user.email).toBe('a@b.com');
     expect(mockUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ email: 'a@b.com' }));
+  });
+
+  it('X-Correlation-Id hợp lệ được truyền vào login use case (dedup theo (correlationId, action))', async () => {
+    await ctrl.login(
+      { email: 'a@b.com', password: 'Secret123!' } as unknown as never,
+      { headers: { 'x-correlation-id': VALID_CORR }, ip: '127.0.0.1' } as unknown as never,
+    );
+    expect(mockUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+  });
+
+  it('PUBLIC policy: X-Correlation-Id không phải UUID → correlationId undefined, KHÔNG 400/block', async () => {
+    await ctrl.login(
+      { email: 'a@b.com', password: 'Secret123!' } as unknown as never,
+      { headers: { 'x-correlation-id': 'not-a-uuid-123' }, ip: '127.0.0.1' } as unknown as never,
+    );
+    expect(mockUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
+  });
+
+  it('PUBLIC policy: thiếu X-Correlation-Id → correlationId undefined (best-effort)', async () => {
+    await ctrl.login(
+      { email: 'a@b.com', password: 'Secret123!' } as unknown as never,
+      { headers: {}, ip: '127.0.0.1' } as unknown as never,
+    );
+    expect(mockUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: undefined }));
   });
 });

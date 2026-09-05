@@ -148,6 +148,25 @@ describe('RedisTokenRevocationService', () => {
       await expect(newService().isUserRevokedBefore('u1', undefined, DB_CUTOFF)).resolves.toBe(true);
     });
 
+    it('iat một giây trước cutoff (second-precision biên) → true', async () => {
+      redisClient.get.mockResolvedValue(String(REDIS_LATER));
+      const cutoffSec = Math.floor(REDIS_LATER / 1000);
+      const iat = cutoffSec - 1;
+      await expect(newService().isUserRevokedBefore('u1', iat, DB_CUTOFF)).resolves.toBe(true);
+    });
+
+    it('iat cùng giây với cutoff (kể cả ms cutoff muộn hơn iat) → false (1-giây acceptance window)', async () => {
+      // JWT iat có second-precision; token đúc cùng giây với cutoff dù ms của
+      // password_changed_at muộn hơn iat*1000 → chấp nhận (fix race cùng giây).
+      redisClient.get.mockResolvedValue(String(REDIS_LATER));
+      const cutoffSec = Math.floor(REDIS_LATER / 1000);
+      const iatSameSecond = cutoffSec;
+      await expect(newService().isUserRevokedBefore('u1', iatSameSecond, DB_CUTOFF)).resolves.toBe(false);
+      // db cutoff có ms offset trong cùng giây → vẫn chấp nhận
+      const dbCutoffWithMs = new Date(iatSameSecond * 1000 + 500);
+      await expect(newService().isUserRevokedBefore('u1', iatSameSecond, dbCutoffWithMs)).resolves.toBe(false);
+    });
+
     it('biên equality: iat*1000 == effective cutoff → false (chỉ token phát TRƯỚC cutoff bị chặn)', async () => {
       redisClient.get.mockResolvedValue(String(NOW));
       const iat = Math.floor(NOW / 1000);

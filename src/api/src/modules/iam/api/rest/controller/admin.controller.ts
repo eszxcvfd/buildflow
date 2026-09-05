@@ -36,14 +36,18 @@ function assertAdmin(req: Request): TokenPayload {
   return user;
 }
 
-function getRequestMeta(req: Request): { ip: string | null; userAgent: string | null } {
+function getRequestMeta(req: Request): { ip: string | null; userAgent: string | null; correlationId: string | null } {
   const ip = (req.headers['x-forwarded-for'] as string) || req.ip || null;
   const userAgent = (req.headers['user-agent'] as string) || null;
+  const correlationId = (req.headers['x-correlation-id'] as string) || null;
   return {
     ip: ip ? String(ip).split(',')[0].trim() : null,
     userAgent: userAgent ?? null,
+    correlationId: correlationId ? String(correlationId).trim() : null,
   };
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('api/v1/admin/users')
 @UseGuards(JwtAuthGuard)
@@ -154,12 +158,21 @@ export class AdminController {
   ) {
     const actor = assertAdmin(req);
     const meta = getRequestMeta(req);
+    // correlation_id in audit_logs is uuid-typed: a non-UUID header must be rejected
+    // as 400 with an actionable message instead of surfacing as a 500 audit-insert
+    // failure (same strict pattern as admin-roles.controller.ts).
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
     const { entity } = await this.changeStatus.execute({
       targetUserId: id,
       status: dto.status,
       actorUserId: actor.sub,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return toAdminUserResponse(entity);
   }

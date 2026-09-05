@@ -12,6 +12,7 @@ import { UserEntity } from '../src/modules/iam/domain/entity/user.entity';
 describe('POST /api/v1/auth/login (e2e contract)', () => {
   let app: INestApplication;
   let userEntity: UserEntity;
+  let mockAudit: { log: jest.Mock };
 
   beforeAll(async () => {
     userEntity = new UserEntity({
@@ -46,7 +47,7 @@ describe('POST /api/v1/auth/login (e2e contract)', () => {
       verify: jest.fn(),
     };
 
-    const mockAudit = { log: jest.fn(async () => {}) };
+    mockAudit = { log: jest.fn(async () => {}) };
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -89,5 +90,36 @@ describe('POST /api/v1/auth/login (e2e contract)', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'e2e@example.com' })
       .expect(400);
+  });
+
+  it('X-Correlation-Id hợp lệ → audit mock nhận correlationId (AUTH_LOGIN_SUCCESS)', async () => {
+    const corr = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
+    (mockAudit.log as jest.Mock).mockClear();
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('X-Correlation-Id', corr)
+      .send({ email: 'e2e@example.com', password: 'Password123!' })
+      .expect(200);
+    expect(res.body.accessToken).toBeDefined();
+    const successCalls = (mockAudit.log as jest.Mock).mock.calls.filter(
+      (c: Array<Record<string, unknown>>) => c[0].action === 'AUTH_LOGIN_SUCCESS',
+    );
+    expect(successCalls.length).toBeGreaterThanOrEqual(1);
+    expect(successCalls[successCalls.length - 1][0].correlationId).toBe(corr);
+  });
+
+  it('PUBLIC policy: X-Correlation-Id không phải UUID → vẫn 401/không 400 và correlationId null (lenient)', async () => {
+    (mockAudit.log as jest.Mock).mockClear();
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .set('X-Correlation-Id', 'bad-correlation-not-uuid')
+      .send({ email: 'e2e@example.com', password: 'wrong-password' })
+      .expect(401); // login không bao giờ bị block 400 vì header sai
+    expect(res.body.message).toContain('Thông tin đăng nhập không hợp lệ');
+    const failedCalls = (mockAudit.log as jest.Mock).mock.calls.filter(
+      (c: Array<Record<string, unknown>>) => c[0].action === 'AUTH_LOGIN_FAILED',
+    );
+    const last = failedCalls[failedCalls.length - 1];
+    expect(last[0].correlationId).toBeNull();
   });
 });

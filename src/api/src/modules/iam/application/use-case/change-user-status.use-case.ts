@@ -11,6 +11,7 @@ export interface ChangeUserStatusInput {
   actorUserId: string;
   ipAddress?: string | null;
   userAgent?: string | null;
+  correlationId?: string | null;
 }
 
 export interface ChangeUserStatusOutput {
@@ -69,6 +70,7 @@ export class ChangeUserStatusUseCase {
           result: 'SUCCESS' as const,
           ipAddress: input.ipAddress ?? null,
           userAgent: input.userAgent ?? null,
+          correlationId: input.correlationId ?? null,
         };
         if (this.audit.logWithClient) {
           await this.audit.logWithClient(client, payload);
