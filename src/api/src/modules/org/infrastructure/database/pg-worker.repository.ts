@@ -205,4 +205,15 @@ export class PgWorkerRepository implements WorkerRepositoryPort {
     const r = await this.pool().query(`SELECT trade_id, skill_level FROM public.resource_trades WHERE resource_type='USER' AND user_id=$1 AND is_active=true`, [userId]);
     return r.rows.map((row: Record<string, unknown>) => ({ tradeId: String(row['trade_id']), skillLevel: Number(row['skill_level']) }));
   }
+
+  async countOpenAssignments(workerId: string): Promise<number> {
+    // ORG-SRS-004 (issue #27): assignments đang mở của worker
+    // (worker_id; status PENDING_ACCEPTANCE/ACTIVE — CHECK migration 0001).
+    const r = await this.pool().query(
+      `SELECT COUNT(*)::int AS total FROM public.assignments
+       WHERE worker_id = $1 AND status IN ('PENDING_ACCEPTANCE', 'ACTIVE')`,
+      [workerId],
+    );
+    return Number(r.rows[0].total ?? 0);
+  }
 }

@@ -8,6 +8,7 @@ export interface AuditPort {
     entityId?: string | null;
     beforeData?: unknown;
     afterData?: unknown;
+    reason?: string | null;
     result: 'SUCCESS' | 'FAILED';
     ipAddress?: string | null;
     userAgent?: string | null;
@@ -20,6 +21,7 @@ export interface AuditPort {
     entityId?: string | null;
     beforeData?: unknown;
     afterData?: unknown;
+    reason?: string | null;
     result: 'SUCCESS' | 'FAILED';
     ipAddress?: string | null;
     userAgent?: string | null;

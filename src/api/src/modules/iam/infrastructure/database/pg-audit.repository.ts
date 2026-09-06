@@ -30,8 +30,8 @@ const AUDIT_RETRY_DELAY_MS = 100;
 
 const INSERT_BASE =
   `INSERT INTO public.audit_logs
-     (actor_user_id, action, entity_type, entity_id, before_data, after_data, result, ip_address, user_agent, correlation_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`;
+     (actor_user_id, action, entity_type, entity_id, before_data, after_data, reason, result, ip_address, user_agent, correlation_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`;
 
 // Must match the predicate of partial unique index ux_audit_correlation_action
 // (migration 0003) exactly, otherwise PostgreSQL cannot infer the conflict target.
@@ -116,6 +116,7 @@ interface AuditLogParams {
   entityId?: string | null;
   beforeData?: unknown;
   afterData?: unknown;
+  reason?: string | null;
   result: 'SUCCESS' | 'FAILED';
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -150,6 +151,7 @@ export class PgAuditRepository implements AuditPort {
       params.entityId ?? null,
       params.beforeData ? JSON.stringify(params.beforeData) : null,
       params.afterData ? JSON.stringify(params.afterData) : null,
+      params.reason ?? null,
       params.result,
       params.ipAddress ?? null,
       params.userAgent ?? null,

@@ -1,10 +1,17 @@
 'use client';
 
 import * as React from 'react';
-import { listWorkers, type Worker } from '@/lib/api/workers';
+import { listWorkers, changeWorkerLifecycleStatus, getWorkerOpenWork, type Worker } from '@/lib/api/workers';
 import type { ApiError } from '@/lib/api/workers';
-import { updateAdminUserStatus } from '@/lib/api/admin-users';
 import { useTradeNames } from '@/features/workers/hooks/useTradeNames';
+import {
+  ResourceStatusDialog,
+  type ResourceAction,
+  type OpenWorkCheck,
+  RESOURCE_ACTION_LABEL,
+  RESOURCE_REASON_REQUIRED_MESSAGE,
+  RESOURCE_REASON_MAX_LENGTH,
+} from '@/features/resources/components/ResourceStatusDialog';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -26,6 +33,17 @@ function statusTone(status: string): { label: string; color: string } {
   }
 }
 
+/**
+ * ORG-SRS-004 (issue #27) — lifecycle status worker:
+ * - ACTIVE: nút 'Tạm ngừng' (SUSPEND) và 'Chấm dứt' (TERMINATE) — mở confirm dialog
+ *   kèm pre-check GET /workers/:id/open-work; cảnh báo ảnh hưởng nếu có việc mở;
+ *   lý do bắt buộc validate theo field (không tự suy diễn khi API từ chối).
+ * - INACTIVE: nút 'Kích hoạt lại' (ACTIVATE).
+ * - LOCKED (bị khóa do bảo mật): không nút lifecycle ở đây — xử lý ở quản trị tài
+ *   khoản (PATCH /admin/users/:id/status) để không suy diễn trạng thái.
+ * - `alreadyInState: true` từ API (request lặp) → thông tin 'đã ở trạng thái này',
+ *   không báo lỗi, không tạo audit trùng.
+ */
 export function WorkerList() {
   const tradeNames = useTradeNames();
   const [workers, setWorkers] = React.useState<Worker[]>([]);
@@ -34,10 +52,13 @@ export function WorkerList() {
   const [error, setError] = React.useState<ApiError | null>(null);
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
-  const [retryKey, setRetryKey] = React.useState(0);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
-  const [confirmTarget, setConfirmTarget] = React.useState<{ worker: Worker; next: string } | null>(null);
+  const [actionInfo, setActionInfo] = React.useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = React.useState<{ worker: Worker; action: ResourceAction } | null>(null);
+  const [openCheck, setOpenCheck] = React.useState<OpenWorkCheck>({ state: 'loading' });
+  const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
+  const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -63,28 +84,81 @@ export function WorkerList() {
   }, [load]);
 
   function handleRetry() {
-    setRetryKey((k) => k + 1);
+    void load();
   }
 
-  async function handleStatusChange(worker: Worker, next: 'ACTIVE' | 'INACTIVE') {
+  // Pre-check open work khi vừa mở dialog với action rời khỏi ACTIVE (SRS: hiển thị
+  // cảnh báo ảnh hưởng trước khi ngừng; chỉ đếm, không chặn).
+  async function runOpenCheck(workerId: string) {
+    setOpenCheck({ state: 'loading' });
+    try {
+      const res = await getWorkerOpenWork(workerId);
+      setOpenCheck({ state: 'done', openAssignments: res.openAssignments });
+    } catch {
+      setOpenCheck({ state: 'failed' });
+    }
+  }
+
+  function openDialog(worker: Worker, action: ResourceAction) {
+    setConfirmTarget({ worker, action });
+    setDialogServerMessage(null);
+    setDialogReasonError(null);
+    setActionInfo(null);
+    setOpenCheck(action === 'ACTIVATE' ? { state: 'done', openAssignments: 0 } : { state: 'loading' });
+    if (action !== 'ACTIVATE') void runOpenCheck(worker.id);
+  }
+
+  async function handleConfirm(reason: string) {
+    if (!confirmTarget) return;
+    const { worker, action } = confirmTarget;
     setActionError(null);
+    setDialogServerMessage(null);
+    setDialogReasonError(null);
     setBusyId(worker.id);
     try {
-      const updated = await updateAdminUserStatus(worker.id, { status: next });
+      const updated = await changeWorkerLifecycleStatus(worker.id, { action, reason: reason || null });
+      const nextStatus = updated.status;
       setWorkers((prev) => prev.map((w) => (w.id === updated.id
-        ? { ...w, status: updated.status, eligible: updated.status === 'ACTIVE' }
+        ? { ...w, status: nextStatus, eligible: updated.eligible }
         : w)));
       setConfirmTarget(null);
+      if (updated.alreadyInState) {
+        // Request lặp/trạng thái đã đúng: API trả 200 alreadyInState — thông tin,
+        // không phải lỗi; không tạo audit trùng ở server.
+        setActionInfo(
+          action === 'ACTIVATE'
+            ? 'Worker đã ở trạng thái hoạt động — không thay đổi gì thêm.'
+            : 'Worker đã ở trạng thái ngừng hoạt động — không thay đổi gì thêm.',
+        );
+      } else if (action === 'ACTIVATE') {
+        setActionInfo('Đã kích hoạt lại worker — có thể nhận phân công mới.');
+      } else if (updated.warning && updated.warning.openAssignments > 0) {
+        setActionInfo(
+          `${RESOURCE_ACTION_LABEL[action]} thành công. Worker đang có ${updated.warning.openAssignments} công việc/lịch mở — lịch sử vẫn được giữ nguyên.`,
+        );
+      } else {
+        setActionInfo(
+          `${RESOURCE_ACTION_LABEL[action]} thành công — worker sẽ bị chặn phân công mới, lịch sử vẫn giữ.`,
+        );
+      }
     } catch (e) {
       const err = e as ApiError;
-      setActionError(err.status === 401
-        ? 'Phiên hết hạn, vui lòng đăng nhập lại.'
-        : err.status === 403
-          ? 'Không có quyền — cần ADMIN.'
-          : err.message || 'Thao tác thất bại');
+      if (err.status === 401) {
+        setDialogServerMessage('Phiên hết hạn, vui lòng đăng nhập lại.');
+      } else if (err.status === 403) {
+        setDialogServerMessage('Không có quyền — cần ADMIN.');
+      } else if (err.fieldErrors?.reason?.length) {
+        setDialogReasonError(err.fieldErrors.reason.join(' '));
+      } else {
+        setDialogServerMessage(err.message || 'Chuyển trạng thái thất bại');
+      }
     } finally {
       setBusyId(null);
     }
+  }
+
+  function handleCancel() {
+    setConfirmTarget(null);
   }
 
   if (loading) {
@@ -179,6 +253,24 @@ export function WorkerList() {
         </p>
       </Card>
 
+      {actionError ? <Alert tone="error">{actionError}</Alert> : null}
+      {actionInfo ? <Alert tone="success">{actionInfo}</Alert> : null}
+
+      {confirmTarget ? (
+        <ResourceStatusDialog
+          resourceName={confirmTarget.worker.fullName}
+          currentStatus={confirmTarget.worker.status}
+          action={confirmTarget.action}
+          openCheck={openCheck}
+          submitting={busyId === confirmTarget.worker.id}
+          serverMessage={dialogServerMessage}
+          serverFieldError={dialogReasonError}
+          onConfirm={(reason) => void handleConfirm(reason)}
+          onCancel={handleCancel}
+          onRetryCheck={() => void runOpenCheck(confirmTarget.worker.id)}
+        />
+      ) : null}
+
       {workers.length === 0 ? (
         <Card>
           <p style={{ margin: 0, color: '#6b7280' }}>Chưa có worker nào phù hợp bộ lọc.</p>
@@ -187,34 +279,10 @@ export function WorkerList() {
           </p>
         </Card>
       ) : (
-        <>
-        {actionError ? <Alert tone="error">{actionError}</Alert> : null}
-        {confirmTarget ? (
-          <Card>
-            <Alert tone="info">
-              Xác nhận chuyển trạng thái {confirmTarget.worker.fullName} sang{' '}
-              <strong>{confirmTarget.next === 'INACTIVE' ? 'Ngừng hoạt động' : 'Hoạt động'}</strong>?
-              {confirmTarget.next === 'INACTIVE' ? ' Worker sẽ bị chặn phân công mới; lịch sử vẫn giữ.' : ''}
-            </Alert>
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <Button
-                onClick={() => {
-                  const t = confirmTarget;
-                  setConfirmTarget(null);
-                  void handleStatusChange(t.worker, t.next as 'ACTIVE' | 'INACTIVE');
-                }}
-                loading={busyId === confirmTarget.worker.id}
-                aria-busy={busyId === confirmTarget.worker.id}
-              >
-                Xác nhận
-              </Button>
-              <Button variant="secondary" onClick={() => setConfirmTarget(null)}>Hủy</Button>
-            </div>
-          </Card>
-        ) : null}
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {workers.map((w) => {
             const s = statusTone(w.status);
+            const rowBusy = busyId === w.id;
             return (
               <Card key={w.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -241,14 +309,29 @@ export function WorkerList() {
                         : '—'} · Tạo: {new Date(w.createdAt).toLocaleDateString('vi-VN')}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     {!w.eligible ? <span style={{ fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 6, padding: '0.2rem 0.5rem' }}>Chặn phân công</span> : null}
                     {w.status === 'ACTIVE' ? (
-                      <Button variant="secondary" onClick={() => setConfirmTarget({ worker: w, next: 'INACTIVE' })} disabled={busyId === w.id}>
-                        Ngừng hoạt động
-                      </Button>
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => openDialog(w, 'SUSPEND')}
+                          disabled={rowBusy}
+                          title="Tạm ngừng — lý do bắt buộc, có cảnh báo công việc mở"
+                        >
+                          Tạm ngừng
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => openDialog(w, 'TERMINATE')}
+                          disabled={rowBusy}
+                          title="Chấm dứt — lý do bắt buộc, lịch sử vẫn giữ"
+                        >
+                          Chấm dứt
+                        </Button>
+                      </>
                     ) : w.status === 'INACTIVE' ? (
-                      <Button variant="secondary" onClick={() => setConfirmTarget({ worker: w, next: 'ACTIVE' })} disabled={busyId === w.id}>
+                      <Button variant="secondary" onClick={() => openDialog(w, 'ACTIVATE')} disabled={rowBusy}>
                         Kích hoạt lại
                       </Button>
                     ) : null}
@@ -261,8 +344,14 @@ export function WorkerList() {
             );
           })}
         </div>
-        </>
       )}
+
+      {confirmTarget ? (
+        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--bf-muted)' }}>
+          Lý do {RESOURCE_ACTION_LABEL[confirmTarget.action].toLowerCase()} phải dài 1–{RESOURCE_REASON_MAX_LENGTH} ký tự
+          ({RESOURCE_REASON_REQUIRED_MESSAGE}).
+        </p>
+      ) : null}
     </div>
   );
 }

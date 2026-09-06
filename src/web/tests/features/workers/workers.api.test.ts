@@ -3,6 +3,8 @@ import {
   getWorker,
   createWorker,
   updateWorker,
+  changeWorkerLifecycleStatus,
+  getWorkerOpenWork,
   type Worker,
 } from '@/lib/api/workers';
 
@@ -115,5 +117,58 @@ describe('workers API client (ORG-SRS-001)', () => {
           password: expect.arrayContaining(['Mật khẩu tối thiểu 8 ký tự']),
         }),
       });
+  });
+
+  describe('lifecycle status (ORG-SRS-004, issue #27)', () => {
+    it('changeWorkerLifecycleStatus PATCHes /workers/:id/status with action + reason', async () => {
+      const profile = { ...sampleWorker, status: 'INACTIVE', eligible: false };
+      const fetchMock = jest.fn().mockResolvedValueOnce(mockJsonResponse(200, { ...profile, alreadyInState: false, warning: { openAssignments: 3 } }));
+      setFetchMock(fetchMock);
+      const res = await changeWorkerLifecycleStatus('w-1', { action: 'SUSPEND', reason: 'Hết việc mùa' });
+      expect(res.status).toBe('INACTIVE');
+      expect(res.eligible).toBe(false);
+      expect(res.alreadyInState).toBe(false);
+      expect(res.warning?.openAssignments).toBe(3);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/v1/workers/w-1/status');
+      expect((init as RequestInit).method).toBe('PATCH');
+      expect(JSON.parse(String((init as RequestInit).body))).toEqual({ action: 'SUSPEND', reason: 'Hết việc mùa' });
+    });
+
+    it('maps 400 missing-required reason to fieldErrors.reason (400 message lý do)', async () => {
+      const fetchMock = jest.fn().mockResolvedValueOnce(mockJsonResponse(400, { message: 'Lý do là bắt buộc khi tạm ngừng/chấm dứt' }));
+      setFetchMock(fetchMock);
+      await expect(changeWorkerLifecycleStatus('w-1', { action: 'TERMINATE' })).rejects.toMatchObject({
+        status: 400,
+        message: 'Lý do là bắt buộc khi tạm ngừng/chấm dứt',
+        fieldErrors: expect.objectContaining({ reason: expect.arrayContaining(['Lý do là bắt buộc khi tạm ngừng/chấm dứt']) }),
+      });
+    });
+
+    it('parses alreadyInState:true và warning rỗng (request lặp, không audit trùng)', async () => {
+      const fetchMock = jest.fn().mockResolvedValueOnce(mockJsonResponse(200, { ...sampleWorker, alreadyInState: true }));
+      setFetchMock(fetchMock);
+      const res = await changeWorkerLifecycleStatus('w-1', { action: 'ACTIVATE', reason: null });
+      expect(res.alreadyInState).toBe(true);
+      expect(res.warning).toBeNull();
+    });
+
+    it('getWorkerOpenWork GETs /workers/:id/open-work và trả số assignment mở', async () => {
+      const fetchMock = jest.fn().mockResolvedValueOnce(mockJsonResponse(200, { openAssignments: 5 }));
+      setFetchMock(fetchMock);
+      const res = await getWorkerOpenWork('w-1');
+      expect(res.openAssignments).toBe(5);
+      const [url] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/v1/workers/w-1/open-work');
+    });
+
+    it('preserves 403 from lifecycle endpoints', async () => {
+      const fetchMock = jest.fn()
+        .mockResolvedValueOnce(mockJsonResponse(403, { message: 'Không có quyền truy cập' }))
+        .mockResolvedValueOnce(mockJsonResponse(403, { message: 'Không có quyền truy cập' }));
+      setFetchMock(fetchMock);
+      await expect(changeWorkerLifecycleStatus('w-1', { action: 'SUSPEND', reason: 'x' })).rejects.toMatchObject({ status: 403 });
+      await expect(getWorkerOpenWork('w-1')).rejects.toMatchObject({ status: 403 });
+    });
   });
 });

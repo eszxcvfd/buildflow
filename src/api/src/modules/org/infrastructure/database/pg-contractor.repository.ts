@@ -133,4 +133,24 @@ export class PgContractorRepository implements ContractorRepositoryPort {
     if (r2.rows.length > 0) return true;
     return false;
   }
+
+  async countOpenAssignments(contractorId: string): Promise<number> {
+    // ORG-SRS-004 (issue #27): assignments đang mở của nhà thầu = assignments của
+    // crews thuộc contractor (crews.contractor_id) UNION assignments của workers
+    // thuộc contractor (users.contractor_id). UNION xử lý trường hợp cùng assignment
+    // thuộc cả crew lẫn worker trong nhà thầu — không double-count.
+    const r = await this.pool().query(
+      `SELECT COUNT(*)::int AS total FROM (
+         SELECT a.id FROM public.assignments a
+         JOIN public.crews c ON c.id = a.crew_id
+         WHERE c.contractor_id = $1 AND a.status IN ('PENDING_ACCEPTANCE', 'ACTIVE')
+         UNION
+         SELECT a.id FROM public.assignments a
+         JOIN public.users u ON u.id = a.worker_id
+         WHERE u.contractor_id = $1 AND a.status IN ('PENDING_ACCEPTANCE', 'ACTIVE')
+       ) open_assignments`,
+      [contractorId],
+    );
+    return Number(r.rows[0].total ?? 0);
+  }
 }

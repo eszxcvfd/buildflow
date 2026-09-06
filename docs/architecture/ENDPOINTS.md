@@ -1,7 +1,7 @@
 # Endpoint contract — ORG catalog slices (workers/contractors/trades)
 
 > **Owner:** API/Contract workspace (xem [`WORK-ROUTING.md`](../../WORK-ROUTING.md) — HTTP endpoint/DTO/validation thuộc `src/api` Contract lane).
-> **Phạm vi:** các endpoint org catalog đã implement theo vertical slice `#24` (`ORG-SRS-001` workers), `#25` (`ORG-SRS-002` contractors) và `#26` (`ORG-SRS-003` trades). Đây là contract công bố cho web/mobile; thay đổi breaking phải route qua `NETCODE.md` và đồng bộ consumer trong cùng thay đổi.
+> **Phạm vi:** các endpoint org catalog đã implement theo vertical slice `#24` (`ORG-SRS-001` workers), `#25` (`ORG-SRS-002` contractors) và `#26` (`ORG-SRS-003` trades) + lifecycle trạng thái `#27` (`ORG-SRS-004`). Đây là contract công bố cho web/mobile; thay đổi breaking phải route qua `NETCODE.md` và đồng bộ consumer trong cùng thay đổi.
 > **File gốc:** endpoint policy được cập nhật cùng slice trong `docs/architecture/API.md`; file này chép/bám sát nội dung đó để làm tài liệu tra cứu endpoint (không tạo một policy thứ hai).
 
 ---
@@ -25,7 +25,7 @@
 | GET | `/api/v1/workers/:id` | — | `200` worker profile | `400` id sai; `404` |
 | PATCH | `/api/v1/workers/:id` | `{ fullName?, phone?, avatarUrl?, employeeCode?, contractorId?, trades? }` | `200` worker profile | `400`/`409`; `404` |
 
-- Audit actions: `ORG_WORKER_CREATED`, `ORG_WORKER_UPDATED` (xem 8.2 API.md). Worker trong org module quản lý profile + trades; account IAM lifecycle (status) nằm ở `/api/v1/admin/users/:id/status`.
+- Audit actions: `ORG_WORKER_CREATED`, `ORG_WORKER_UPDATED` (xem 8.2 API.md). Worker trong org module quản lý profile + trades; account IAM lifecycle (LOCKED/security) nằm ở `/api/v1/admin/users/:id/status`, còn lifecycle nghiệp vụ (ACTIVATE/SUSPEND/TERMINATE) nằm ở `PATCH /api/v1/workers/:id/status` (ORG-SRS-004, mục 5).
 - Trade gán cho worker phải đang ACTIVE — inactive không qua được (không dùng cho phân công mới).
 - **PATCH `/workers/:id` — `trades` = replace toàn bộ:** nếu payload có gửi `trades` thì danh sách đó **thay thế toàn bộ** trades hiện có của worker (row cũ bị deactivate, insert row mới). Client giữ nguyên phần ngành nghề phải **OMIT** key `trades` khỏi payload; không có khái niệm gửi danh sách trống để “giữ nguyên”.
 
@@ -39,6 +39,7 @@
 | PATCH | `/api/v1/contractors/:id` | `{ code?, name?, contactName?, phone?, email?, scope?, status? }` | `200` contractor profile | `400`; `409` trùng code (excl. self); `404` |
 
 - Same-status PATCH là no-op idempotent (không reject) — form edit luôn kèm status hiện tại (#25).
+- **PATCH `/contractors/:id` inline `status` giữ nguyên hoạt động (backward-compat) nhưng DEPRECATED** — lifecycle chính thức chuyển sang `PATCH /api/v1/contractors/:id/status` (ORG-SRS-004, mục 5); inline status không có reason policy/open-work warning.
 - Deactivate contractor đang có lịch sử: vẫn cho phép (không hard delete), audit afterData gắn `_warning: 'Nhà thầu có lịch sử công việc, không xóa liên kết'`.
 - Audit actions: `ORG_CONTRACTOR_CREATED`, `ORG_CONTRACTOR_UPDATED`, `ORG_CONTRACTOR_STATUS_CHANGED` (khi status thật sự đổi).
 - Code rules: 2-50 ký tự, `^[A-Za-z0-9_-]+$`; name 2-200; contactName bắt buộc ≤150; scope bắt buộc ≤1000; phone/email optional.
@@ -64,7 +65,41 @@ Rules:
 - Không có DELETE; inactive trade vẫn truy được chi tiết (lịch sử catalog).
 - Audit actions: `ORG_TRADE_CREATED` (afterData), `ORG_TRADE_UPDATED` (before/afterData), `ORG_TRADE_STATUS_CHANGED` (before/afterData).
 
-## 5. Audit action list (bổ sung org trades)
+## 5. Resource lifecycle status — ORG-SRS-004 (#27)
+
+Kích hoạt/tạm ngừng/chấm dứt worker và contractor. **State policy (đã chốt, KHÔNG đổi enum DB):** action enum ở API layer ánh xạ về status DB hiện có — `ACTIVATE`→`ACTIVE`, `SUSPEND`→`INACTIVE`, `TERMINATE`→`INACTIVE`; eligibility giữ nguyên ACTIVE-only.
+
+| Method | Path | Body | Response | Lỗi |
+| --- | --- | --- | --- | --- |
+| PATCH | `/api/v1/workers/:id/status` | `{ action: 'ACTIVATE' \| 'SUSPEND' \| 'TERMINATE', reason? }` | `200` worker profile + `alreadyInState` + `warning?` | `400` action sai/thiếu reason; `404`; `400` X-Correlation-Id sai |
+| PATCH | `/api/v1/contractors/:id/status` | `{ action: 'ACTIVATE' \| 'SUSPEND' \| 'TERMINATE', reason? }` | `200` contractor profile + `alreadyInState` + `warning?` | `400` action sai/thiếu reason; `404`; `400` X-Correlation-Id sai |
+| GET | `/api/v1/workers/:id/open-work` | — | `200 { openAssignments }` | `401`/`403`; `404` |
+| GET | `/api/v1/contractors/:id/open-work` | — | `200 { openAssignments }` | `401`/`403`; `404` |
+
+Rules (worker + contractor giống nhau, issue #27):
+
+- **Reason policy:** bắt buộc (1-500 ký tự, sau trim) cho `SUSPEND`/`TERMINATE` — thiếu → `400` `'Lý do là bắt buộc khi tạm ngừng/chấm dứt'`; optional cho `ACTIVATE`. Reason KHÔNG đi vào beforeData/afterData; ghi vào cột `audit_logs.reason` (write path wire lần đầu tại slice này).
+- **Idempotent repeat:** `SUSPEND`/`TERMINATE` khi đã `INACTIVE`, hoặc `ACTIVATE` khi đã `ACTIVE` → `200` kèm `alreadyInState: true`, KHÔNG ghi audit, KHÔNG đụng change logic. Khác reject same-status cũ (`PATCH /admin/users/:id/status` vẫn reject như trước, giữ nguyên cho LOCKED/security).
+- **Open-work warning:** khi rời khỏi `ACTIVE` (`SUSPEND`/`TERMINATE` từ ACTIVE) đếm assignments mở (`PENDING_ACCEPTANCE`/`ACTIVE`): worker = `assignments.worker_id`; contractor = assignments của crews (`crews.contractor_id`) + workers (`users.contractor_id`) thuộc contractor (UNION, không double-count). `openAssignments > 0` → response kèm `warning: { openAssignments: N }` và audit afterData gắn `_warning: 'Nguồn lực đang có N công việc/lịch mở'` (text tiếng Việt, pass no-secrets sanitize). **Cảnh báo, KHÔNG chặn transition.** Count thất bại (DB down) → `500`, không transition thiếu cảnh báo.
+- **ACTIVATE** xóa `locked_until`/reset failed count qua `changeStatus` hiện có (hành vi giữ nguyên).
+- Audit action riêng theo action (tx-embedded 1 lần; retry cùng `X-Correlation-Id` bị dedup):
+
+| Endpoint | `ACTIVATE` | `SUSPEND` | `TERMINATE` |
+| --- | --- | --- | --- |
+| `PATCH /api/v1/workers/:id/status` | `ORG_WORKER_REACTIVATED` | `ORG_WORKER_SUSPENDED` | `ORG_WORKER_TERMINATED` |
+| `PATCH /api/v1/contractors/:id/status` | `ORG_CONTRACTOR_REACTIVATED` | `ORG_CONTRACTOR_SUSPENDED` | `ORG_CONTRACTOR_TERMINATED` |
+
+- Worker lifecycle dùng entity `changeStatus` chung (users table); KHÔNG đụng `PATCH /api/v1/admin/users/:id/status` cũ (giữ nguyên cho LOCKED/security).
+- `GET .../open-work` là pre-check admin-only cho UI confirm dialog — chỉ đếm, không chặn, không audit.
+- `PATCH /api/v1/contractors/:id` inline `status` vẫn hoạt động (backward-compat) nhưng **deprecated** (xem mục 3).
+
+Giới hạn phạm vi & quyết định đã duyệt (bounded decisions, review #27):
+
+- **Đội (crew) defer:** SRS ORG-SRS-004 nêu lifecycle cho "worker, nhà thầu và đội" — nhưng crew CRUD/chuyên mục quản lý đội thuộc ORG-SRS-006 (`#29`, Should) chưa implement (schema `crews` có sẵn cột `status ACTIVE|INACTIVE`, hiện 0 row, 0 code). Crew lifecycle sẽ được gắn khi slice `#29` ra đời, dùng cùng state policy ở mục này.
+- **Concurrency = last-write accepted:** check-then-act (findById + idempotent check + count) chạy ngoài transaction, không `FOR UPDATE`. Hai admin đổi trạng thái đồng thời với correlation-id khác nhau → status hội tụ đúng (last-write) nhưng có thể sinh 2 audit rows cho cùng một chuyển đổi. Rủi ro chấp nhận được (admin-only, hiếm, không corrupt dữ liệu).
+- **Worker open-work đếm trực tiếp:** `countOpenAssignments(worker)` chỉ đếm assignment gán trực tiếp (`assignments.worker_id`); assignment gán qua crew (`worker_id NULL`, XOR check `assignments_assignee_ck`) không tính vào pre-check của worker riêng lẻ — contractor-level UNION đã bao phủ cả hai. Chỉ ảnh hưởng cảnh báo, không ảnh hưởng an toàn transition.
+
+## 6. Audit action list (bổ sung org trades)
 
 Strict `X-Correlation-Id` producer (bảng 8.2 API.md):
 
@@ -78,4 +113,4 @@ Strict `X-Correlation-Id` producer (bảng 8.2 API.md):
 
 - [`docs/architecture/API.md`](API.md) — module/domain conventions, audit policy (8.2/8.3/8.4/8.5)
 - [`docs/architecture/NETCODE.md`](NETCODE.md) — transport/error contract
-- SRS/issue: workers `#24`, contractors `#25`, trades `#26`
+- SRS/issue: workers `#24`, contractors `#25`, trades `#26`, lifecycle `#27`

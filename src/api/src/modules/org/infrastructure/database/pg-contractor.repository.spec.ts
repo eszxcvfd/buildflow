@@ -95,4 +95,29 @@ describe('PgContractorRepository ORG-SRS-002 (mapper + contract)', () => {
     // History still viewable: inactive still in all
     expect(all.find((c) => c.id === inactive.id)).toBeDefined();
   });
+
+  it('countOpenAssignments: SQL đếm qua crews + users thuộc contractor (UNION, không double-count)', async () => {
+    // ORG-SRS-004 (issue #27) — contract-level SQL assert (không cần DB thật).
+    const seenQueries: string[] = [];
+    const fakePool = {
+      query: jest.fn(async (sql: string) => {
+        seenQueries.push(sql);
+        return { rows: [{ total: 3 }], rowCount: 1 };
+      }),
+    };
+    (globalThis as unknown as { __pgPool?: unknown }).__pgPool = fakePool;
+    const { PgContractorRepository } = await import('./pg-contractor.repository');
+    const repo = new PgContractorRepository();
+    const total = await repo.countOpenAssignments('11111111-1111-4111-8111-111111111111');
+    delete (globalThis as unknown as { __pgPool?: unknown }).__pgPool;
+
+    expect(total).toBe(3);
+    const sql = seenQueries[0] as string;
+    expect(sql).toContain('JOIN public.crews c ON c.id = a.crew_id');
+    expect(sql).toContain('c.contractor_id = $1');
+    expect(sql).toContain('JOIN public.users u ON u.id = a.worker_id');
+    expect(sql).toContain('u.contractor_id = $1');
+    expect(sql).toContain("status IN ('PENDING_ACCEPTANCE', 'ACTIVE')");
+    expect(sql).toContain('UNION');
+  });
 });

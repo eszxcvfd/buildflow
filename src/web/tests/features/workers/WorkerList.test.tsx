@@ -1,11 +1,13 @@
 /**
- * DOM-level tests for WorkerList (ORG-SRS-001).
- * Covers: loading, list rendering with status + eligible flag, status change flow
- * (confirm -> PATCH admin users status -> UI update), 403 permission, action error.
+ * DOM-level tests for WorkerList (ORG-SRS-001 + ORG-SRS-004 lifecycle, issue #27).
+ * Covers: loading, list rendering with status + eligible flag, lifecycle action
+ * flow (SUSPEND/TERMINATE confirm dialog có reason bắt buộc + pre-check open-work
+ * warning; ACTIVATE), alreadyInState → info không lỗi, 401/403/generic error.
  */
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { WorkerList } from '@/features/workers/components/WorkerList';
+import type { ApiError } from '@/lib/api/workers';
 
 const routerMock = { replace: jest.fn(), push: jest.fn(), refresh: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => routerMock }));
@@ -13,11 +15,8 @@ jest.mock('next/navigation', () => ({ useRouter: () => routerMock }));
 jest.mock('@/lib/api/workers', () => ({
   __esModule: true,
   listWorkers: jest.fn(),
-}));
-
-jest.mock('@/lib/api/admin-users', () => ({
-  __esModule: true,
-  updateAdminUserStatus: jest.fn(),
+  changeWorkerLifecycleStatus: jest.fn(),
+  getWorkerOpenWork: jest.fn(),
 }));
 
 // #26: WorkerList hiển thị tên ngành nghề thay UUID thô qua useTradeNames.
@@ -26,11 +25,11 @@ jest.mock('@/features/workers/hooks/useTradeNames', () => ({
   useTradeNames: () => ({ names: tradeNames, loading: false, failed: false }),
 }));
 
-import { listWorkers } from '@/lib/api/workers';
-import { updateAdminUserStatus } from '@/lib/api/admin-users';
+import { listWorkers, changeWorkerLifecycleStatus, getWorkerOpenWork } from '@/lib/api/workers';
 
 const listMock = listWorkers as jest.Mock;
-const statusMock = updateAdminUserStatus as jest.Mock;
+const lifecycleMock = changeWorkerLifecycleStatus as jest.Mock;
+const openWorkMock = getWorkerOpenWork as jest.Mock;
 
 const workerA = {
   id: 'w-1',
@@ -57,15 +56,18 @@ const workerB = {
   eligible: false,
 };
 
-describe('WorkerList (ORG-SRS-001)', () => {
+const LOCKED_REASON = 'Lý do là bắt buộc khi tạm ngừng/chấm dứt';
+
+describe('WorkerList (ORG-SRS-001 + #27)', () => {
   beforeEach(() => {
     listMock.mockReset();
-    statusMock.mockReset();
+    lifecycleMock.mockReset();
+    openWorkMock.mockReset();
   });
 
   afterEach(cleanup);
 
-  it('renders loaded workers with status, eligible flag and action links', async () => {
+  it('renders loaded workers with status, eligible flag and lifecycle action links', async () => {
     listMock.mockResolvedValueOnce({ data: [workerA, workerB], total: 2, limit: 20, offset: 0 });
     render(<WorkerList />);
     expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
@@ -73,8 +75,11 @@ describe('WorkerList (ORG-SRS-001)', () => {
     expect(screen.getByText('Đủ điều kiện phân công')).toBeTruthy();
     expect(screen.getByText('Không đủ điều kiện (inactive/locked)')).toBeTruthy();
     expect(screen.getByText('Chặn phân công')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ngừng hoạt động' })).toBeTruthy(); // action on workerA row
-    expect(screen.getByRole('button', { name: 'Kích hoạt lại' })).toBeTruthy(); // action on workerB row
+    // ACTIVE row: SUSPEND + TERMINATE buttons
+    expect(screen.getByRole('button', { name: 'Tạm ngừng' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Chấm dứt' })).toBeTruthy();
+    // INACTIVE row: ACTIVATE
+    expect(screen.getByRole('button', { name: 'Kích hoạt lại' })).toBeTruthy();
   });
 
   it('shows empty state when no workers match filter', async () => {
@@ -97,28 +102,107 @@ describe('WorkerList (ORG-SRS-001)', () => {
     expect(alert403l.length).toBeGreaterThan(0);
   });
 
-  it('status change: confirm -> PATCH admin status -> row updates', async () => {
+  it('SUSPEND flow: pre-check open work → cảnh báo ảnh hưởng → reason bắt buộc → PATCH lifecycle', async () => {
     listMock.mockResolvedValueOnce({ data: [workerA], total: 1, limit: 20, offset: 0 });
-    statusMock.mockResolvedValueOnce({ id: 'w-1', status: 'INACTIVE' });
+    openWorkMock.mockResolvedValueOnce({ openAssignments: 3 });
+    lifecycleMock.mockResolvedValueOnce({
+      ...workerA,
+      status: 'INACTIVE',
+      eligible: false,
+      alreadyInState: false,
+      warning: { openAssignments: 3 },
+    });
     render(<WorkerList />);
-    const btn = await screen.findByRole('button', { name: 'Ngừng hoạt động' });
-    fireEvent.click(btn);
-    // confirm dialog appears
-    const confirmBtn = await screen.findByText('Xác nhận');
-    fireEvent.click(confirmBtn);
-    await waitFor(() => expect(statusMock).toHaveBeenCalledWith('w-1', { status: 'INACTIVE' }));
-    // row updated: eligible flag flips
-    await screen.findByText('Không đủ điều kiện (inactive/locked)');
-    expect(screen.queryByText('Xác nhận')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngừng' }));
+
+    // dialog có pre-check + cảnh báo ảnh hưởng (text bị ngắt bởi <strong> nên match theo
+    // function chứ không match chuỗi liền)
+    expect((await screen.findAllByText((_, el) => (el?.textContent ?? '').includes('đang có') && (el?.textContent ?? '').includes('3 công việc/lịch mở'))).length).toBeGreaterThan(0);
+    expect(screen.getByText(/lịch sử đã phát sinh vẫn được giữ nguyên/i)).toBeTruthy();
+    // lý do bắt buộc: submit rỗng → lỗi field, không gọi API
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận tạm ngừng/i }));
+    expect(screen.getByText(LOCKED_REASON)).toBeTruthy();
+    expect(lifecycleMock).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/lý do/i), { target: { value: 'Hết mùa cao điểm' } });
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận tạm ngừng/i }));
+
+    await waitFor(() => expect(lifecycleMock).toHaveBeenCalledWith('w-1', { action: 'SUSPEND', reason: 'Hết mùa cao điểm' }));
+    // row updated: eligible flag flips + thông báo có open work
+    expect(await screen.findByText(/Worker đang có 3 công việc\/lịch mở/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tạm ngừng' })).toBeNull();
+    expect(screen.queryByText(LOCKED_REASON)).toBeNull();
   });
 
-  it('status change failure surfaces error message', async () => {
-    listMock.mockResolvedValueOnce({ data: [workerA], total: 1, limit: 20, offset: 0 });
-    statusMock.mockRejectedValueOnce({ status: 403, message: 'Không có quyền' });
+  it('ACTIVATE flow không cần reason và cập nhật lại danh sách', async () => {
+    listMock.mockResolvedValueOnce({ data: [workerB], total: 1, limit: 20, offset: 0 });
+    lifecycleMock.mockResolvedValueOnce({ ...workerB, status: 'ACTIVE', eligible: true, alreadyInState: false });
     render(<WorkerList />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Ngừng hoạt động' }));
-    fireEvent.click(await screen.findByText('Xác nhận'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt lại' }));
+    // dialog không bắt buộc lý do — có thể xác nhận ngay
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận kích hoạt lại/i }));
+    await waitFor(() => expect(lifecycleMock).toHaveBeenCalledWith('w-2', { action: 'ACTIVATE', reason: null }));
+    expect(await screen.findByText(/Đã kích hoạt lại worker/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tạm ngừng' })).toBeTruthy();
+  });
+
+  it('alreadyInState: true từ API → info, không báo lỗi', async () => {
+    listMock.mockResolvedValueOnce({ data: [workerB], total: 1, limit: 20, offset: 0 });
+    lifecycleMock.mockResolvedValueOnce({ ...workerB, alreadyInState: true });
+    render(<WorkerList />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt lại' }));
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận kích hoạt lại/i }));
+    const info = await screen.findAllByText((_, el) => (el?.textContent ?? '').includes('đã ở trạng thái hoạt động'));
+    expect(info.length).toBeGreaterThan(0);
+    expect(screen.queryByRole('alert', { hidden: true })).toBeNull();
+  });
+
+  it('TERMINATE thiếu lý do từ API → lỗi hiện theo field reason trong dialog', async () => {
+    listMock.mockResolvedValueOnce({ data: [workerA], total: 1, limit: 20, offset: 0 });
+    openWorkMock.mockResolvedValueOnce({ openAssignments: 0 });
+    lifecycleMock.mockRejectedValueOnce({
+      status: 400,
+      message: LOCKED_REASON,
+      fieldErrors: { reason: [LOCKED_REASON] },
+    } as ApiError);
+    render(<WorkerList />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấm dứt' }));
+    fireEvent.change(screen.getByLabelText(/lý do/i), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận chấm dứt/i }));
+    await waitFor(() => expect(lifecycleMock).toHaveBeenCalledTimes(1));
+    const err = await screen.findAllByText((_, el) => (el?.textContent ?? '').includes(LOCKED_REASON));
+    expect(err.length).toBeGreaterThan(0);
+  });
+
+  it('status change failure surfaces server message (403 → cần ADMIN)', async () => {
+    listMock.mockResolvedValueOnce({ data: [workerA], total: 1, limit: 20, offset: 0 });
+    openWorkMock.mockResolvedValueOnce({ openAssignments: 0 });
+    lifecycleMock.mockRejectedValueOnce({ status: 403, message: 'Không có quyền' } as ApiError);
+    render(<WorkerList />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạm ngừng' }));
+    fireEvent.change(screen.getByLabelText(/lý do/i), { target: { value: 'Kiểm tra' } });
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận tạm ngừng/i }));
     const alert403b = await screen.findAllByText((_, el) => (el?.textContent ?? '').includes('Không có quyền — cần ADMIN'));
     expect(alert403b.length).toBeGreaterThan(0);
+  });
+
+  it('pre-check open work thất bại → dialog vẫn dùng được (cảnh báo từ response sau transition)', async () => {
+    listMock.mockResolvedValueOnce({ data: [workerA], total: 1, limit: 20, offset: 0 });
+    openWorkMock.mockRejectedValueOnce({ status: 500, message: 'Lỗi hệ thống' } as ApiError);
+    lifecycleMock.mockResolvedValueOnce({
+      ...workerA,
+      status: 'INACTIVE',
+      eligible: false,
+      alreadyInState: false,
+      warning: { openAssignments: 1 },
+    });
+    render(<WorkerList />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Chấm dứt' }));
+    expect(await screen.findByText(/Chưa kiểm tra được công việc\/lịch đang mở/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/lý do/i), { target: { value: 'Đóng cửa cơ sở' } });
+    fireEvent.click(screen.getByRole('button', { name: /xác nhận chấm dứt/i }));
+    await waitFor(() => expect(lifecycleMock).toHaveBeenCalledWith('w-1', { action: 'TERMINATE', reason: 'Đóng cửa cơ sở' }));
+    expect(await screen.findByText(/Worker đang có 1 công việc\/lịch mở/)).toBeTruthy();
+    expect(screen.queryByText('Đang xử lý…')).toBeNull();
   });
 });

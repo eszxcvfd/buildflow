@@ -15,6 +15,10 @@ import { UpdateTradeUseCase } from './application/use-case/update-trade.use-case
 import { ChangeTradeStatusUseCase } from './application/use-case/change-trade-status.use-case';
 import { GetTradeUseCase } from './application/use-case/get-trade.use-case';
 import { SearchTradesUseCase } from './application/use-case/search-trades.use-case';
+import { StatusTransitionWorkerUseCase } from './application/use-case/status-transition-worker.use-case';
+import { StatusTransitionContractorUseCase } from './application/use-case/status-transition-contractor.use-case';
+import { GetWorkerOpenWorkUseCase } from './application/use-case/get-worker-open-work.use-case';
+import { GetContractorOpenWorkUseCase } from './application/use-case/get-contractor-open-work.use-case';
 import { PgWorkerRepository } from './infrastructure/database/pg-worker.repository';
 import { PgTradeRepository } from './infrastructure/database/pg-trade.repository';
 import { PgContractorRepository } from './infrastructure/database/pg-contractor.repository';
@@ -49,6 +53,10 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     ChangeTradeStatusUseCase,
     GetTradeUseCase,
     SearchTradesUseCase,
+    StatusTransitionWorkerUseCase,
+    StatusTransitionContractorUseCase,
+    GetWorkerOpenWorkUseCase,
+    GetContractorOpenWorkUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: WORKER_REPOSITORY, useClass: PgWorkerRepository },

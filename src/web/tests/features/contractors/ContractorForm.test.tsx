@@ -1,7 +1,8 @@
 /**
- * DOM-level tests cho ContractorForm (ORG-SRS-002, fix #25).
- * Covers: edit PATCH payload — status giữ nguyên thì OMIT status; status thực sự đổi
- * (ACTIVE -> INACTIVE có confirm) thì payload có status; create vẫn gửi status.
+ * DOM-level tests cho ContractorForm (ORG-SRS-002, fix #25 + lifecycle #27).
+ * Covers: edit PATCH payload — status giữ nguyên thì OMIT status; #27: kể cả khi
+ * đổi status trên select, PATCH hồ sơ KHÔNG BAO GIỜ gửi status (lifecycle đi qua
+ * dialog ở màn chi tiết) mà chỉ hiện ghi chú hướng dẫn; create vẫn gửi status.
  */
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
@@ -61,8 +62,9 @@ describe('ContractorForm (ORG-SRS-002 #25)', () => {
     expect(id).toBe('11111111-1111-4111-8111-111111111111');
     expect(payload).toMatchObject({ contactName: 'Nguyen Van B', scope: 'Hoan thien' });
     expect(payload).not.toHaveProperty('status');
-    // không có confirm dialog status nào xuất hiện
+    // không có confirm dialog status cũ lẫn ghi chú lifecycle khi không đổi status
     expect(screen.queryByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeNull();
+    expect(screen.queryByText(/không thực hiện ở form hồ sơ/i)).toBeNull();
   });
 
   it('edit INACTIVE giữ nguyên status INACTIVE: payload không chứa status', async () => {
@@ -76,33 +78,35 @@ describe('ContractorForm (ORG-SRS-002 #25)', () => {
     expect(updateMock.mock.calls[0][1]).not.toHaveProperty('status');
   });
 
-  it('edit ACTIVE -> INACTIVE: confirm dialog xuất hiện, sau Xác nhận payload có status INACTIVE', async () => {
-    updateMock.mockResolvedValueOnce(makeContractor({ status: 'INACTIVE', eligible: false }));
+  it('edit ACTIVE -> INACTIVE trên select: KHÔNG confirm cũ, PATCH payload KHÔNG có status, hiện ghi chú lifecycle (#27)', async () => {
+    updateMock.mockResolvedValueOnce(makeContractor());
     render(<ContractorForm mode="edit" initial={makeContractor()} />);
 
     fireEvent.change(screen.getByLabelText(/trạng thái/i), { target: { value: 'INACTIVE' } });
-    // dialog xác nhận ACTIVE -> INACTIVE hiển thị trước khi submit
-    expect(await screen.findByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeTruthy();
+    // không còn dialog confirm cũ — thay bằng ghi chú hướng dẫn dùng lifecycle ở chi tiết
+    expect(screen.queryByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeNull();
+    expect(screen.getByText(/không thực hiện ở form hồ sơ/i)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/phạm vi công việc/i), { target: { value: 'Hoan thien' } });
     fireEvent.click(screen.getByRole('button', { name: /lưu thay đổi/i }));
 
-    expect(updateMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /xác nhận inactive/i }));
-
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
-    expect(updateMock.mock.calls[0][1]).toMatchObject({ status: 'INACTIVE', scope: 'Hoan thien' });
+    const [id, payload] = updateMock.mock.calls[0];
+    expect(id).toBe('11111111-1111-4111-8111-111111111111');
+    expect(payload).toMatchObject({ contactName: 'Nguyen Van A', scope: 'Hoan thien' });
+    expect(payload).not.toHaveProperty('status');
   });
 
-  it('edit INACTIVE -> ACTIVE (kích hoạt lại): payload có status ACTIVE — không cần confirm', async () => {
+  it('edit INACTIVE -> ACTIVE (chọn lại trên select): payload không có status, chỉ ghi chú (#27)', async () => {
     updateMock.mockResolvedValueOnce(makeContractor());
     render(<ContractorForm mode="edit" initial={makeContractor({ status: 'INACTIVE', eligible: false })} />);
 
     fireEvent.change(screen.getByLabelText(/trạng thái/i), { target: { value: 'ACTIVE' } });
     expect(screen.queryByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeNull();
+    expect(screen.getByText(/không thực hiện ở form hồ sơ/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /lưu thay đổi/i }));
 
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
-    expect(updateMock.mock.calls[0][1]).toMatchObject({ status: 'ACTIVE' });
+    expect(updateMock.mock.calls[0][1]).not.toHaveProperty('status');
   });
 
   it('create mode vẫn gửi status (mặc định ACTIVE)', async () => {

@@ -49,6 +49,28 @@ export interface UpdateContractorPayload {
   status?: 'ACTIVE' | 'INACTIVE';
 }
 
+/**
+ * ORG-SRS-004 (issue #27) — lifecycle status (API layer enum; DB status không đổi:
+ * ACTIVATE→ACTIVE, SUSPEND/TERMINATE→INACTIVE). Inline `status` trên PATCH hồ sơ
+ * vẫn hoạt động (backward-compat, deprecated) nhưng lifecycle có reason policy +
+ * open-work warning nên dùng hàm này.
+ */
+export type ContractorLifecycleAction = 'ACTIVATE' | 'SUSPEND' | 'TERMINATE';
+
+export interface ChangeContractorLifecycleStatusPayload {
+  action: ContractorLifecycleAction;
+  reason?: string | null;
+}
+
+export interface OpenWorkResult {
+  openAssignments: number;
+}
+
+export type ContractorLifecycleStatusChangeResult = Contractor & {
+  alreadyInState: boolean;
+  warning?: { openAssignments: number } | null;
+};
+
 export interface ApiError {
   status: number;
   message: string;
@@ -97,11 +119,19 @@ async function parseError(res: Response, fallback: string): Promise<never> {
         else if (lower.includes('phone') || lower.includes('điện thoại')) fieldErrors.phone = [...(fieldErrors.phone ?? []), m];
         else if (lower.includes('email')) fieldErrors.email = [...(fieldErrors.email ?? []), m];
         else if (lower.includes('trạng thái') || lower.includes('status')) fieldErrors.status = [...(fieldErrors.status ?? []), m];
+        else if (lower.includes('lý do') || lower.includes('reason')) fieldErrors.reason = [...(fieldErrors.reason ?? []), m];
         else fieldErrors._global = [...(fieldErrors._global ?? []), m];
       }
       throw { status: res.status, message: msg ?? fallback, code, fieldErrors, traceId } satisfies ApiError;
     }
-    if (msg) throw { status: res.status, message: msg, code, traceId } satisfies ApiError;
+    if (msg) {
+      // Single-string 400 từ use case (reason policy) → map vào field để dialog
+      // hiển thị lỗi theo field (cùng pattern trades.ts).
+      if (res.status === 400 && /(lý do|reason)/i.test(msg)) {
+        throw { status: res.status, message: msg, code, fieldErrors: { reason: [msg] }, traceId } satisfies ApiError;
+      }
+      throw { status: res.status, message: msg, code, traceId } satisfies ApiError;
+    }
   }
   if (typeof body === 'string' && body.length > 0) {
     throw { status: res.status, message: body } satisfies ApiError;
@@ -184,4 +214,59 @@ export async function updateContractor(id: string, payload: UpdateContractorPayl
     await parseError(res, `Cập nhật contractor thất bại (${res.status})`);
   }
   return (await res.json()) as Contractor;
+}
+
+/**
+ * ORG-SRS-004 (issue #27) — lifecycle status: ACTIVATE/SUSPEND/TERMINATE.
+ * SUSPEND/TERMINATE bắt buộc reason (1-500) — API trả 400 kèm message lý do
+ * (bắt buộc/quá dài) được parse về field `reason` để dialog hiển thị theo field.
+ */
+export async function changeContractorLifecycleStatus(
+  id: string,
+  payload: ChangeContractorLifecycleStatusPayload,
+): Promise<ContractorLifecycleStatusChangeResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/contractors/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseError(res, `Chuyển trạng thái contractor thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyInState, warning, ...profile } = body;
+  return {
+    ...(profile as unknown as Contractor),
+    alreadyInState: alreadyInState === true,
+    warning: warning && typeof warning === 'object'
+      ? { openAssignments: Number((warning as { openAssignments?: unknown }).openAssignments ?? 0) }
+      : null,
+  };
+}
+
+/**
+ * ORG-SRS-004 (issue #27) — pre-check open work (chỉ đếm cho confirm dialog,
+ * không chặn, không audit).
+ */
+export async function getContractorOpenWork(id: string): Promise<OpenWorkResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/contractors/${encodeURIComponent(id)}/open-work`, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    await parseError(res, `Kiểm tra công việc mở của contractor thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as OpenWorkResult;
+  return { openAssignments: Number(body.openAssignments ?? 0) };
 }

@@ -1,0 +1,67 @@
+{
+  "workerId": "e2e4a000-0000-4000-8000-0000000000a1",
+  "contractorId": "e2e4c000-0000-4000-8000-0000000000c1",
+  "assignmentOpen": "e2e4c100-0000-4000-8000-0000000000c2",
+  "results": [
+    {
+      "id": "B0",
+      "ok": true,
+      "note": "assignment seed=1; worker/contractor đã về ACTIVE"
+    },
+    {
+      "id": "B1",
+      "ok": true,
+      "note": "warning '1 công việc/lịch mở' + field error 'Lý do là bắt buộc khi tạm ngừng/chấm dứt'; audit giữ 7"
+    },
+    {
+      "id": "B2",
+      "ok": true,
+      "note": "DB:\nstatus  | failed_login_count | locked_until \n----------+--------------------+--------------\n INACTIVE |                  0 | \n(1 row)\naudit:\naction        | result  |                    reason                    |   b    |    a     |                warning                |            actor_user_id             | correlation_id \n----------------------+---------+----------------------------------------------+--------+----------+---------------------------------------+--------------------------------------+----------------\n ORG_WORKER_SUSPENDED | SUCCESS | Tạm ngừng do thiếu việc trong kỳ (E2E run 3) | ACTIVE | INACTIVE | Nguồn lực đang có 1 công việc/lịch mở | 11111111-1111-4111-8111-111111111111 | \n(1 row)"
+    },
+    {
+      "id": "B3",
+      "ok": true,
+      "note": "UI info alreadyInState; audit giữ 3; status ACTIVE (đúng thiết kế: không tạo audit trùng)"
+    },
+    {
+      "id": "B4",
+      "ok": true,
+      "note": "DB:\nstatus  | failed_login_count | locked_until \n----------+--------------------+--------------\n INACTIVE |                  0 | \n(1 row)\naudit:\naction         |                 reason                  |   b    |    a     \n-----------------------+-----------------------------------------+--------+----------\n ORG_WORKER_TERMINATED | Chấm dứt hồ sơ do nghỉ việc (E2E run 3) | ACTIVE | INACTIVE\n(1 row)"
+    },
+    {
+      "id": "B5",
+      "ok": true,
+      "note": "timeline full + deep-link '/admin/audit-logs?entityType=WORKER&entityId=e2e4a000-0000-4000-8000-0000000000a1&result=SUCCESS' hiển thị ORG_WORKER_*"
+    },
+    {
+      "id": "B6",
+      "ok": true,
+      "note": "API ACTIVE không chứa worker; eligible=false; open-work vẫn 1; UI filter INACTIVE có / ACTIVE không"
+    },
+    {
+      "id": "B7",
+      "ok": true,
+      "note": "DB:\nstatus  \n----------\n INACTIVE\n(1 row)\naudit:\naction          |                     reason                     |   b    |    a     \n--------------------------+------------------------------------------------+--------+----------\n ORG_CONTRACTOR_SUSPENDED | Tạm ngừng nhà thầu do chậm tiến độ (E2E run 3) | ACTIVE | INACTIVE\n(1 row)"
+    },
+    {
+      "id": "B8",
+      "ok": true,
+      "note": "DB:\nstatus \n--------\n ACTIVE\n(1 row)\naudit:\naction           |             reason              |    b     |   a    \n----------------------------+---------------------------------+----------+--------\n ORG_CONTRACTOR_REACTIVATED | Hết lý do tạm ngừng (E2E run 3) | INACTIVE | ACTIVE\n(1 row)"
+    },
+    {
+      "id": "B9",
+      "ok": true,
+      "note": "API pm worker=403 contractor=403 open=403; anon=401; UI sidebar ẩn + card 403"
+    },
+    {
+      "id": "B10",
+      "ok": true,
+      "note": "HTTP r1=200(alreadyInState=false) r2=200(alreadyInState=false); audit rows=1; status INACTIVE nhất quán"
+    },
+    {
+      "id": "B11",
+      "ok": true,
+      "note": "400 \"Lý do là bắt buộc khi tạm ngừng/chấm dứt\" + 400 [\"Lý do tối đa 500 ký tự\"]; status giữ nguyên:\nstatus  | failed_login_count | locked_until \n----------+--------------------+--------------\n INACTIVE |                  0 | \n(1 row)"
+    }
+  ]
+}

@@ -163,7 +163,7 @@ Audit trail ghi lại các event bảo mật/IAM quan trọng (login success/fai
 - Phân trang là limit/offset kèm `total` tuyệt đối; chưa có cursor pagination.
 - Response `data[]` có leak guard: nếu before/after data vi phạm `AuditLogEntity.isSanitized()` (xem 8.5) thì request bị từ chối `400` — defense in depth phía read.
 - Body lỗi hiện tại là shape Nest default `{ statusCode, message }`; freeze sang Problem Details ([`NETCODE.md`](NETCODE.md) §3) phải đi cùng OpenAPI và đồng bộ consumer.
-- Response `data[]` item gồm các trường: `id`, `actorUserId`, `action`, `entityType`, `entityId`, `beforeData`, `afterData`, `reason`, `result`, `ipAddress`, `userAgent`, `correlationId`, `createdAt`. `reason` là lý do nghiệp vụ nullable do producer ghi (write path hiện tại chưa ghi `reason` → thường `null`).
+- Response `data[]` item gồm các trường: `id`, `actorUserId`, `action`, `entityType`, `entityId`, `beforeData`, `afterData`, `reason`, `result`, `ipAddress`, `userAgent`, `correlationId`, `createdAt`. `reason` là lý do nghiệp vụ nullable do producer ghi; write path wire lần đầu ở ORG-SRS-004 (issue #27): `PATCH /api/v1/workers/:id/status` và `PATCH /api/v1/contractors/:id/status` ghi `reason` (bắt buộc 1-500 cho SUSPEND/TERMINATE, optional cho ACTIVATE) vào cột `audit_logs.reason`; các producer còn lại chưa ghi `reason` → `null`.
 
 Ví dụ một item trong `data[]`:
 
@@ -197,7 +197,9 @@ Ví dụ một item trong `data[]`:
     - `POST /api/v1/admin/users` → `IAM_USER_CREATED`
     - `PATCH /api/v1/admin/users/:id` → `IAM_USER_UPDATED`
     - `POST /api/v1/workers` → `ORG_WORKER_CREATED`; `PATCH /api/v1/workers/:id` → `ORG_WORKER_UPDATED`
+    - `PATCH /api/v1/workers/:id/status` → `ORG_WORKER_SUSPENDED`/`ORG_WORKER_TERMINATED`/`ORG_WORKER_REACTIVATED` (ORG-SRS-004, action `SUSPEND`/`TERMINATE`/`ACTIVATE`)
     - `POST /api/v1/contractors` → `ORG_CONTRACTOR_CREATED`; `PATCH /api/v1/contractors/:id` → `ORG_CONTRACTOR_UPDATED`/`ORG_CONTRACTOR_STATUS_CHANGED`
+    - `PATCH /api/v1/contractors/:id/status` → `ORG_CONTRACTOR_SUSPENDED`/`ORG_CONTRACTOR_TERMINATED`/`ORG_CONTRACTOR_REACTIVATED` (ORG-SRS-004, action `SUSPEND`/`TERMINATE`/`ACTIVATE`)
     - `POST /api/v1/trades` → `ORG_TRADE_CREATED`; `PATCH /api/v1/trades/:id` → `ORG_TRADE_UPDATED`; `PATCH /api/v1/trades/:id/status` → `ORG_TRADE_STATUS_CHANGED`
   - **Lenient (public/self-service — header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai không bao giờ block/400):**
     - `POST /api/v1/auth/login` → `AUTH_LOGIN_SUCCESS`/`AUTH_LOGIN_FAILED`

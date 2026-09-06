@@ -24,16 +24,19 @@ export function ContractorForm({ mode, initial }: Props) {
   const [email, setEmail] = React.useState(initial?.email ?? '');
   const [scope, setScope] = React.useState(initial?.scope ?? '');
   const [status, setStatus] = React.useState(initial?.status ?? 'ACTIVE');
-  const [showStatusConfirm, setShowStatusConfirm] = React.useState(false);
-  const statusConfirmedRef = React.useRef(false);
+  const [statusChangeNote, setStatusChangeNote] = React.useState(false);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
   const [globalError, setGlobalError] = React.useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
-  // PATCH payload theo mode: edit chỉ gửi status khi nó THỰC SỰ đổi so với initial (#25).
+  // #27 (ORG-SRS-004): form sửa hồ sơ KHÔNG đổi status inline nữa — đã có lifecycle
+  // riêng (SUSPEND/TERMINATE + reason + open-work warning) ở màn chi tiết; giữ select
+  // hiển thị chỉ để ngữ cảnh. PATCH hồ sơ không bao giờ mang status (tránh 2 luồng).
+
+  // PATCH payload theo mode: edit KHÔNG BAO GIỜ gửi status (#27) — lifecycle status
+  // đi qua dialog riêng (PATCH /contractors/:id/status) ở màn chi tiết.
   function buildPayload(): UpdateContractorPayload {
-    const isStatusChange = mode === 'edit' && !!initial && status !== initial.status;
     const payload: UpdateContractorPayload = {
       code: code.trim() || undefined,
       name: name.trim() || undefined,
@@ -41,7 +44,6 @@ export function ContractorForm({ mode, initial }: Props) {
       phone: phone.trim() || null,
       email: email.trim() || null,
       scope: scope.trim(),
-      ...(isStatusChange ? { status: status as 'ACTIVE' | 'INACTIVE' } : {}),
     };
     return payload;
   }
@@ -84,8 +86,6 @@ export function ContractorForm({ mode, initial }: Props) {
       } else if (initial) {
         await updateContractor(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật nhà thầu thành công');
-        setShowStatusConfirm(false);
-        statusConfirmedRef.current = false;
         setTimeout(() => router.push(`/contractors/${initial.id}`), 800);
       }
     } catch (e) {
@@ -101,32 +101,20 @@ export function ContractorForm({ mode, initial }: Props) {
     setGlobalSuccess(null);
 
     const validation = validateContractorCreate({ code, name, contactName, phone, email, scope, status });
-    // For edit, allow partial but we still validate required fields
     if (!validation.valid) {
       setFieldErrors(validation.fieldErrors);
       return;
     }
     setFieldErrors({});
-    // ACTIVE -> INACTIVE (thực sự đổi) cần confirm trước khi ghi (#25: giữ confirm dialog khi đổi status).
-    const isStatusChange = mode === 'edit' && !!initial && status !== initial.status;
-    if (isStatusChange && status === 'INACTIVE' && !statusConfirmedRef.current) {
-      setShowStatusConfirm(true);
-      return;
-    }
     await save();
   }
 
   function handleStatusChange(newStatus: string) {
-    const changed = mode === 'edit' && !!initial && newStatus !== initial.status;
-    if (changed && newStatus === 'INACTIVE') {
-      // Show confirmation dialog for ACTIVE -> INACTIVE; dialog confirm sẽ ghi thật.
-      setShowStatusConfirm(true);
-      setStatus(newStatus);
-    } else {
-      // ACTIVE <- INACTIVE (reactivate) hoặc chọn lại giá trị cũ: không cần confirm.
-      setStatus(newStatus);
-      setShowStatusConfirm(false);
-    }
+    // #27: select chỉ để ngữ cảnh — thay đổi trạng thái phải qua dialog lifecycle
+    // (có reason + open-work warning). Nếu admin đang muốn đổi status, hiện ghi chú
+    // hướng dẫn thay vì confirm cũ (bỏ đường inline gây 2 luồng xung đột).
+    setStatus(newStatus);
+    if (mode === 'edit' && !!initial) setStatusChangeNote(newStatus !== initial.status);
   }
 
   return (
@@ -137,6 +125,14 @@ export function ContractorForm({ mode, initial }: Props) {
         </p>
       ) : null}
 
+      {statusChangeNote ? (
+        <Alert tone="info">
+          Thay đổi trạng thái (tạm ngừng/chấm dứt/kích hoạt lại) không thực hiện ở form hồ sơ —
+          vào trang chi tiết để dùng luồng lifecycle: hệ thống kiểm tra công việc/lịch đang mở,
+          yêu cầu lý do và ghi nhật ký thao tác.
+        </Alert>
+      ) : null}
+
       {globalError ? <Alert tone="error">{globalError}</Alert> : null}
       {globalSuccess ? <Alert tone="success">{globalSuccess}</Alert> : null}
 
@@ -145,17 +141,6 @@ export function ContractorForm({ mode, initial }: Props) {
           Nhà thầu hiện không đủ điều kiện phân công (INACTIVE). Lịch sử cũ vẫn xem được; phân công
           mới sẽ bị chặn.
         </Alert>
-      ) : null}
-
-      {showStatusConfirm ? (
-        <div style={{ border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>
-          <p style={{ margin: 0, fontWeight: 600, color: '#92400e' }}>Xác nhận đổi trạng thái sang INACTIVE?</p>
-          <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>Nhà thầu ngừng hoạt động sẽ không được chọn cho phân công mới nhưng lịch sử cũ vẫn được giữ. Hành động này sẽ được audit.</p>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-            <Button type="button" variant="secondary" onClick={() => { setShowStatusConfirm(false); setStatus(initial?.status ?? 'ACTIVE'); }}>Hủy</Button>
-            <Button type="button" onClick={() => { setShowStatusConfirm(false); statusConfirmedRef.current = true; void save(); }}>Xác nhận INACTIVE</Button>
-          </div>
-        </div>
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>

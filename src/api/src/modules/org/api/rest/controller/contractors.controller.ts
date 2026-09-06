@@ -20,7 +20,10 @@ import { CreateContractorUseCase } from '../../../application/use-case/create-co
 import { UpdateContractorUseCase } from '../../../application/use-case/update-contractor.use-case';
 import { GetContractorUseCase } from '../../../application/use-case/get-contractor.use-case';
 import { SearchContractorsUseCase } from '../../../application/use-case/search-contractors.use-case';
+import { StatusTransitionContractorUseCase } from '../../../application/use-case/status-transition-contractor.use-case';
+import { GetContractorOpenWorkUseCase } from '../../../application/use-case/get-contractor-open-work.use-case';
 import { CreateContractorDto, UpdateContractorDto } from '../presentation/dto/contractor.dto';
+import { ChangeResourceStatusDto } from '../presentation/dto/resource-status.dto';
 import { toContractorResponse, toContractorListResponse } from '../presentation/mapper/contractor.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
@@ -52,6 +55,8 @@ export class ContractorsController {
     private readonly updateContractor: UpdateContractorUseCase,
     private readonly getContractor: GetContractorUseCase,
     private readonly searchContractors: SearchContractorsUseCase,
+    private readonly transitionContractorStatus: StatusTransitionContractorUseCase,
+    private readonly getContractorOpenWork: GetContractorOpenWorkUseCase,
   ) {}
 
   @Post()
@@ -163,5 +168,50 @@ export class ContractorsController {
       correlationId: meta.correlationId,
     });
     return toContractorResponse(entity);
+  }
+
+  /**
+   * ORG-SRS-004 (issue #27) — lifecycle nhà thầu. PATCH /contractors/:id inline
+   * status cũ vẫn hoạt động (backward-compat, deprecated — xem ENDPOINTS.md).
+   * Action enum API layer, KHÔNG đổi enum DB.
+   */
+  @Patch(':id/status')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async changeStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ChangeResourceStatusDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertAdmin(req);
+    const meta = getMeta(req);
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
+    const { entity, alreadyInState, warning } = await this.transitionContractorStatus.execute({
+      contractorId: id,
+      action: dto.action,
+      reason: dto.reason ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return {
+      ...toContractorResponse(entity),
+      alreadyInState,
+      ...(warning !== undefined ? { warning } : {}),
+    };
+  }
+
+  /**
+   * ORG-SRS-004 (issue #27) — pre-check open work (UI confirm dialog), admin-only,
+   * chỉ đếm, không chặn, không audit.
+   */
+  @Get(':id/open-work')
+  async openWork(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    assertAdmin(req);
+    return this.getContractorOpenWork.execute({ contractorId: id });
   }
 }

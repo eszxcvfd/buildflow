@@ -22,6 +22,12 @@ export interface WorkerRepositoryPort {
   // Trades handling via resource_trades table
   assignTradesWithClient?(client: PoolClient, params: { userId: string; trades: Array<{ tradeId: string; skillLevel: number }>; now: Date }): Promise<void>;
   findActiveTradesByUserId(userId: string): Promise<Array<{ tradeId: string; skillLevel: number }>>;
+  /**
+   * ORG-SRS-004 (issue #27): đếm assignments đang mở của worker
+   * (worker_id + status PENDING_ACCEPTANCE/ACTIVE — migration 0001 CHECK).
+   * Dùng cho open-work warning; KHÔNG chặn transition.
+   */
+  countOpenAssignments(workerId: string): Promise<number>;
 }
 
 export const WORKER_REPOSITORY = Symbol('WORKER_REPOSITORY');

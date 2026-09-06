@@ -51,7 +51,9 @@ describe('PgAuditRepository IAM-SRS-008 (unit)', () => {
     expect(sql).toContain('INSERT INTO public.audit_logs');
     expect(sql).toContain('ON CONFLICT (correlation_id, action) WHERE correlation_id IS NOT NULL DO NOTHING');
     expect(values[1]).toBe('AUTH_LOGIN_SUCCESS');
-    expect(values[9]).toBe('corr-1');
+    // reason column wired (position 7): null khi không truyền
+    expect(values[6]).toBeNull();
+    expect(values[10]).toBe('corr-1');
   });
 
   it('log không có correlationId → INSERT thuần, không ON CONFLICT', async () => {
@@ -63,7 +65,20 @@ describe('PgAuditRepository IAM-SRS-008 (unit)', () => {
 
     const [sql, values] = query.mock.calls[0];
     expect(sql).not.toContain('ON CONFLICT');
-    expect(values[9]).toBeNull();
+    expect(values[6]).toBeNull();
+    expect(values[10]).toBeNull();
+  });
+
+  it('log với reason → reason được ghi vào cột audit_logs.reason (issue #27, lần đầu wire)', async () => {
+    const query = makeExecutorQuery();
+    installFakePool(query);
+    const repo = new PgAuditRepository();
+
+    await repo.log({ ...BASE_PARAMS, reason: 'Vi phạm hợp đồng', correlationId: 'corr-r' });
+
+    const [sql, values] = query.mock.calls[0];
+    expect(sql).toContain('reason');
+    expect(values[6]).toBe('Vi phạm hợp đồng');
   });
 
   it('idempotency: hai insert cùng (correlationId, action) — lần 2 no-op rowCount 0, không lỗi', async () => {

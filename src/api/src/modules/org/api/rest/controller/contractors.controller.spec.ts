@@ -4,6 +4,8 @@ import { CreateContractorUseCase } from '../../../application/use-case/create-co
 import { UpdateContractorUseCase } from '../../../application/use-case/update-contractor.use-case';
 import { GetContractorUseCase } from '../../../application/use-case/get-contractor.use-case';
 import { SearchContractorsUseCase } from '../../../application/use-case/search-contractors.use-case';
+import { StatusTransitionContractorUseCase } from '../../../application/use-case/status-transition-contractor.use-case';
+import { GetContractorOpenWorkUseCase } from '../../../application/use-case/get-contractor-open-work.use-case';
 import { ContractorEntity } from '../../../domain/entity/contractor.entity';
 
 function makeContractor(id: string, status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE'): ContractorEntity {
@@ -40,6 +42,8 @@ describe('ContractorsController ORG-SRS-002', () => {
   let updateMock: jest.Mocked<UpdateContractorUseCase>;
   let getMock: jest.Mocked<GetContractorUseCase>;
   let searchMock: jest.Mocked<SearchContractorsUseCase>;
+  let transitionMock: jest.Mocked<StatusTransitionContractorUseCase>;
+  let openWorkMock: jest.Mocked<GetContractorOpenWorkUseCase>;
   let controller: ContractorsController;
 
   beforeEach(() => {
@@ -47,7 +51,9 @@ describe('ContractorsController ORG-SRS-002', () => {
     updateMock = { execute: jest.fn(async () => ({ entity: makeContractor('11111111-1111-4111-8111-111111111111') })) } as unknown as jest.Mocked<UpdateContractorUseCase>;
     getMock = { execute: jest.fn(async () => ({ entity: makeContractor('11111111-1111-4111-8111-111111111111') })) } as unknown as jest.Mocked<GetContractorUseCase>;
     searchMock = { execute: jest.fn(async () => ({ entities: [makeContractor('11111111-1111-4111-8111-111111111111'), makeContractor('22222222-2222-4222-8222-222222222222', 'INACTIVE')], total: 2 })) } as unknown as jest.Mocked<SearchContractorsUseCase>;
-    controller = new ContractorsController(createMock, updateMock, getMock, searchMock);
+    transitionMock = { execute: jest.fn(async () => ({ entity: makeContractor('11111111-1111-4111-8111-111111111111'), alreadyInState: false })) } as unknown as jest.Mocked<StatusTransitionContractorUseCase>;
+    openWorkMock = { execute: jest.fn(async () => ({ openAssignments: 0 })) } as unknown as jest.Mocked<GetContractorOpenWorkUseCase>;
+    controller = new ContractorsController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock);
   });
 
   it('ADMIN có thể tạo contractor', async () => {
@@ -130,6 +136,60 @@ describe('ContractorsController ORG-SRS-002', () => {
 
       await controller.update(id, updateDto, adminReq() as never);
       expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
+  });
+
+  describe('ORG-SRS-004 lifecycle endpoints (issue #27)', () => {
+    const CID = '11111111-1111-4111-8111-111111111111';
+
+    it('PATCH :id/status — ADMIN transition: forward action/reason + metadata, response kèm alreadyInState', async () => {
+      const res = await controller.changeStatus(CID, { action: 'SUSPEND', reason: 'Vi phạm hợp đồng' } as never, adminReqWithCorr(VALID_CORR) as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(expect.objectContaining({
+        contractorId: CID,
+        action: 'SUSPEND',
+        reason: 'Vi phạm hợp đồng',
+        actorUserId: 'admin-1',
+        correlationId: VALID_CORR,
+      }));
+      expect(res.alreadyInState).toBe(false);
+    });
+
+    it('PATCH :id/status — non-ADMIN bị chặn 403', async () => {
+      await expect(controller.changeStatus(CID, { action: 'TERMINATE', reason: 'x' } as never, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('PATCH :id/status — ACTIVATE reason optional, response không warning khi use case không báo', async () => {
+      const res = await controller.changeStatus(CID, { action: 'ACTIVATE' } as never, adminReq() as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTIVATE', reason: null }));
+      expect(res.alreadyInState).toBe(false);
+      expect((res as Record<string, unknown>).warning).toBeUndefined();
+    });
+
+    it('PATCH :id/status — response phản ánh warning {openAssignments}', async () => {
+      transitionMock.execute.mockResolvedValue({ entity: makeContractor(CID, 'INACTIVE'), alreadyInState: false, warning: { openAssignments: 2 } });
+      const res = await controller.changeStatus(CID, { action: 'SUSPEND', reason: 'x' } as never, adminReq() as never);
+      expect(res.warning).toEqual({ openAssignments: 2 });
+      expect(res.status).toBe('INACTIVE');
+    });
+
+    it('PATCH :id/status — X-Correlation-Id sai → 400 actionable, không gọi use case', async () => {
+      await expect(controller.changeStatus(CID, { action: 'TERMINATE', reason: 'x' } as never, adminReqWithCorr('not-a-uuid') as never)).rejects.toThrow(
+        new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'),
+      );
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('GET :id/open-work — ADMIN được phép, trả {openAssignments}', async () => {
+      openWorkMock.execute.mockResolvedValue({ openAssignments: 5 });
+      const res = await controller.openWork(CID, adminReq() as never);
+      expect(openWorkMock.execute).toHaveBeenCalledWith({ contractorId: CID });
+      expect(res.openAssignments).toBe(5);
+    });
+
+    it('GET :id/open-work — non-ADMIN bị chặn 403', async () => {
+      await expect(controller.openWork(CID, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(openWorkMock.execute).not.toHaveBeenCalled();
     });
   });
 });

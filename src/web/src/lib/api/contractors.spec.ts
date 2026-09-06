@@ -1,4 +1,30 @@
-import { listContractors, getContractor, createContractor, updateContractor } from './contractors';
+import {
+  listContractors,
+  getContractor,
+  createContractor,
+  updateContractor,
+  changeContractorLifecycleStatus,
+  getContractorOpenWork,
+  type Contractor,
+} from './contractors';
+
+function makeContractor(overrides: Partial<Contractor> = {}): Contractor {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    code: 'CTR-001',
+    name: 'Alpha',
+    contactName: 'Nguyen Van A',
+    phone: '+84901234567',
+    email: 'a@example.com',
+    status: 'ACTIVE',
+    scope: 'Thi cong phan tho',
+    eligible: true,
+    createdBy: 'u-admin',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 function response(status: number, body: unknown, contentType = 'application/json') {
   return {
@@ -64,5 +90,52 @@ describe('web contractor API client ORG-SRS-002', () => {
     const res = await listContractors({});
     expect(res.data[0].eligible).toBe(true);
     expect(res.total).toBe(1);
+  });
+
+  describe('lifecycle status (ORG-SRS-004, issue #27)', () => {
+    it('changeContractorLifecycleStatus PATCHes /contractors/:id/status với action + reason', async () => {
+      const profile = makeContractor({ status: 'INACTIVE', eligible: false });
+      fetchMock.mockResolvedValue(response(200, { ...profile, alreadyInState: false, warning: { openAssignments: 2 } }));
+      const res = await changeContractorLifecycleStatus('11111111-1111-4111-8111-111111111111', { action: 'TERMINATE', reason: 'Hết hợp đồng' });
+      expect(res.status).toBe('INACTIVE');
+      expect(res.eligible).toBe(false);
+      expect(res.alreadyInState).toBe(false);
+      expect(res.warning?.openAssignments).toBe(2);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/v1/contractors/11111111-1111-4111-8111-111111111111/status');
+      expect((init as RequestInit).method).toBe('PATCH');
+      expect(JSON.parse(String((init as RequestInit).body))).toEqual({ action: 'TERMINATE', reason: 'Hết hợp đồng' });
+    });
+
+    it('maps 400 thiếu lý do → fieldErrors.reason (hiển thị theo field)', async () => {
+      fetchMock.mockResolvedValue(response(400, { message: 'Lý do là bắt buộc khi tạm ngừng/chấm dứt' }));
+      await expect(changeContractorLifecycleStatus('11111111-1111-4111-8111-111111111111', { action: 'SUSPEND' })).rejects.toMatchObject({
+        status: 400,
+        message: 'Lý do là bắt buộc khi tạm ngừng/chấm dứt',
+        fieldErrors: expect.objectContaining({ reason: expect.arrayContaining(['Lý do là bắt buộc khi tạm ngừng/chấm dứt']) }),
+      });
+    });
+
+    it('parses alreadyInState:true (request lặp — không báo lỗi, không audit trùng)', async () => {
+      fetchMock.mockResolvedValue(response(200, { ...makeContractor(), alreadyInState: true }));
+      const res = await changeContractorLifecycleStatus('11111111-1111-4111-8111-111111111111', { action: 'ACTIVATE', reason: null });
+      expect(res.alreadyInState).toBe(true);
+      expect(res.warning).toBeNull();
+    });
+
+    it('getContractorOpenWork GETs /contractors/:id/open-work và trả số công việc mở', async () => {
+      fetchMock.mockResolvedValue(response(200, { openAssignments: 4 }));
+      const res = await getContractorOpenWork('11111111-1111-4111-8111-111111111111');
+      expect(res.openAssignments).toBe(4);
+      const [url] = fetchMock.mock.calls[0];
+      expect(url).toContain('/api/v1/contractors/11111111-1111-4111-8111-111111111111/open-work');
+    });
+
+    it('preserves 403 from lifecycle endpoints', async () => {
+      fetchMock.mockResolvedValue(response(403, { message: 'Không có quyền truy cập' }));
+      await expect(changeContractorLifecycleStatus('11111111-1111-4111-8111-111111111111', { action: 'SUSPEND', reason: 'x' })).rejects.toMatchObject({ status: 403 });
+      fetchMock.mockResolvedValue(response(403, { message: 'Không có quyền truy cập' }));
+      await expect(getContractorOpenWork('11111111-1111-4111-8111-111111111111')).rejects.toMatchObject({ status: 403 });
+    });
   });
 });

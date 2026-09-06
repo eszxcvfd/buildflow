@@ -178,6 +178,35 @@ describe('AuditLogList (IAM-SRS-008)', () => {
     expect((screen.getByLabelText('Hành động') as HTMLSelectElement).value).toBe('AUTH_LOGIN_FAILED');
   });
 
+  it('deep link ?entityType=&entityId=&result= (StatusTimeline ORG-SRS-004) → lần gọi đầu đã mang đủ filter', async () => {
+    mockSearch = 'entityType=WORKER&entityId=e2e4a000-0000-4000-8000-0000000000a1&result=SUCCESS';
+    listMock.mockResolvedValueOnce(makePage(1, 1, 0));
+    render(<AuditLogList />);
+    await screen.findByText(/Tổng: 1 bản ghi/);
+    await waitFor(() => {
+      expect(listMock.mock.calls[0][0]).toMatchObject({
+        entityType: 'WORKER',
+        entityId: 'e2e4a000-0000-4000-8000-0000000000a1',
+        result: 'SUCCESS',
+      });
+    });
+    // draft filter cũng được khởi tạo theo deep link
+    expect((screen.getByLabelText('Loại đối tượng') as HTMLSelectElement).value).toBe('WORKER');
+    expect((screen.getByLabelText('ID đối tượng') as HTMLInputElement).value).toBe(
+      'e2e4a000-0000-4000-8000-0000000000a1',
+    );
+    expect((screen.getByLabelText('Kết quả') as HTMLSelectElement).value).toBe('SUCCESS');
+  });
+
+  it('dropdown Hành động có option ORG_WORKER_*/ORG_CONTRACTOR_* (E2E ORG-SRS-004 §5e)', async () => {
+    listMock.mockResolvedValueOnce(makePage(1, 1, 0));
+    render(<AuditLogList />);
+    await screen.findByText(/Tổng: 1 bản ghi/);
+    for (const a of ['ORG_WORKER_SUSPENDED', 'ORG_WORKER_REACTIVATED', 'ORG_WORKER_TERMINATED',
+      'ORG_CONTRACTOR_SUSPENDED', 'ORG_CONTRACTOR_REACTIVATED', 'ORG_CONTRACTOR_TERMINATED']) {
+      expect(screen.getByRole('option', { name: a })).toBeTruthy();
+    }
+  });
   it('deep link action ngoài KNOWN_ACTIONS → option bổ sung, select giữ giá trị (Finding 5)', async () => {
     mockSearch = 'action=IAM_PROFILE_UPDATED';
     listMock.mockResolvedValueOnce(makePage(1, 1, 0));

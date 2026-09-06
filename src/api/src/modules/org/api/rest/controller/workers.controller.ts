@@ -20,7 +20,10 @@ import { CreateWorkerUseCase } from '../../../application/use-case/create-worker
 import { UpdateWorkerUseCase } from '../../../application/use-case/update-worker.use-case';
 import { GetWorkerUseCase } from '../../../application/use-case/get-worker.use-case';
 import { SearchWorkersUseCase } from '../../../application/use-case/search-workers.use-case';
+import { StatusTransitionWorkerUseCase } from '../../../application/use-case/status-transition-worker.use-case';
+import { GetWorkerOpenWorkUseCase } from '../../../application/use-case/get-worker-open-work.use-case';
 import { CreateWorkerDto, UpdateWorkerDto } from '../presentation/dto/worker.dto';
+import { ChangeResourceStatusDto } from '../presentation/dto/resource-status.dto';
 import { toWorkerResponse, toWorkerListResponse } from '../presentation/mapper/worker.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
@@ -52,6 +55,8 @@ export class WorkersController {
     private readonly updateWorker: UpdateWorkerUseCase,
     private readonly getWorker: GetWorkerUseCase,
     private readonly searchWorkers: SearchWorkersUseCase,
+    private readonly transitionWorkerStatus: StatusTransitionWorkerUseCase,
+    private readonly getWorkerOpenWork: GetWorkerOpenWorkUseCase,
   ) {}
 
   @Post()
@@ -167,5 +172,49 @@ export class WorkersController {
       correlationId: meta.correlationId,
     });
     return toWorkerResponse(entity);
+  }
+
+  /**
+   * ORG-SRS-004 (issue #27) — lifecycle worker. KHÔNG đụng PATCH /admin/users/:id/status
+   * cũ (giữ nguyên cho LOCKED/security). Action enum API layer, KHÔNG đổi enum DB.
+   */
+  @Patch(':id/status')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async changeStatus(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ChangeResourceStatusDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertAdmin(req);
+    const meta = getMeta(req);
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
+    const { entity, alreadyInState, warning } = await this.transitionWorkerStatus.execute({
+      workerId: id,
+      action: dto.action,
+      reason: dto.reason ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return {
+      ...toWorkerResponse(entity),
+      alreadyInState,
+      ...(warning !== undefined ? { warning } : {}),
+    };
+  }
+
+  /**
+   * ORG-SRS-004 (issue #27) — pre-check open work (UI confirm dialog), admin-only,
+   * chỉ đếm, không chặn, không audit.
+   */
+  @Get(':id/open-work')
+  async openWork(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    assertAdmin(req);
+    return this.getWorkerOpenWork.execute({ workerId: id });
   }
 }

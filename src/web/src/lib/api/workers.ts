@@ -21,6 +21,27 @@ export interface Worker {
   updatedAt: string;
 }
 
+/**
+ * ORG-SRS-004 (issue #27) — lifecycle status action (API layer enum; DB status
+ * không đổi: ACTIVATE→ACTIVE, SUSPEND/TERMINATE→INACTIVE).
+ */
+export type WorkerLifecycleAction = 'ACTIVATE' | 'SUSPEND' | 'TERMINATE';
+
+export interface ChangeWorkerLifecycleStatusPayload {
+  action: WorkerLifecycleAction;
+  reason?: string | null;
+}
+
+export interface OpenWorkResult {
+  openAssignments: number;
+}
+
+/** PATCH /workers/:id/status trả profile + `alreadyInState` + `warning?` (khi rời ACTIVE có open work). */
+export type WorkerLifecycleStatusChangeResult = Worker & {
+  alreadyInState: boolean;
+  warning?: { openAssignments: number } | null;
+};
+
 export interface ListWorkersParams {
   status?: string;
   search?: string;
@@ -105,11 +126,19 @@ async function parseError(res: Response, fallback: string): Promise<never> {
         else if (lower.includes('trade')) fieldErrors.trades = [...(fieldErrors.trades ?? []), m];
         else if (lower.includes('skill')) fieldErrors.trades = [...(fieldErrors.trades ?? []), m];
         else if (lower.includes('password') || lower.includes('mật khẩu')) fieldErrors.password = [...(fieldErrors.password ?? []), m];
+        else if (lower.includes('lý do') || lower.includes('reason')) fieldErrors.reason = [...(fieldErrors.reason ?? []), m];
         else fieldErrors._global = [...(fieldErrors._global ?? []), m];
       }
       throw { status: res.status, message: msg ?? fallback, code, fieldErrors, traceId } satisfies ApiError;
     }
-    if (msg) throw { status: res.status, message: msg, code, traceId } satisfies ApiError;
+    if (msg) {
+      // Single-string 400 từ use case (reason policy) → map vào field để dialog
+      // hiển thị lỗi theo field (cùng pattern trades.ts).
+      if (res.status === 400 && /(lý do|reason)/i.test(msg)) {
+        throw { status: res.status, message: msg, code, fieldErrors: { reason: [msg] }, traceId } satisfies ApiError;
+      }
+      throw { status: res.status, message: msg, code, traceId } satisfies ApiError;
+    }
   }
   if (typeof body === 'string' && body.length > 0) {
     throw { status: res.status, message: body } satisfies ApiError;
@@ -192,4 +221,59 @@ export async function updateWorker(id: string, payload: UpdateWorkerPayload): Pr
     await parseError(res, `Cập nhật worker thất bại (${res.status})`);
   }
   return (await res.json()) as Worker;
+}
+
+/**
+ * ORG-SRS-004 (issue #27) — lifecycle status: ACTIVATE/SUSPEND/TERMINATE.
+ * SUSPEND/TERMINATE bắt buộc reason (1-500) — API trả 400 kèm message lý do
+ * (bắt buộc/quá dài) được parse về field `reason` để dialog hiển thị theo field.
+ */
+export async function changeWorkerLifecycleStatus(
+  id: string,
+  payload: ChangeWorkerLifecycleStatusPayload,
+): Promise<WorkerLifecycleStatusChangeResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/workers/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseError(res, `Chuyển trạng thái worker thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyInState, warning, ...profile } = body;
+  return {
+    ...(profile as unknown as Worker),
+    alreadyInState: alreadyInState === true,
+    warning: warning && typeof warning === 'object'
+      ? { openAssignments: Number((warning as { openAssignments?: unknown }).openAssignments ?? 0) }
+      : null,
+  };
+}
+
+/**
+ * ORG-SRS-004 (issue #27) — pre-check open work (chỉ đếm cho confirm dialog,
+ * không chặn, không audit).
+ */
+export async function getWorkerOpenWork(id: string): Promise<OpenWorkResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/workers/${encodeURIComponent(id)}/open-work`, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    await parseError(res, `Kiểm tra công việc mở của worker thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as OpenWorkResult;
+  return { openAssignments: Number(body.openAssignments ?? 0) };
 }

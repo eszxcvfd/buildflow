@@ -19,6 +19,13 @@ export interface ContractorRepositoryPort {
   save(contractor: ContractorEntity): Promise<void>;
   saveWithClient?(client: PoolClient, contractor: ContractorEntity): Promise<void>;
   hasHistory?(contractorId: string): Promise<boolean>;
+  /**
+   * ORG-SRS-004 (issue #27): đếm assignments đang mở của nhà thầu — assignments
+   * của crews thuộc contractor (crews.contractor_id) + của users thuộc contractor
+   * (users.contractor_id), status PENDING_ACCEPTANCE/ACTIVE (migration 0001 CHECK).
+   * Dùng cho open-work warning; KHÔNG chặn transition.
+   */
+  countOpenAssignments(contractorId: string): Promise<number>;
 }
 
 export const CONTRACTOR_REPOSITORY = Symbol('CONTRACTOR_REPOSITORY');

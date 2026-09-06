@@ -4,7 +4,9 @@
  * AuditLogList (IAM-SRS-008, GitHub issue #23): bảng nhật ký thao tác cho admin.
  * State matrix clone theo AdminUserList: loading / 401 / 403 / lỗi khác / empty,
  * draft vs applied filters ('Lọc' mới áp dụng và reset offset về 0),
- * deep-link ?action=&result=&correlationId= qua useSearchParams (page bọc Suspense).
+ * deep-link ?action=&result=&correlationId=&entityType=&entityId= qua useSearchParams
+ * (page bọc Suspense). entityType/entityId phục vụ deep-link từ StatusTimeline
+ * (ORG-SRS-004): API lọc exact-match, bỏ param action prefix gây 0 dòng.
  */
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -29,10 +31,29 @@ const KNOWN_ACTIONS = [
   'IAM_ROLE_ASSIGNED',
   'IAM_PASSWORD_CHANGED',
   'IAM_PASSWORD_RESET_COMPLETED',
+  // ORG-SRS-001/002/003/004: lifecycle + CRUD worker/contractor/trade (E2E ORG-SRS-004 —
+  // dropdown trước đây thiếu option cho các action mới, user không chọn tay được).
+  'ORG_WORKER_CREATED',
+  'ORG_WORKER_UPDATED',
+  'ORG_WORKER_SUSPENDED',
+  'ORG_WORKER_REACTIVATED',
+  'ORG_WORKER_TERMINATED',
+  'ORG_CONTRACTOR_CREATED',
+  'ORG_CONTRACTOR_UPDATED',
+  'ORG_CONTRACTOR_SUSPENDED',
+  'ORG_CONTRACTOR_REACTIVATED',
+  'ORG_CONTRACTOR_TERMINATED',
+  'ORG_CONTRACTOR_STATUS_CHANGED',
+  'ORG_TRADE_CREATED',
+  'ORG_TRADE_UPDATED',
+  'ORG_TRADE_STATUS_CHANGED',
 ] as const;
 
 // Lookup O(1) cho Finding 5: action deep-link ngoài danh sách → thêm option bổ sung.
 const KNOWN_ACTION_SET: ReadonlySet<string> = new Set<string>(KNOWN_ACTIONS);
+
+// Entity types thật trong DB (SELECT DISTINCT entity_type FROM audit_logs).
+const KNOWN_ENTITY_TYPES = ['WORKER', 'CONTRACTOR', 'TRADE', 'USER'] as const;
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return '—';
@@ -66,11 +87,15 @@ export function AuditLogList() {
   const initialAction = searchParams.get('action') ?? '';
   const initialResult = searchParams.get('result') ?? '';
   const initialCorrelationId = searchParams.get('correlationId') ?? '';
+  const initialEntityType = searchParams.get('entityType') ?? '';
+  const initialEntityId = searchParams.get('entityId') ?? '';
 
   // Applied filters — thay đổi sẽ kích hoạt load().
   const [action, setAction] = React.useState(initialAction);
   const [result, setResult] = React.useState(initialResult);
   const [correlationId, setCorrelationId] = React.useState(initialCorrelationId);
+  const [entityType, setEntityType] = React.useState(initialEntityType);
+  const [entityId, setEntityId] = React.useState(initialEntityId);
   const [from, setFrom] = React.useState('');
   const [to, setTo] = React.useState('');
   const [offset, setOffset] = React.useState(0);
@@ -80,6 +105,8 @@ export function AuditLogList() {
   const [actionInput, setActionInput] = React.useState(initialAction);
   const [resultInput, setResultInput] = React.useState(initialResult);
   const [correlationIdInput, setCorrelationIdInput] = React.useState(initialCorrelationId);
+  const [entityTypeInput, setEntityTypeInput] = React.useState(initialEntityType);
+  const [entityIdInput, setEntityIdInput] = React.useState(initialEntityId);
   const [fromInput, setFromInput] = React.useState('');
   const [toInput, setToInput] = React.useState('');
 
@@ -101,6 +128,8 @@ export function AuditLogList() {
         action: action || undefined,
         result: result || undefined,
         correlationId: correlationId || undefined,
+        entityType: entityType || undefined,
+        entityId: entityId || undefined,
         from: from || undefined,
         to: to || undefined,
         limit: PAGE_SIZE,
@@ -118,7 +147,7 @@ export function AuditLogList() {
         setLoading(false);
       }
     }
-  }, [action, result, correlationId, from, to, offset]);
+  }, [action, result, correlationId, entityType, entityId, from, to, offset]);
 
   React.useEffect(() => {
     void load();
@@ -128,6 +157,8 @@ export function AuditLogList() {
     setAction(actionInput);
     setResult(resultInput);
     setCorrelationId(correlationIdInput);
+    setEntityType(entityTypeInput);
+    setEntityId(entityIdInput);
     setFrom(fromInput);
     setTo(toInput);
     setOffset(0);
@@ -201,6 +232,11 @@ export function AuditLogList() {
   // Deep-link/filter action ngoài KNOWN_ACTIONS → prepend option để select hiển thị đúng
   // giá trị thay vì rơi về rỗng (Finding 5).
   const extraAction = actionInput && !KNOWN_ACTION_SET.has(actionInput) ? actionInput : null;
+  const extraEntityType =
+    entityTypeInput &&
+    !(KNOWN_ENTITY_TYPES as readonly string[]).includes(entityTypeInput)
+      ? entityTypeInput
+      : null;
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
@@ -245,6 +281,32 @@ export function AuditLogList() {
               onChange={(e) => setCorrelationIdInput(e.target.value)}
             />
             <FieldError messages={fieldErrors?.correlationId} />
+          </div>
+          <div className="bf-field" style={{ minWidth: 150 }}>
+            <label className="bf-label" htmlFor="audit-entity-type">Loại đối tượng</label>
+            <select
+              id="audit-entity-type"
+              className="bf-input"
+              value={entityTypeInput}
+              onChange={(e) => setEntityTypeInput(e.target.value)}
+            >
+              <option value="">Tất cả</option>
+              {extraEntityType ? <option value={extraEntityType}>{extraEntityType}</option> : null}
+              {KNOWN_ENTITY_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <FieldError messages={fieldErrors?.entityType} />
+          </div>
+          <div className="bf-field" style={{ flex: '1 1 220px' }}>
+            <label className="bf-label" htmlFor="audit-entity-id">ID đối tượng</label>
+            <Input
+              id="audit-entity-id"
+              placeholder="uuid đối tượng…"
+              value={entityIdInput}
+              onChange={(e) => setEntityIdInput(e.target.value)}
+            />
+            <FieldError messages={fieldErrors?.entityId} />
           </div>
           <div className="bf-field" style={{ minWidth: 150 }}>
             <label className="bf-label" htmlFor="audit-from">Từ ngày</label>

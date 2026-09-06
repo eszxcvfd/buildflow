@@ -4,6 +4,8 @@ import { CreateWorkerUseCase } from '../../../application/use-case/create-worker
 import { UpdateWorkerUseCase } from '../../../application/use-case/update-worker.use-case';
 import { GetWorkerUseCase } from '../../../application/use-case/get-worker.use-case';
 import { SearchWorkersUseCase } from '../../../application/use-case/search-workers.use-case';
+import { StatusTransitionWorkerUseCase } from '../../../application/use-case/status-transition-worker.use-case';
+import { GetWorkerOpenWorkUseCase } from '../../../application/use-case/get-worker-open-work.use-case';
 import { WorkerEntity } from '../../../domain/entity/worker.entity';
 import { UserEntity } from '../../../../iam/domain/entity/user.entity';
 
@@ -47,6 +49,8 @@ describe('WorkersController ORG-SRS-001', () => {
   let updateMock: jest.Mocked<UpdateWorkerUseCase>;
   let getMock: jest.Mocked<GetWorkerUseCase>;
   let searchMock: jest.Mocked<SearchWorkersUseCase>;
+  let transitionMock: jest.Mocked<StatusTransitionWorkerUseCase>;
+  let openWorkMock: jest.Mocked<GetWorkerOpenWorkUseCase>;
   let controller: WorkersController;
 
   beforeEach(() => {
@@ -54,7 +58,9 @@ describe('WorkersController ORG-SRS-001', () => {
     updateMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1') })) } as unknown as jest.Mocked<UpdateWorkerUseCase>;
     getMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1') })) } as unknown as jest.Mocked<GetWorkerUseCase>;
     searchMock = { execute: jest.fn(async () => ({ entities: [makeWorker('w1'), makeWorker('w2', 'INACTIVE')], total: 2 })) } as unknown as jest.Mocked<SearchWorkersUseCase>;
-    controller = new WorkersController(createMock, updateMock, getMock, searchMock);
+    transitionMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1'), alreadyInState: false })) } as unknown as jest.Mocked<StatusTransitionWorkerUseCase>;
+    openWorkMock = { execute: jest.fn(async () => ({ openAssignments: 0 })) } as unknown as jest.Mocked<GetWorkerOpenWorkUseCase>;
+    controller = new WorkersController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock);
   });
 
   it('ADMIN có thể tạo worker', async () => {
@@ -130,6 +136,62 @@ describe('WorkersController ORG-SRS-001', () => {
 
       await controller.update('w1', updateDto, adminReq() as never);
       expect(updateMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: null }));
+    });
+  });
+
+  describe('ORG-SRS-004 lifecycle endpoints (issue #27)', () => {
+    it('PATCH :id/status — ADMIN transition: forward action/reason + metadata, response kèm alreadyInState', async () => {
+      const res = await controller.changeStatus('w1', { action: 'SUSPEND', reason: 'Vắng mặt dài hạn' } as never, adminReqWithCorr(VALID_CORR) as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(expect.objectContaining({
+        workerId: 'w1',
+        action: 'SUSPEND',
+        reason: 'Vắng mặt dài hạn',
+        actorUserId: 'admin-1',
+        correlationId: VALID_CORR,
+      }));
+      expect(res.alreadyInState).toBe(false);
+    });
+
+    it('PATCH :id/status — non-ADMIN (PM/WORKER) bị chặn 403', async () => {
+      await expect(controller.changeStatus('w1', { action: 'SUSPEND', reason: 'x' } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('PATCH :id/status — reason optional cho ACTIVATE được forward null', async () => {
+      await controller.changeStatus('w1', { action: 'ACTIVATE' } as never, adminReq() as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(expect.objectContaining({ action: 'ACTIVATE', reason: null, correlationId: null }));
+    });
+
+    it('PATCH :id/status — response phản ánh warning {openAssignments} khi use case trả warning', async () => {
+      transitionMock.execute.mockResolvedValue({ entity: makeWorker('w1', 'INACTIVE'), alreadyInState: false, warning: { openAssignments: 3 } });
+      const res = await controller.changeStatus('w1', { action: 'TERMINATE', reason: 'Hết hợp đồng' } as never, adminReq() as never);
+      expect(res.warning).toEqual({ openAssignments: 3 });
+      expect(res.status).toBe('INACTIVE');
+    });
+
+    it('PATCH :id/status — alreadyInState=true (idempotent) hiển thị qua response', async () => {
+      transitionMock.execute.mockResolvedValue({ entity: makeWorker('w1', 'INACTIVE'), alreadyInState: true });
+      const res = await controller.changeStatus('w1', { action: 'SUSPEND', reason: 'x' } as never, adminReq() as never);
+      expect(res.alreadyInState).toBe(true);
+    });
+
+    it('PATCH :id/status — X-Correlation-Id sai → 400 actionable, không gọi use case', async () => {
+      await expect(controller.changeStatus('w1', { action: 'SUSPEND', reason: 'x' } as never, adminReqWithCorr('not-a-uuid') as never)).rejects.toThrow(
+        new BadRequestException('X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)'),
+      );
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('GET :id/open-work — ADMIN được phép, trả {openAssignments}', async () => {
+      openWorkMock.execute.mockResolvedValue({ openAssignments: 2 });
+      const res = await controller.openWork('w1', adminReq() as never);
+      expect(openWorkMock.execute).toHaveBeenCalledWith({ workerId: 'w1' });
+      expect(res.openAssignments).toBe(2);
+    });
+
+    it('GET :id/open-work — non-ADMIN bị chặn 403', async () => {
+      await expect(controller.openWork('w1', workerReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(openWorkMock.execute).not.toHaveBeenCalled();
     });
   });
 });
