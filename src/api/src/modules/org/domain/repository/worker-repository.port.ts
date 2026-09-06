@@ -7,6 +7,8 @@ export interface WorkerFilter {
   search?: string; // search fullName, email, employeeCode
   tradeId?: string;
   skillLevel?: number;
+  /** ORG-SRS-007 (issue #30, D9): workers có ACTIVE membership trong đội này. */
+  crewId?: string;
   sort?: 'name' | 'createdAt'; // ORG-SRS-005 (#28): name → full_name, createdAt → created_at
   order?: 'asc' | 'desc';
   limit?: number;

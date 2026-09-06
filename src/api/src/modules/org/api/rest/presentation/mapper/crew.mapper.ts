@@ -1,5 +1,6 @@
 import { CrewEntity } from '../../../../domain/entity/crew.entity';
-import { CrewResponseDto } from '../dto/crew.dto';
+import { CrewMemberRow } from '../../../../domain/repository/crew-repository.port';
+import { CrewResponseDto, CrewMemberResponseDto } from '../dto/crew.dto';
 
 export function toCrewResponse(entity: CrewEntity): CrewResponseDto {
   const pub = entity.toPublic();
@@ -20,4 +21,24 @@ export function toCrewResponse(entity: CrewEntity): CrewResponseDto {
 
 export function toCrewListResponse(entities: CrewEntity[]): CrewResponseDto[] {
   return entities.map(toCrewResponse);
+}
+
+/** ORG-SRS-007 (issue #30) — map CrewMemberRow sang response DTO. */
+export function toCrewMemberResponse(row: CrewMemberRow): CrewMemberResponseDto {
+  return {
+    id: row.id,
+    userId: row.userId,
+    memberRole: row.memberRole,
+    effectiveFrom: row.effectiveFrom,
+    effectiveTo: row.effectiveTo,
+    isActive: row.isActive,
+    addedBy: row.addedBy,
+    createdAt: row.createdAt.toISOString(),
+    userName: row.userName ?? null,
+    userCode: row.userCode ?? null,
+  };
+}
+
+export function toCrewMemberListResponse(rows: CrewMemberRow[]): CrewMemberResponseDto[] {
+  return rows.map(toCrewMemberResponse);
 }

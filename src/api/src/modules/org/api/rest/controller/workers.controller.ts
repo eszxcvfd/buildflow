@@ -121,6 +121,7 @@ export class WorkersController {
     @Query('order') order?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('crewId') crewId?: string,
   ) {
     requireRoles(req as unknown as { user?: { roles?: string[] } }, DIRECTORY_READ_ROLES);
     if (status && !['ACTIVE', 'INACTIVE', 'LOCKED'].includes(status)) {
@@ -148,6 +149,10 @@ export class WorkersController {
       parsedSkill = Number(skillLevel);
       if (!Number.isInteger(parsedSkill) || parsedSkill < 1 || parsedSkill > 5) filterError('skillLevel', 'Skill level phải là 1-5');
     }
+    // ORG-SRS-007 (issue #30, D9): crewId filter — workers có ACTIVE membership trong đội.
+    if (crewId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(crewId)) {
+      filterError('crewId', 'Crew ID không hợp lệ');
+    }
     // ORG-SRS-005 (issue #28) — sort whitelist: name → full_name,
     // createdAt → created_at; default createdAt/desc. Mapping to columns
     // happens in the repository layer (no client string interpolation).
@@ -162,6 +167,7 @@ export class WorkersController {
       search: search || undefined,
       tradeId: tradeId || undefined,
       skillLevel: parsedSkill,
+      crewId: crewId || undefined,
       sort: (sort || undefined) as 'name' | 'createdAt' | undefined,
       order: (order || undefined) as 'asc' | 'desc' | undefined,
       limit: parsedLimit,

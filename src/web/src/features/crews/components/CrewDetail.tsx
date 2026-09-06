@@ -11,6 +11,7 @@ import {
   RESOURCE_ACTION_LABEL,
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
+import { CrewMembers } from './CrewMembers';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
@@ -25,8 +26,8 @@ function statusLabel(status: string): string {
  * ORG-SRS-006 (issue #29) — chi tiết đội thi công + lifecycle status qua
  * PATCH /crews/:id/status (ACTIVATE/SUSPEND/TERMINATE + reason).
  * Read + write mở cho ADMIN + PROJECT_MANAGER (SRS actor Điều phối viên).
- * Section 'Thành viên' chỉ tóm tắt LEAD hiện tại — quản lý thành viên đầy đủ
- * thuộc ORG-SRS-007 (issue #30).
+ * Section 'Thành viên' là `CrewMembers` đầy đủ (ORG-SRS-007, issue #30):
+ * danh sách MEMBER + LEAD, thêm/xóa mềm, lịch sử + point-in-time.
  */
 export function CrewDetail({ id }: { id: string }) {
   const [crew, setCrew] = React.useState<Crew | null>(null);
@@ -147,8 +148,12 @@ export function CrewDetail({ id }: { id: string }) {
     }
   }
 
-  if (loading) return <Card><p aria-busy="true">Đang tải chi tiết đội thi công…</p></Card>;
-  if (error) {
+  // ORG-SRS-007 (issue #30, fix E2E run 1) — chỉ unmount khi chưa có dữ liệu lần đầu.
+  // Reload sau onChanged (thêm/xóa thành viên) mà early-return ở đây sẽ unmount
+  // <CrewMembers>, xóa sạch success/warning notices vừa set. Khi đã có crew thì
+  // giữ nguyên cây con + hiện ghi chú tải lại inline.
+  if (loading && crew === null) return <Card><p aria-busy="true">Đang tải chi tiết đội thi công…</p></Card>;
+  if (error && crew === null) {
     if (error.status === 401) return <Card><Alert tone="error">Phiên hết hạn, vui lòng đăng nhập lại (401)</Alert><div style={{ marginTop: '0.75rem' }}><a href="/login">Đến trang đăng nhập</a></div></Card>;
     if (error.status === 403) return <Card><Alert tone="error">Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER (403)</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
     if (error.status === 404) return <Card><Alert tone="error">Không tìm thấy đội thi công (404) — kiểm tra lại đường dẫn</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
@@ -169,6 +174,16 @@ export function CrewDetail({ id }: { id: string }) {
           </a>
         }
       />
+      {loading ? (
+        <p aria-busy="true" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+          Đang tải lại chi tiết đội thi công…
+        </p>
+      ) : null}
+      {error ? (
+        <Alert tone="error">
+          Tải lại thất bại{error.message ? `: ${error.message}` : ''} — đang hiện dữ liệu trước đó.
+        </Alert>
+      ) : null}
 
       <Card>
         <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
@@ -264,19 +279,14 @@ export function CrewDetail({ id }: { id: string }) {
       </Card>
 
       <Card>
-        <div className="bf-card-head">
-          <span className="bf-card-title">Thành viên</span>
-        </div>
-        <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>
-          Trưởng nhóm hiện tại:{' '}
-          <strong>
-            {crew.leaderUserId ? (leaderName ?? `${crew.leaderUserId.slice(0, 8)}…`) : '— chưa chỉ định —'}
-          </strong>
-        </p>
-        <Alert tone="info">
-          Quản lý thành viên đầy đủ — ORG-SRS-007 (issue #30). Màn hình này chỉ tóm tắt trưởng nhóm
-          hiện tại; thêm/xóa thành viên thực hiện ở slice thành viên.
-        </Alert>
+        <CrewMembers
+          crewId={crew.id}
+          crewStatus={crew.status}
+          onChanged={() => {
+            void load();
+            setTimelineKey((k) => k + 1);
+          }}
+        />
       </Card>
 
       <Card>

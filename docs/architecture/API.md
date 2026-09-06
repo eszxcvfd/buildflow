@@ -202,6 +202,7 @@ Ví dụ một item trong `data[]`:
     - `PATCH /api/v1/contractors/:id/status` → `ORG_CONTRACTOR_SUSPENDED`/`ORG_CONTRACTOR_TERMINATED`/`ORG_CONTRACTOR_REACTIVATED` (ORG-SRS-004, action `SUSPEND`/`TERMINATE`/`ACTIVATE`)
     - `POST /api/v1/trades` → `ORG_TRADE_CREATED`; `PATCH /api/v1/trades/:id` → `ORG_TRADE_UPDATED`; `PATCH /api/v1/trades/:id/status` → `ORG_TRADE_STATUS_CHANGED`
     - `POST /api/v1/crews` → `ORG_CREW_CREATED`; `PATCH /api/v1/crews/:id` → `ORG_CREW_UPDATED` (đổi tên/mô tả/nhà thầu) hoặc `ORG_CREW_LEAD_CHANGED` (đổi trưởng nhóm); `PATCH /api/v1/crews/:id/status` → `ORG_CREW_SUSPENDED`/`ORG_CREW_TERMINATED`/`ORG_CREW_REACTIVATED` (ORG-SRS-006, action `SUSPEND`/`TERMINATE`/`ACTIVATE`)
+    - `POST /api/v1/crews/:id/members` → `ORG_CREW_MEMBER_ADDED`; `DELETE /api/v1/crews/:id/members/:memberId` → `ORG_CREW_MEMBER_REMOVED` (ORG-SRS-007, issue `#30`; `alreadyRemoved` idempotent không audit; `reason` ở cột `audit_logs.reason`)
   - **Lenient (public/self-service — header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai không bao giờ block/400):**
     - `POST /api/v1/auth/login` → `AUTH_LOGIN_SUCCESS`/`AUTH_LOGIN_FAILED`
     - `POST /api/v1/auth/logout` (authenticated self-service) → `AUTH_LOGOUT`
@@ -292,10 +293,12 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 
 - **Helper dùng chung:** `requireRoles(req, roles)` trong `modules/iam/api/rest/guard/roles.guard.ts` (RolesGuard đã có logic tương tự nhưng không dùng ở các controller này). Chỉ các GET path widen gọi `requireRoles(req, ['ADMIN', 'PROJECT_MANAGER'])`; write path giữ `assertAdmin` cục bộ.
 - **Ngoại lệ crews (ORG-SRS-006, `#29`):** crews mở `ADMIN` + `PROJECT_MANAGER` trên cả read lẫn write (SRS actor Điều phối viên) — xem `ENDPOINTS.md` §7 bounded decision và §8. Không widen nhầm endpoint workers/contractors/trades.
+- **Thành viên đội (ORG-SRS-007, `#30`, xem `ENDPOINTS.md` §8.1):** `GET`/`POST /api/v1/crews/:id/members` và `DELETE /api/v1/crews/:id/members/:memberId` dùng chung `CREW_ROLES` (`ADMIN` + `PROJECT_MANAGER`). POST chỉ tạo `MEMBER` (`201`; overlap đội khác WARN kèm `warning` + `_warning` audit, trùng cùng đội `409 MEMBER_DUPLICATE`); DELETE là soft-deactivate giữ lịch sử (idempotent `alreadyRemoved`, không audit; row LEAD → `409 MEMBER_IS_LEAD`, đổi trưởng nhóm qua `PATCH /crews/:id` `leaderUserId`); audit `ORG_CREW_MEMBER_ADDED`/`ORG_CREW_MEMBER_REMOVED` tx-embedded.
+- **Team filter workers (D9, `#30` — defer `#28` đã đóng):** `GET /api/v1/workers` nhận thêm `crewId` (uuid) = workers có ACTIVE membership trong đội (join `crew_members` `is_active`); sai format → `400 fieldErrors { crewId }`.
 - **Sort:** `GET /workers` và `GET /contractors` nhận `sort` (`name`/`createdAt`) + `order` (`asc`/`desc`, default `createdAt`/`desc`); whitelist mapping sang cột ở repository layer (worker `name`→`full_name`, contractor `name`→`name`, cả hai `createdAt`→`created_at`); sai giá trị → `400 { statusCode, message, fieldErrors }`. `GET /trades` giữ `ORDER BY name` cố định.
 - **Field-level filter errors:** lỗi validation filter trả `400 { statusCode, message, fieldErrors: { <field>: [msg] } }`, `message` giữ nguyên text cũ (web hiện chỉ đọc `message` nên không break).
 - **Current data:** các GET search + detail trả `Cache-Control: no-store` (qua `@Header`).
-- **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29`; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
+- **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29` đã resolved cho crews; team filter workers defer `#30` (D9) đã đóng; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
 
 ## References
 

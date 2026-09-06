@@ -117,4 +117,16 @@ describe('SearchWorkersUseCase ORG-SRS-001', () => {
     const active = makeWorker('w1', 'ACTIVE');
     expect(active.isEligibleForAssignment()).toBe(true);
   });
+
+  it('ORG-SRS-007 (issue #30, D9): crewId hợp lệ forward; sai → 400 fieldErrors', async () => {
+    const crewId = '22222222-2222-4222-8222-222222222222';
+    await useCase.execute({ crewId });
+    expect(workerRepo.findMany).toHaveBeenCalledWith(expect.objectContaining({ crewId }));
+    const err = await useCase.execute({ crewId: 'not-uuid' }).catch((e: unknown) => e);
+    expect((err as BadRequestException).getResponse()).toEqual({
+      statusCode: 400,
+      message: 'Crew ID không hợp lệ',
+      fieldErrors: { crewId: ['Crew ID không hợp lệ'] },
+    });
+  });
 });

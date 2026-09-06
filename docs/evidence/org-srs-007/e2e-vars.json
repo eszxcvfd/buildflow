@@ -1,0 +1,67 @@
+{
+  "crewA": "dbf1cd63-cb8e-4e27-96e5-ff89176ccc76",
+  "crewB": "eba90b93-2ab9-4baf-af81-6de39eea6bc6",
+  "memberB": "c14e99f0-15dc-4c7f-b357-798f94cbf549",
+  "today": "2026-09-06",
+  "worker1": "33333333-3333-4333-8333-333333333333",
+  "worker2": "44444444-4444-4444-8444-444444444444",
+  "worker3": "55555555-5555-4555-8555-555555555555",
+  "worker4": "66666666-6666-4666-8666-666666666666",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "UI 201 + list hiện Lê Văn Thợ; DB MEMBER|true|2026-09-06; audit ORG_CREW_MEMBER_ADDED=1"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "UI field-error 409; active rows=1; audit vẫn 1"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "UI success + banner overlap; audit có _warning; memberB=c14e99f0…"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "UI Đã rời; DB false|2026-09-06; audit REMOVED +1 có reason"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "alreadyRemoved=true; audit 1→1 (delta 0)"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "at=2026-09-06 thấy worker2; row 2026-09-06|2026-09-06|false nguyên vẹn"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "UI disabled + notice; API 409 CREW_INACTIVE; không lọt row"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "API GET/POST/DELETE đều 403; UI card 403"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "URL tab=workers&crew=dbf1cd63-cb8e-4e27-96e5-ff89176ccc76&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "note": "201+409; active rows=1 (unique constraint + UI disable khi pending)"
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "PM UI add + remove OK; audit actor đúng PM"
+    }
+  ]
+}

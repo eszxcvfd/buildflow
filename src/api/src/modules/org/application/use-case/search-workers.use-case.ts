@@ -7,6 +7,7 @@ export interface SearchWorkersInput {
   search?: string;
   tradeId?: string;
   skillLevel?: number;
+  crewId?: string;
   sort?: 'name' | 'createdAt';
   order?: 'asc' | 'desc';
   limit?: number;
@@ -41,6 +42,10 @@ export class SearchWorkersUseCase {
     if (input.skillLevel !== undefined && (!Number.isInteger(input.skillLevel) || input.skillLevel < 1 || input.skillLevel > 5)) {
       throw new BadRequestException({ statusCode: 400, message: 'Skill level phải là 1-5', fieldErrors: { skillLevel: ['Skill level phải là 1-5'] } });
     }
+    // ORG-SRS-007 (issue #30, D9): crewId filter — workers có ACTIVE membership trong đội.
+    if (input.crewId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.crewId)) {
+      throw new BadRequestException({ statusCode: 400, message: 'Crew ID không hợp lệ', fieldErrors: { crewId: ['Crew ID không hợp lệ'] } });
+    }
     if (input.sort !== undefined && !['name', 'createdAt'].includes(input.sort)) {
       throw new BadRequestException({ statusCode: 400, message: 'Sort không hợp lệ (name|createdAt)', fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] } });
     }
@@ -53,6 +58,7 @@ export class SearchWorkersUseCase {
       search: input.search,
       tradeId: input.tradeId,
       skillLevel: input.skillLevel,
+      crewId: input.crewId,
       sort: input.sort,
       order: input.order,
       limit: input.limit,

@@ -78,6 +78,13 @@ describe('web worker API client ORG-SRS-005 (issue #28)', () => {
     expect(url).not.toContain('order=');
   });
 
+  it('ORG-SRS-007 (issue #30, D9) — listWorkers gửi crewId khi lọc theo đội', async () => {
+    fetchMock.mockResolvedValue(response(200, { data: [], total: 0, limit: 20, offset: 0 }));
+    await listWorkers({ crewId: '33333333-3333-4333-8333-333333333333' });
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('crewId=33333333-3333-4333-8333-333333333333');
+  });
+
   it('giữ nguyên fieldErrors shape mới { message, fieldErrors } của API 400', async () => {
     fetchMock.mockResolvedValue(response(400, {
       statusCode: 400,

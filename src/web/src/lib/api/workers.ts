@@ -47,6 +47,8 @@ export interface ListWorkersParams {
   search?: string;
   tradeId?: string;
   skillLevel?: number;
+  /** ORG-SRS-007 (issue #30, D9) — chỉ workers có ACTIVE membership trong đội (uuid). */
+  crewId?: string;
   /** ORG-SRS-005 (issue #28) — sort whitelist: name|createdAt */
   sort?: string;
   /** ORG-SRS-005 (issue #28) — order whitelist: asc|desc */
@@ -179,6 +181,7 @@ export async function listWorkers(params: ListWorkersParams = {}): Promise<ListW
   if (params.search) qs.set('search', params.search);
   if (params.tradeId) qs.set('tradeId', params.tradeId);
   if (params.skillLevel !== undefined) qs.set('skillLevel', String(params.skillLevel));
+  if (params.crewId) qs.set('crewId', params.crewId);
   if (params.sort) qs.set('sort', params.sort);
   if (params.order) qs.set('order', params.order);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));

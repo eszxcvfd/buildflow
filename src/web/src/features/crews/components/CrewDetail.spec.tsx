@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { CrewDetail } from './CrewDetail';
-import { getCrew, changeCrewLifecycleStatus, getCrewOpenWork } from '@/lib/api/crews';
+import { getCrew, changeCrewLifecycleStatus, getCrewOpenWork, listCrewMembers } from '@/lib/api/crews';
 import { listWorkers } from '@/lib/api/workers';
 import { listAuditLogs } from '@/lib/api/audit-logs';
 
@@ -11,6 +11,9 @@ jest.mock('@/lib/api/crews', () => ({
   updateCrew: jest.fn(),
   changeCrewLifecycleStatus: jest.fn(),
   getCrewOpenWork: jest.fn(),
+  listCrewMembers: jest.fn(),
+  addCrewMember: jest.fn(),
+  removeCrewMember: jest.fn(),
 }));
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
@@ -18,6 +21,7 @@ jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
 const getCrewMock = getCrew as jest.Mock;
 const changeStatusMock = changeCrewLifecycleStatus as jest.Mock;
 const getOpenWorkMock = getCrewOpenWork as jest.Mock;
+const listMembersMock = listCrewMembers as jest.Mock;
 const listWorkersMock = listWorkers as jest.Mock;
 const listAuditLogsMock = listAuditLogs as jest.Mock;
 
@@ -59,18 +63,21 @@ function leadWorker() {
 beforeEach(() => {
   jest.clearAllMocks();
   getCrewMock.mockResolvedValue(crew());
+  listMembersMock.mockResolvedValue({ data: [], total: 0 });
   listWorkersMock.mockResolvedValue({ data: [leadWorker()], total: 1, limit: 100, offset: 0 });
   listAuditLogsMock.mockResolvedValue({ data: [], total: 0, limit: 10, offset: 0 });
 });
 
 describe('CrewDetail ORG-SRS-006', () => {
-  it('hiển thị profile + thành viên summary + note #30', async () => {
+  it('hiển thị profile + panel thành viên ORG-SRS-007 (issue #30)', async () => {
     render(<CrewDetail id="crew-1" />);
     await waitFor(() => expect(screen.getByText('Doi ket cau')).not.toBeNull());
     expect(screen.getByText('TEAM-001')).not.toBeNull();
     expect(screen.getByText('Thành viên')).not.toBeNull();
-    await waitFor(() => expect(screen.getAllByText('Nguyen Van Lead · NV-001')).toHaveLength(2));
-    expect(screen.getByText(/Quản lý thành viên đầy đủ — ORG-SRS-007 \(issue #30\)/)).not.toBeNull();
+    // Trưởng nhóm ở profile + option trong form thêm thành viên (cùng worker ACTIVE).
+    await waitFor(() => expect(screen.getAllByText('Nguyen Van Lead · NV-001').length).toBeGreaterThanOrEqual(1));
+    expect(screen.getByText('Chưa có thành viên — thêm thành viên đầu tiên')).not.toBeNull();
+    expect(listMembersMock).toHaveBeenCalledWith('crew-1', {});
   });
 
   it('404 hiển thị not-found + retry', async () => {

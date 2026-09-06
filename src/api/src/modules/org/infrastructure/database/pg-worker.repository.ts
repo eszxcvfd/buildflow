@@ -114,6 +114,12 @@ export class PgWorkerRepository implements WorkerRepositoryPort {
       conditions.push(`EXISTS (SELECT 1 FROM public.resource_trades rt WHERE rt.resource_type='USER' AND rt.user_id = users.id AND rt.skill_level = $${idx++} AND rt.is_active = true)`);
       values.push(filter.skillLevel);
     }
+    // ORG-SRS-007 (issue #30, D9): lọc workers có ACTIVE membership trong đội
+    // (join crew_members is_active — mọi role LEAD/MEMBER đều tính).
+    if (filter.crewId) {
+      conditions.push(`EXISTS (SELECT 1 FROM public.crew_members cm WHERE cm.user_id = users.id AND cm.crew_id = $${idx++} AND cm.is_active)`);
+      values.push(filter.crewId);
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const countR = await this.pool().query(`SELECT COUNT(*) FROM public.users users ${where}`, values);

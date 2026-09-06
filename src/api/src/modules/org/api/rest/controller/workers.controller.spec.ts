@@ -150,6 +150,19 @@ describe('WorkersController ORG-SRS-001', () => {
       }));
       expect(res.total).toBe(2);
     });
+
+    it('ORG-SRS-007 (issue #30, D9): crewId hợp lệ được forward; sai → 400 fieldErrors', async () => {
+      const crewId = '22222222-2222-4222-8222-222222222222';
+      await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, crewId);
+      expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ crewId }));
+      const err = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'not-uuid').catch((e: unknown) => e);
+      expect((err as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Crew ID không hợp lệ',
+        fieldErrors: { crewId: ['Crew ID không hợp lệ'] },
+      });
+      expect(searchMock.execute).not.toHaveBeenCalledWith(expect.objectContaining({ crewId: 'not-uuid' }));
+    });
   });
 
   it('update không hard delete — controller không expose DELETE', async () => {

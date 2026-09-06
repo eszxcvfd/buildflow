@@ -57,3 +57,46 @@ export class CrewResponseDto {
   createdAt!: string;
   updatedAt!: string;
 }
+
+/**
+ * ORG-SRS-007 (issue #30, D1) — POST /crews/:id/members chỉ quản lý MEMBER.
+ * member_role luôn 'MEMBER' (LEAD qua leaderUserId swap). effectiveFrom
+ * optional ISO date (default today), validate chi tiết ở use case (fieldErrors).
+ */
+export class CreateCrewMemberDto {
+  @IsUUID('4', { message: 'Người dùng không hợp lệ' })
+  userId!: string;
+
+  @IsOptional()
+  @IsString()
+  effectiveFrom?: string | null;
+}
+
+/**
+ * ORG-SRS-007 (issue #30, D2) — DELETE /crews/:id/members/:memberId (soft-deactivate).
+ * effectiveTo optional ISO date (default today, phải >= effectiveFrom);
+ * reason optional 1-500 ký tự, ghi vào cột audit_logs.reason.
+ */
+export class RemoveCrewMemberDto {
+  @IsOptional()
+  @IsString()
+  effectiveTo?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string | null;
+}
+
+export class CrewMemberResponseDto {
+  id!: string;
+  userId!: string;
+  memberRole!: string;
+  effectiveFrom!: string;
+  effectiveTo!: string | null;
+  isActive!: boolean;
+  addedBy!: string;
+  createdAt!: string;
+  userName!: string | null;
+  userCode!: string | null;
+}

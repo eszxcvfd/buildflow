@@ -6,7 +6,11 @@ import { GetCrewUseCase } from '../../../application/use-case/get-crew.use-case'
 import { SearchCrewsUseCase } from '../../../application/use-case/search-crews.use-case';
 import { StatusTransitionCrewUseCase } from '../../../application/use-case/status-transition-crew.use-case';
 import { GetCrewOpenWorkUseCase } from '../../../application/use-case/get-crew-open-work.use-case';
+import { AddCrewMemberUseCase } from '../../../application/use-case/add-crew-member.use-case';
+import { RemoveCrewMemberUseCase } from '../../../application/use-case/remove-crew-member.use-case';
+import { ListCrewMembersUseCase } from '../../../application/use-case/list-crew-members.use-case';
 import { CrewEntity } from '../../../domain/entity/crew.entity';
+import { CrewMemberRow } from '../../../domain/repository/crew-repository.port';
 
 const LEADER = '33333333-3333-4333-8333-333333333333';
 const ACTOR = '22222222-2222-4222-8222-222222222222';
@@ -22,6 +26,22 @@ function makeCrew(id: string, status: 'ACTIVE' | 'INACTIVE' = 'ACTIVE'): CrewEnt
     createdAt: new Date('2026-08-26T00:00:00.000Z'),
     updatedAt: new Date('2026-08-27T00:00:00.000Z'),
   });
+}
+
+function makeMember(id: string): CrewMemberRow {
+  return {
+    id,
+    crewId: '11111111-1111-4111-8111-111111111111',
+    userId: '33333333-3333-4333-8333-333333333333',
+    memberRole: 'MEMBER',
+    effectiveFrom: '2026-09-01',
+    effectiveTo: null,
+    isActive: true,
+    addedBy: ACTOR,
+    createdAt: new Date('2026-09-01T00:00:00.000Z'),
+    userName: 'Nguyen Van A',
+    userCode: 'EMP-1',
+  };
 }
 
 function adminReq(): unknown {
@@ -48,6 +68,9 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
   let searchMock: jest.Mocked<SearchCrewsUseCase>;
   let transitionMock: jest.Mocked<StatusTransitionCrewUseCase>;
   let openWorkMock: jest.Mocked<GetCrewOpenWorkUseCase>;
+  let addMemberMock: jest.Mocked<AddCrewMemberUseCase>;
+  let removeMemberMock: jest.Mocked<RemoveCrewMemberUseCase>;
+  let listMembersMock: jest.Mocked<ListCrewMembersUseCase>;
   let controller: CrewsController;
 
   beforeEach(() => {
@@ -57,7 +80,10 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
     searchMock = { execute: jest.fn(async () => ({ entities: [makeCrew(CID)], total: 1 })) } as unknown as jest.Mocked<SearchCrewsUseCase>;
     transitionMock = { execute: jest.fn(async () => ({ entity: makeCrew(CID), alreadyInState: false })) } as unknown as jest.Mocked<StatusTransitionCrewUseCase>;
     openWorkMock = { execute: jest.fn(async () => ({ openAssignments: 0 })) } as unknown as jest.Mocked<GetCrewOpenWorkUseCase>;
-    controller = new CrewsController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock);
+    addMemberMock = { execute: jest.fn(async () => ({ member: makeMember('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') })) } as unknown as jest.Mocked<AddCrewMemberUseCase>;
+    removeMemberMock = { execute: jest.fn(async () => ({ member: makeMember('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'), alreadyRemoved: false })) } as unknown as jest.Mocked<RemoveCrewMemberUseCase>;
+    listMembersMock = { execute: jest.fn(async () => ({ members: [makeMember('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')] })) } as unknown as jest.Mocked<ListCrewMembersUseCase>;
+    controller = new CrewsController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock, addMemberMock, removeMemberMock, listMembersMock);
   });
 
   describe('role matrix: ADMIN + PROJECT_MANAGER read+write; WORKER 403', () => {
@@ -95,12 +121,18 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
       await expect(controller.update(CID, { name: 'B' } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
       await expect(controller.changeStatus(CID, { action: 'SUSPEND', reason: 'x' } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
       await expect(controller.openWork(CID, workerReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.listMembers(CID, workerReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.addMember(CID, { userId: LEADER } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.removeMember(CID, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', workerReq() as never)).rejects.toThrow(ForbiddenException);
       expect(createMock.execute).not.toHaveBeenCalled();
       expect(searchMock.execute).not.toHaveBeenCalled();
       expect(getMock.execute).not.toHaveBeenCalled();
       expect(updateMock.execute).not.toHaveBeenCalled();
       expect(transitionMock.execute).not.toHaveBeenCalled();
       expect(openWorkMock.execute).not.toHaveBeenCalled();
+      expect(addMemberMock.execute).not.toHaveBeenCalled();
+      expect(removeMemberMock.execute).not.toHaveBeenCalled();
+      expect(listMembersMock.execute).not.toHaveBeenCalled();
     });
   });
 
@@ -119,9 +151,10 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
     await expect(controller.search(adminReq() as never, 'INACTIVE', undefined, 'true', undefined, undefined, undefined, undefined)).rejects.toThrow(BadRequestException);
   });
 
-  it('không hard delete — controller không expose DELETE', () => {
+  it('không hard delete crew — DELETE duy nhất là members soft-deactivate (D2, giữ lịch sử)', () => {
     const proto = Object.getOwnPropertyNames(CrewsController.prototype);
-    expect(proto.some((m) => /delete|remove|destroy/i.test(m))).toBe(false);
+    const destructive = proto.filter((m) => /delete|remove|destroy/i.test(m));
+    expect(destructive).toEqual(['removeMember']);
   });
 
   describe('X-Correlation-Id strict trên create/update/status', () => {
@@ -165,6 +198,54 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
       openWorkMock.execute.mockResolvedValue({ openAssignments: 5 });
       const res = await controller.openWork(CID, pmReq() as never);
       expect(res.openAssignments).toBe(5);
+    });
+  });
+
+  describe('members ORG-SRS-007 (issue #30)', () => {
+    const MID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+    it('ADMIN + PM read + write members; response member shape', async () => {
+      const list = await controller.listMembers(CID, pmReq() as never, undefined, undefined);
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ crewId: CID, at: undefined, includeInactive: false });
+      expect(list.total).toBe(1);
+      expect(list.data[0]).toEqual(expect.objectContaining({
+        id: MID, memberRole: 'MEMBER', effectiveFrom: '2026-09-01', isActive: true, userName: 'Nguyen Van A',
+      }));
+      const added = await controller.addMember(CID, { userId: LEADER, effectiveFrom: '2026-09-01' } as never, adminReq() as never);
+      expect(addMemberMock.execute).toHaveBeenCalledWith(expect.objectContaining({
+        crewId: CID, userId: LEADER, effectiveFrom: '2026-09-01', actorUserId: 'admin-1',
+      }));
+      expect(added.memberRole).toBe('MEMBER');
+      expect((added as Record<string, unknown>).warning).toBeUndefined();
+      const removed = await controller.removeMember(CID, MID, adminReq() as never, { effectiveTo: '2026-09-06', reason: 'x' } as never);
+      expect(removeMemberMock.execute).toHaveBeenCalledWith(expect.objectContaining({
+        crewId: CID, memberId: MID, effectiveTo: '2026-09-06', reason: 'x',
+      }));
+      expect(removed.alreadyRemoved).toBe(false);
+    });
+
+    it('list forward at + includeInactive; add kèm warning; remove alreadyRemoved', async () => {
+      await controller.listMembers(CID, adminReq() as never, '2026-09-03', 'true');
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ crewId: CID, at: '2026-09-03', includeInactive: true });
+      addMemberMock.execute.mockResolvedValue({
+        member: makeMember(MID),
+        warning: { code: 'MEMBER_IN_OTHER_CREW', otherCrews: [{ crewId: CID, crewCode: 'CREW-B', crewName: 'B' }] },
+      });
+      const warned = await controller.addMember(CID, { userId: LEADER } as never, pmReq() as never);
+      expect((warned as Record<string, unknown>).warning).toEqual(expect.objectContaining({ code: 'MEMBER_IN_OTHER_CREW' }));
+      removeMemberMock.execute.mockResolvedValue({ member: makeMember(MID), alreadyRemoved: true });
+      const again = await controller.removeMember(CID, MID, adminReq() as never);
+      expect(again.alreadyRemoved).toBe(true);
+    });
+
+    it('X-Correlation-Id strict trên add/remove members', async () => {
+      await controller.addMember(CID, { userId: LEADER } as never, reqWithCorr(['ADMIN'], VALID_CORR) as never);
+      expect(addMemberMock.execute).toHaveBeenCalledWith(expect.objectContaining({ correlationId: VALID_CORR }));
+      addMemberMock.execute.mockClear();
+      await expect(controller.addMember(CID, { userId: LEADER } as never, reqWithCorr(['ADMIN'], 'bad') as never)).rejects.toThrow(BadRequestException);
+      expect(addMemberMock.execute).not.toHaveBeenCalled();
+      await expect(controller.removeMember(CID, MID, reqWithCorr(['PROJECT_MANAGER'], 'bad') as never)).rejects.toThrow(BadRequestException);
+      expect(removeMemberMock.execute).not.toHaveBeenCalled();
     });
   });
 });

@@ -24,6 +24,9 @@ import { UpdateCrewUseCase } from './application/use-case/update-crew.use-case';
 import { GetCrewUseCase } from './application/use-case/get-crew.use-case';
 import { SearchCrewsUseCase } from './application/use-case/search-crews.use-case';
 import { GetCrewOpenWorkUseCase } from './application/use-case/get-crew-open-work.use-case';
+import { AddCrewMemberUseCase } from './application/use-case/add-crew-member.use-case';
+import { RemoveCrewMemberUseCase } from './application/use-case/remove-crew-member.use-case';
+import { ListCrewMembersUseCase } from './application/use-case/list-crew-members.use-case';
 import { GetWorkerOpenWorkUseCase } from './application/use-case/get-worker-open-work.use-case';
 import { GetContractorOpenWorkUseCase } from './application/use-case/get-contractor-open-work.use-case';
 import { PgWorkerRepository } from './infrastructure/database/pg-worker.repository';
@@ -70,6 +73,9 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     GetCrewUseCase,
     SearchCrewsUseCase,
     GetCrewOpenWorkUseCase,
+    AddCrewMemberUseCase,
+    RemoveCrewMemberUseCase,
+    ListCrewMembersUseCase,
     GetWorkerOpenWorkUseCase,
     GetContractorOpenWorkUseCase,
     JwtAuthGuard,

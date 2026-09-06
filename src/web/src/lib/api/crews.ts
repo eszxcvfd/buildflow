@@ -70,6 +70,66 @@ export interface OpenWorkResult {
   openAssignments: number;
 }
 
+/**
+ * ORG-SRS-007 (issue #30) — thành viên đội (MEMBER qua slice này, LEAD qua
+ * PATCH /crews/:id leaderUserId swap). Response DTO: id/userId/memberRole/
+ * effectiveFrom (date-only YYYY-MM-DD)/effectiveTo/isActive/addedBy/createdAt
+ * + userName/userCode join từ users (nullable).
+ */
+export interface CrewMember {
+  id: string;
+  userId: string;
+  memberRole: 'LEAD' | 'MEMBER' | string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  addedBy: string;
+  createdAt: string;
+  userName: string | null;
+  userCode: string | null;
+}
+
+export interface ListCrewMembersParams {
+  /** Point-in-time roster: members có [effectiveFrom, effectiveTo] INCLUSIVE hai đầu bao phủ date (effectiveTo null = open-ended). */
+  at?: string;
+  /** true → toàn bộ lịch sử (past members kèm effectiveTo), false/default → chỉ active. */
+  includeInactive?: boolean;
+}
+
+export interface ListCrewMembersResult {
+  data: CrewMember[];
+  total: number;
+}
+
+export interface AddCrewMemberPayload {
+  userId: string;
+  /** ISO date YYYY-MM-DD, optional — API default today. */
+  effectiveFrom?: string | null;
+}
+
+export interface OtherCrewRef {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+}
+
+/** POST /crews/:id/members → 201 member + warning? MEMBER_IN_OTHER_CREW (vẫn thêm thành công). */
+export type AddCrewMemberResult = CrewMember & {
+  warning?: { code: 'MEMBER_IN_OTHER_CREW'; otherCrews: OtherCrewRef[] } | null;
+};
+
+export interface RemoveCrewMemberPayload {
+  /** ISO date YYYY-MM-DD, optional — API default today, phải >= effectiveFrom. */
+  effectiveTo?: string | null;
+  /** Lý do rời đội 1–500, optional — ghi vào audit_logs.reason. */
+  reason?: string | null;
+}
+
+/** DELETE /crews/:id/members/:memberId → soft-deactivate; đã inactive → alreadyRemoved:true. */
+export type RemoveCrewMemberResult = CrewMember & {
+  alreadyRemoved: boolean;
+};
+
 export type CrewLifecycleStatusChangeResult = Crew & {
   alreadyInState: boolean;
   warning?: { openAssignments: number } | null;
@@ -313,4 +373,99 @@ export async function getCrewOpenWork(id: string): Promise<OpenWorkResult> {
   }
   const body = (await res.json()) as OpenWorkResult;
   return { openAssignments: Number(body.openAssignments ?? 0) };
+}
+
+/**
+ * ORG-SRS-007 (issue #30) — tra cứu thành viên: default chỉ active,
+ * `at` point-in-time roster, `includeInactive=true` toàn bộ lịch sử.
+ * Reads dùng `cache: 'no-store'`; 400 shape { message, fieldErrors } giữ
+ * nguyên fieldErrors server (pattern changeCrewLifecycleStatus).
+ */
+export async function listCrewMembers(id: string, params: ListCrewMembersParams = {}): Promise<ListCrewMembersResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const qs = new URLSearchParams();
+  if (params.at) qs.set('at', params.at);
+  if (params.includeInactive) qs.set('includeInactive', 'true');
+  const url = `${base}/api/v1/crews/${encodeURIComponent(id)}/members${qs.toString() ? `?${qs.toString()}` : ''}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    await parseError(res, `Danh sách thành viên đội thi công thất bại (${res.status})`);
+  }
+  const data = (await res.json()) as ListCrewMembersResult;
+  return data;
+}
+
+/**
+ * ORG-SRS-007 (issue #30, D1) — thêm thành viên role MEMBER (201).
+ * LEAD không qua đây. Lỗi: 409 MEMBER_DUPLICATE (code giữ nguyên để form
+ * map về field userId) / CREW_INACTIVE / USER_INACTIVE, 404 USER_NOT_FOUND,
+ * 400 fieldErrors (effectiveFrom). Thành công kèm warning? MEMBER_IN_OTHER_CREW
+ * (overlap đội khác — vẫn thêm thành công, UI hiện banner).
+ */
+export async function addCrewMember(id: string, payload: AddCrewMemberPayload): Promise<AddCrewMemberResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/crews/${encodeURIComponent(id)}/members`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseError(res, `Thêm thành viên đội thi công thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { warning, ...member } = body;
+  return {
+    ...(member as unknown as CrewMember),
+    warning: warning && typeof warning === 'object'
+      ? {
+        code: 'MEMBER_IN_OTHER_CREW' as const,
+        otherCrews: Array.isArray((warning as { otherCrews?: unknown }).otherCrews)
+          ? (warning as { otherCrews: OtherCrewRef[] }).otherCrews
+          : [],
+      }
+      : null,
+  };
+}
+
+/**
+ * ORG-SRS-007 (issue #30, D2) — xóa mềm thành viên (giữ lịch sử).
+ * Idempotent: đã inactive → 200 { alreadyRemoved: true }, không audit thêm.
+ */
+export async function removeCrewMember(
+  id: string,
+  memberId: string,
+  payload: RemoveCrewMemberPayload = {},
+): Promise<RemoveCrewMemberResult> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/crews/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseError(res, `Xóa thành viên đội thi công thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyRemoved, ...member } = body;
+  return {
+    ...(member as unknown as CrewMember),
+    alreadyRemoved: alreadyRemoved === true,
+  };
 }

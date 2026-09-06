@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { CrewEntity } from '../../domain/entity/crew.entity';
-import { CrewFilter, CrewRepositoryPort } from '../../domain/repository/crew-repository.port';
+import { CrewFilter, CrewMemberFilter, CrewMemberRow, CrewRepositoryPort } from '../../domain/repository/crew-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -154,4 +154,181 @@ export class PgCrewRepository implements CrewRepositoryPort {
     );
     return Number(r.rows[0].total ?? 0);
   }
+
+  /**
+   * ORG-SRS-007 (issue #30) — map một row crew_members (+ join users rẻ:
+   * full_name/employee_code). Date-only cột trả về dưới dạng string
+   * `YYYY-MM-DD` (pg parse date thành Date UTC midnight → slice).
+   */
+  private mapMemberRow(row: Record<string, unknown>): CrewMemberRow {
+    return {
+      id: String(row['id']),
+      crewId: String(row['crew_id']),
+      userId: String(row['user_id']),
+      memberRole: row['member_role'] as 'LEAD' | 'MEMBER',
+      effectiveFrom: toDateOnly(row['effective_from']),
+      effectiveTo: row['effective_to'] === null || row['effective_to'] === undefined
+        ? null
+        : toDateOnly(row['effective_to']),
+      isActive: Boolean(row['is_active']),
+      addedBy: String(row['added_by']),
+      createdAt: new Date(String(row['created_at'])),
+      userName: (row['user_name'] as string | null) ?? null,
+      userCode: (row['user_code'] as string | null) ?? null,
+    };
+  }
+
+  private memberSelect(): string {
+    return `m.id, m.crew_id, m.user_id, m.member_role, m.effective_from, m.effective_to,
+      m.is_active, m.added_by, m.created_at, u.full_name AS user_name, u.employee_code AS user_code
+      FROM public.crew_members m LEFT JOIN public.users u ON u.id = m.user_id`;
+  }
+
+  async listMembers(filter: CrewMemberFilter): Promise<CrewMemberRow[]> {
+    return this.listMembersOn((text, values) => this.pool().query(text, values), filter);
+  }
+
+  async listMembersWithClient(client: PoolClient, filter: CrewMemberFilter): Promise<CrewMemberRow[]> {
+    return this.listMembersOn((text, values) => client.query(text, values), filter);
+  }
+
+  private async listMembersOn(
+    query: (text: string, values: unknown[]) => Promise<{ rows: unknown[] }>,
+    filter: CrewMemberFilter,
+  ): Promise<CrewMemberRow[]> {
+    if (filter.at) {
+      // Point-in-time (D6): [effective_from, effective_to] INCLUSIVE hai đầu
+      // (effective_to = at vẫn tính), NULL = open-ended — bất kể is_active.
+      const r = await query(
+        `SELECT ${this.memberSelect()} WHERE m.crew_id = $1
+         AND m.effective_from <= $2::date AND (m.effective_to IS NULL OR m.effective_to >= $2::date)
+         ORDER BY m.effective_from DESC`,
+        [filter.crewId, filter.at],
+      );
+      return (r.rows as Record<string, unknown>[]).map((row) => this.mapMemberRow(row));
+    }
+    if (filter.includeInactive) {
+      const r = await query(
+        `SELECT ${this.memberSelect()} WHERE m.crew_id = $1 ORDER BY m.effective_from DESC`,
+        [filter.crewId],
+      );
+      return (r.rows as Record<string, unknown>[]).map((row) => this.mapMemberRow(row));
+    }
+    const r = await query(
+      `SELECT ${this.memberSelect()} WHERE m.crew_id = $1 AND m.is_active ORDER BY m.effective_from DESC`,
+      [filter.crewId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => this.mapMemberRow(row));
+  }
+
+  async findMemberByIdWithClient(client: PoolClient, memberId: string): Promise<CrewMemberRow | null> {
+    const r = await client.query(`SELECT ${this.memberSelect()} WHERE m.id = $1 LIMIT 1`, [memberId]);
+    if (r.rows.length === 0) return null;
+    return this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findActiveMemberWithClient(client: PoolClient, crewId: string, userId: string): Promise<CrewMemberRow | null> {
+    const r = await client.query(
+      `SELECT ${this.memberSelect()} WHERE m.crew_id = $1 AND m.user_id = $2 AND m.is_active LIMIT 1`,
+      [crewId, userId],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findActiveMembershipsOfUserWithClient(
+    client: PoolClient,
+    userId: string,
+    excludeCrewId: string,
+  ): Promise<Array<{ crewId: string; crewCode: string; crewName: string }>> {
+    const r = await client.query(
+      `SELECT m.crew_id AS crew_id, c.code AS crew_code, c.name AS crew_name
+       FROM public.crew_members m JOIN public.crews c ON c.id = m.crew_id
+       WHERE m.user_id = $1 AND m.is_active AND m.crew_id <> $2`,
+      [userId, excludeCrewId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => ({
+      crewId: String(row['crew_id']),
+      crewCode: String(row['crew_code']),
+      crewName: String(row['crew_name']),
+    }));
+  }
+
+  async insertMemberWithClient(
+    client: PoolClient,
+    input: { crewId: string; userId: string; effectiveFrom: string; addedBy: string },
+  ): Promise<CrewMemberRow> {
+    // member_role luôn 'MEMBER' (D1); LEAD chỉ qua leader-swap.
+    // Trùng active trong cùng đội → ux_crew_member_active (23505) → use case map 409.
+    const r = await client.query(
+      `INSERT INTO public.crew_members (id, crew_id, user_id, member_role, effective_from, effective_to, is_active, added_by)
+       VALUES (gen_random_uuid(), $1, $2, 'MEMBER', $3::date, NULL, true, $4)
+       RETURNING id, crew_id, user_id, member_role, effective_from, effective_to, is_active, added_by, created_at`,
+      [input.crewId, input.userId, input.effectiveFrom, input.addedBy],
+    );
+    const row = this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+    const u = await client.query(`SELECT full_name, employee_code FROM public.users WHERE id = $1`, [input.userId]);
+    if (u.rows.length > 0) {
+      row.userName = (u.rows[0].full_name as string | null) ?? null;
+      row.userCode = (u.rows[0].employee_code as string | null) ?? null;
+    }
+    return row;
+  }
+
+  async deactivateMemberWithClient(
+    client: PoolClient,
+    memberId: string,
+    effectiveTo: string,
+  ): Promise<CrewMemberRow | null> {
+    // Soft-deactivate (D2): row KHÔNG bao giờ bị xóa — giữ lịch sử.
+    const r = await client.query(
+      `UPDATE public.crew_members SET is_active = false, effective_to = $2::date
+       WHERE id = $1 RETURNING id, crew_id, user_id, member_role, effective_from, effective_to, is_active, added_by, created_at`,
+      [memberId, effectiveTo],
+    );
+    if (r.rows.length === 0) return null;
+    const row = this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+    const u = await client.query(`SELECT full_name, employee_code FROM public.users WHERE id = $1`, [row.userId]);
+    if (u.rows.length > 0) {
+      row.userName = (u.rows[0].full_name as string | null) ?? null;
+      row.userCode = (u.rows[0].employee_code as string | null) ?? null;
+    }
+    return row;
+  }
+
+  async findCrewForUpdateWithClient(
+    client: PoolClient,
+    crewId: string,
+  ): Promise<{ id: string; code: string; name: string; status: string } | null> {
+    const r = await client.query(
+      `SELECT id, code, name, status FROM public.crews WHERE id = $1 FOR UPDATE`,
+      [crewId],
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0] as Record<string, unknown>;
+    return { id: String(row['id']), code: String(row['code']), name: String(row['name']), status: String(row['status']) };
+  }
+
+  async findCrewByIdWithClient(
+    client: PoolClient,
+    crewId: string,
+  ): Promise<{ id: string; code: string; name: string; status: string } | null> {
+    // Fix F5: SELECT thường trong tx (không FOR UPDATE) cho audit read.
+    const r = await client.query(
+      `SELECT id, code, name, status FROM public.crews WHERE id = $1 LIMIT 1`,
+      [crewId],
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0] as Record<string, unknown>;
+    return { id: String(row['id']), code: String(row['code']), name: String(row['name']), status: String(row['status']) };
+  }
+}
+
+/**
+ * Chuẩn hóa cột date của pg về `YYYY-MM-DD`. pg trả date thành Date
+ * (UTC midnight) hoặc string tùy driver config — xử lý cả hai.
+ */
+function toDateOnly(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }

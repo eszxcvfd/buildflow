@@ -5,6 +5,9 @@ import {
   updateCrew,
   changeCrewLifecycleStatus,
   getCrewOpenWork,
+  listCrewMembers,
+  addCrewMember,
+  removeCrewMember,
   type Crew,
 } from './crews';
 
@@ -119,5 +122,77 @@ describe('web crews API client ORG-SRS-006', () => {
   it('getCrewOpenWork returns openAssignments count', async () => {
     fetchMock.mockResolvedValue(response(200, { openAssignments: 2 }));
     await expect(getCrewOpenWork('crew-1')).resolves.toEqual({ openAssignments: 2 });
+  });
+
+  it('ORG-SRS-007 — listCrewMembers dùng no-store + query at/includeInactive', async () => {
+    fetchMock.mockResolvedValue(response(200, { data: [], total: 0 }));
+    await listCrewMembers('crew-1', { at: '2026-01-15' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/crews/crew-1/members?at=2026-01-15'),
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+    fetchMock.mockClear();
+    await listCrewMembers('crew-1', { includeInactive: true });
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('includeInactive=true');
+  });
+
+  it('ORG-SRS-007 — addCrewMember 201 tách warning MEMBER_IN_OTHER_CREW', async () => {
+    fetchMock.mockResolvedValue(
+      response(201, {
+        id: 'm-1',
+        userId: 'u-1',
+        memberRole: 'MEMBER',
+        effectiveFrom: '2026-02-01',
+        effectiveTo: null,
+        isActive: true,
+        addedBy: 'admin',
+        createdAt: '2026-02-01T00:00:00.000Z',
+        userName: 'Nguyen Van M',
+        userCode: 'NV-002',
+        warning: { code: 'MEMBER_IN_OTHER_CREW', otherCrews: [{ crewId: 'c-2', crewCode: 'T2', crewName: 'Doi 2' }] },
+      }),
+    );
+    const res = await addCrewMember('crew-1', { userId: 'u-1', effectiveFrom: null });
+    expect(res.userId).toBe('u-1');
+    expect(res.warning?.code).toBe('MEMBER_IN_OTHER_CREW');
+    expect(res.warning?.otherCrews).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/crews/crew-1/members'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('ORG-SRS-007 — addCrewMember giữ code MEMBER_DUPLICATE cho form map field', async () => {
+    fetchMock.mockResolvedValue(response(409, { statusCode: 409, message: 'Thành viên đã thuộc đội', code: 'MEMBER_DUPLICATE' }));
+    await expect(addCrewMember('crew-1', { userId: 'u-1' })).rejects.toMatchObject({
+      status: 409,
+      code: 'MEMBER_DUPLICATE',
+    });
+  });
+
+  it('ORG-SRS-007 — removeCrewMember tách alreadyRemoved', async () => {
+    fetchMock.mockResolvedValue(
+      response(200, {
+        id: 'm-1',
+        userId: 'u-1',
+        memberRole: 'MEMBER',
+        effectiveFrom: '2026-02-01',
+        effectiveTo: '2026-03-01',
+        isActive: false,
+        addedBy: 'admin',
+        createdAt: '2026-02-01T00:00:00.000Z',
+        userName: null,
+        userCode: null,
+        alreadyRemoved: true,
+      }),
+    );
+    const res = await removeCrewMember('crew-1', 'm-1', { effectiveTo: '2026-03-01', reason: null });
+    expect(res.alreadyRemoved).toBe(true);
+    expect(res.isActive).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/crews/crew-1/members/m-1'),
+      expect.objectContaining({ method: 'DELETE' }),
+    );
   });
 });

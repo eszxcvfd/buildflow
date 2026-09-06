@@ -3,6 +3,8 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
+  HttpCode,
   Param,
   Query,
   Body,
@@ -23,9 +25,12 @@ import { GetCrewUseCase } from '../../../application/use-case/get-crew.use-case'
 import { SearchCrewsUseCase } from '../../../application/use-case/search-crews.use-case';
 import { StatusTransitionCrewUseCase } from '../../../application/use-case/status-transition-crew.use-case';
 import { GetCrewOpenWorkUseCase } from '../../../application/use-case/get-crew-open-work.use-case';
-import { CreateCrewDto, UpdateCrewDto } from '../presentation/dto/crew.dto';
+import { AddCrewMemberUseCase } from '../../../application/use-case/add-crew-member.use-case';
+import { RemoveCrewMemberUseCase } from '../../../application/use-case/remove-crew-member.use-case';
+import { ListCrewMembersUseCase } from '../../../application/use-case/list-crew-members.use-case';
+import { CreateCrewDto, UpdateCrewDto, CreateCrewMemberDto, RemoveCrewMemberDto } from '../presentation/dto/crew.dto';
 import { ChangeResourceStatusDto } from '../presentation/dto/resource-status.dto';
-import { toCrewResponse, toCrewListResponse } from '../presentation/mapper/crew.mapper';
+import { toCrewResponse, toCrewListResponse, toCrewMemberResponse, toCrewMemberListResponse } from '../presentation/mapper/crew.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
 /**
@@ -74,6 +79,9 @@ export class CrewsController {
     private readonly searchCrews: SearchCrewsUseCase,
     private readonly transitionCrewStatus: StatusTransitionCrewUseCase,
     private readonly getCrewOpenWork: GetCrewOpenWorkUseCase,
+    private readonly addCrewMember: AddCrewMemberUseCase,
+    private readonly removeCrewMember: RemoveCrewMemberUseCase,
+    private readonly listCrewMembers: ListCrewMembersUseCase,
   ) {}
 
   @Post()
@@ -233,5 +241,93 @@ export class CrewsController {
   async openWork(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     assertCrewAccess(req);
     return this.getCrewOpenWork.execute({ crewId: id });
+  }
+
+  /**
+   * ORG-SRS-007 (issue #30) — tra cứu thành viên hiện tại + lịch sử.
+   * Default chỉ active; `?at=YYYY-MM-DD` point-in-time; `?includeInactive=true`
+   * toàn bộ lịch sử. Same CREW_ROLES read (D7). Current data → no-store.
+   */
+  @Get(':id/members')
+  @Header('Cache-Control', 'no-store')
+  async listMembers(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: Request,
+    @Query('at') at?: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    assertCrewAccess(req);
+    const { members } = await this.listCrewMembers.execute({
+      crewId: id,
+      at: at || undefined,
+      includeInactive: includeInactive === 'true' || includeInactive === '1',
+    });
+    return { data: toCrewMemberListResponse(members), total: members.length };
+  }
+
+  /**
+   * ORG-SRS-007 (issue #30, D1) — thêm thành viên role MEMBER (201).
+   * LEAD không qua đây. member_role luôn 'MEMBER'.
+   */
+  @Post(':id/members')
+  @HttpCode(201)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async addMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CreateCrewMemberDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertCrewAccess(req);
+    const meta = getMeta(req);
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
+    const { member, warning } = await this.addCrewMember.execute({
+      crewId: id,
+      userId: dto.userId,
+      effectiveFrom: dto.effectiveFrom ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return {
+      ...toCrewMemberResponse(member),
+      ...(warning !== undefined ? { warning } : {}),
+    };
+  }
+
+  /**
+   * ORG-SRS-007 (issue #30, D2) — xóa mềm thành viên (soft-deactivate, giữ lịch sử).
+   * Idempotent: đã inactive → 200 {alreadyRemoved:true}, không audit.
+   */
+  @Delete(':id/members/:memberId')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async removeMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('memberId', new ParseUUIDPipe()) memberId: string,
+    @Req() req: Request,
+    @Body() dto?: RemoveCrewMemberDto,
+  ) {
+    const actor = assertCrewAccess(req);
+    const meta = getMeta(req);
+    if (meta.correlationId && !UUID_RE.test(meta.correlationId)) {
+      throw new BadRequestException(
+        'X-Correlation-Id phải là UUID hợp lệ (audit_logs.correlation_id là uuid-typed)',
+      );
+    }
+    const { member, alreadyRemoved } = await this.removeCrewMember.execute({
+      crewId: id,
+      memberId,
+      effectiveTo: dto?.effectiveTo ?? null,
+      reason: dto?.reason ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return { ...toCrewMemberResponse(member), alreadyRemoved };
   }
 }

@@ -1,7 +1,7 @@
 # Endpoint contract — ORG catalog slices (workers/contractors/trades/crews)
 
 > **Owner:** API/Contract workspace (xem [`WORK-ROUTING.md`](../../WORK-ROUTING.md) — HTTP endpoint/DTO/validation thuộc `src/api` Contract lane).
-> **Phạm vi:** các endpoint org catalog đã implement theo vertical slice `#24` (`ORG-SRS-001` workers), `#25` (`ORG-SRS-002` contractors), `#26` (`ORG-SRS-003` trades), lifecycle trạng thái `#27` (`ORG-SRS-004`) và `#29` (`ORG-SRS-006` crews). Đây là contract công bố cho web/mobile; thay đổi breaking phải route qua `NETCODE.md` và đồng bộ consumer trong cùng thay đổi.
+> **Phạm vi:** các endpoint org catalog đã implement theo vertical slice `#24` (`ORG-SRS-001` workers), `#25` (`ORG-SRS-002` contractors), `#26` (`ORG-SRS-003` trades), lifecycle trạng thái `#27` (`ORG-SRS-004`), `#29` (`ORG-SRS-006` crews) và `#30` (`ORG-SRS-007` crew members + workers `crewId` filter). Đây là contract công bố cho web/mobile; thay đổi breaking phải route qua `NETCODE.md` và đồng bộ consumer trong cùng thay đổi.
 > **File gốc:** endpoint policy được cập nhật cùng slice trong `docs/architecture/API.md`; file này chép/bám sát nội dung đó để làm tài liệu tra cứu endpoint (không tạo một policy thứ hai).
 
 ---
@@ -21,7 +21,7 @@
 | Method | Path | Auth | Body | Response | Lỗi |
 | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/workers` | ADMIN-only | `{ email, password, fullName, phone?, avatarUrl?, employeeCode?, contractorId?, trades?: [{ tradeId, skillLevel 1-5 }] }` | `200` worker profile | `400`/`409` trùng email hoặc employeeCode; `400` trade inactive/không tồn tại |
-| GET | `/api/v1/workers` | **ADMIN + PROJECT_MANAGER** | query `status` (`ACTIVE`/`INACTIVE`/`LOCKED`), `search`, `tradeId`, `skillLevel`, `sort` (`name`→`full_name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
+| GET | `/api/v1/workers` | **ADMIN + PROJECT_MANAGER** | query `status` (`ACTIVE`/`INACTIVE`/`LOCKED`), `search`, `tradeId`, `skillLevel`, `crewId` (uuid — workers có ACTIVE membership trong đội, `#30` D9), `sort` (`name`→`full_name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
 | GET | `/api/v1/workers/:id` | **ADMIN + PROJECT_MANAGER** | — | `200` worker profile + header `Cache-Control: no-store` | `400` id sai; `404` |
 | PATCH | `/api/v1/workers/:id` | ADMIN-only | `{ fullName?, phone?, avatarUrl?, employeeCode?, contractorId?, trades? }` | `200` worker profile | `400`/`409`; `404` |
 
@@ -115,6 +115,8 @@ Strict `X-Correlation-Id` producer (bảng 8.2 API.md):
 | `PATCH /api/v1/crews/:id` (đổi tên/mô tả/nhà thầu) | `ORG_CREW_UPDATED` |
 | `PATCH /api/v1/crews/:id` (đổi trưởng nhóm) | `ORG_CREW_LEAD_CHANGED` |
 | `PATCH /api/v1/crews/:id/status` | `ORG_CREW_SUSPENDED` / `ORG_CREW_TERMINATED` / `ORG_CREW_REACTIVATED` (theo action `SUSPEND`/`TERMINATE`/`ACTIVATE`) |
+| `POST /api/v1/crews/:id/members` | `ORG_CREW_MEMBER_ADDED` |
+| `DELETE /api/v1/crews/:id/members/:memberId` | `ORG_CREW_MEMBER_REMOVED` (reason ở cột `audit_logs.reason`; `alreadyRemoved` không audit) |
 
 ## 7. Resource directory — ORG-SRS-005 (#28) bounded decisions
 
@@ -122,6 +124,7 @@ Quyết định đã chốt cho slice tra cứu nguồn lực (API slice; UI Web
 
 - **Role widen READ-only:** `GET` search + `GET` detail của workers/contractors/trades mở cho `ADMIN` + `PROJECT_MANAGER` (helper dùng chung `requireRoles(req, roles)` trong `iam/api/rest/guard/roles.guard.ts`; các write path giữ `assertAdmin`). Không refactor toàn bộ controller — chỉ các path widen.
 - **Team filter defer #29 → resolved cho crews, còn defer cho workers (#30):** SRS yêu cầu lọc theo đội nhưng crew CRUD thuộc ORG-SRS-006 (`#29`, Should) — nay crews đã có endpoint search riêng (mục 8); param team filter ở `GET /workers` vẫn defer sang `#30`.
+- **Team filter workers resolved ở `#30` (D9):** `GET /api/v1/workers` nhận thêm query `crewId` (uuid) = workers có ACTIVE membership trong đội đó (join `crew_members` `is_active`, mọi role LEAD/MEMBER đều tính); sai format → `400 { statusCode, message, fieldErrors: { crewId } }`. Defer `#28` đã đóng.
 - **Project scope N/A:** workers/contractors/trades là org-level directory, không có FK project; enforcement thay thế bằng role scope (chỉ ADMIN/PM được đọc). Không có project-out-of-scope/ID-tampering ở tài nguyên này.
 - **PII:** giữ `email`/`phone` trong response (nghiệp vụ điều phối cần liên hệ trực tiếp; mapper `toPublic` đã giới hạn — detail không trả gì thêm so với list); không thêm/trả PII khác.
 - **Current data:** `GET` search + `GET` detail trả header `Cache-Control: no-store` (không dùng cache stale để quyết định assignment); web client cũng fetch với `cache: 'no-store'`.
@@ -153,6 +156,26 @@ Rules:
 - Audit actions: `ORG_CREW_CREATED`, `ORG_CREW_UPDATED`, `ORG_CREW_LEAD_CHANGED`, `ORG_CREW_SUSPENDED`, `ORG_CREW_TERMINATED`, `ORG_CREW_REACTIVATED` (tx-embedded, correlation strict).
 - **Hai shape 400 trên crews** (giống các slice trước, client parse cả hai): (a) body thiếu/rỗng field bị `ValidationPipe` chặn trước use-case → shape mặc định `{ message: string[], error, statusCode: 400 }` KHÔNG có `fieldErrors`; (b) field hợp lệ về format nhưng business-invalid (leader không tồn tại/inactive, contractor 404, query sai, thiếu reason) → shape `{ statusCode, message, fieldErrors }`.
 - **Uniqueness policy cho `code`:** pre-check `findByCode` case-insensitive (chặt hơn DB — `ux_crews_code` là btree case-sensitive); giới hạn đã biết: hai create đồng thời với code chỉ khác chữ hoa/thường (`ABC`/`abc`) đều qua pre-check và DB chấp nhận cả hai.
+
+### 8.1. Thành viên đội — ORG-SRS-007 (#30)
+
+Quản lý thành viên đội (bảng `public.crew_members`, migration 0001 — không migration mới, không đổi constraint). Bounded decisions D1–D8 (Lead, binding):
+
+| Method | Path | Auth | Body | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/crews/:id/members` | **ADMIN + PROJECT_MANAGER** | query `at` (`YYYY-MM-DD`), `includeInactive` (`true`/`1`) | `200 { data[], total }` + header `Cache-Control: no-store` | `400` `at` sai (`fieldErrors`); `404` đội |
+| POST | `/api/v1/crews/:id/members` | **ADMIN + PROJECT_MANAGER** | `{ userId (uuid, bắt buộc), effectiveFrom? (ISO date, default today) }` | `201` member + `warning?` | `400`/`404`/`409` (xem rules) |
+| DELETE | `/api/v1/crews/:id/members/:memberId` | **ADMIN + PROJECT_MANAGER** | JSON `{ effectiveTo? (ISO date, default today), reason? (1-500) }` | `200` member + `alreadyRemoved` | `400`/`404`/`409 MEMBER_IS_LEAD` |
+
+- **D1 — chỉ MEMBER:** `member_role` luôn `'MEMBER'`; LEAD tiếp tục qua `PATCH /crews/:id` `leaderUserId` swap. `DELETE` vào row LEAD → `409 { code: 'MEMBER_IS_LEAD' }` (đổi trưởng nhóm qua sửa hồ sơ đội).
+- **D2 — xóa mềm:** `DELETE` đặt `is_active=false`, `effective_to=<given>`; row KHÔNG bao giờ bị xóa. Đã inactive → `200 { alreadyRemoved: true }`, không audit, không mutation.
+- **D3 — overlap WARN:** user đang active ở đội KHÁC → vẫn `201` kèm `warning: { code: 'MEMBER_IN_OTHER_CREW', otherCrews: [{ crewId, crewCode, crewName }] }` + `_warning` trong audit afterData. Trùng active trong CÙNG đội → `409 { code: 'MEMBER_DUPLICATE' }` (pre-check + race guard `23505`/`ux_crew_member_active`, constraint-order trước generic `23505`).
+- **D4 — điều kiện tạo:** đội phải `ACTIVE` (ngược lại `409 { code: 'CREW_INACTIVE' }`); user phải tồn tại, `user_type` STAFF/WORKER (ngược lại `404 { code: 'USER_NOT_FOUND' }`) và `status='ACTIVE'` (ngược lại `409 { code: 'USER_INACTIVE' }`). Re-check crew `SELECT ... FOR UPDATE` trong tx ngay trước insert.
+- **D5 — ngày hiệu lực:** `effectiveFrom`/`effectiveTo` phải là ISO date hợp lệ lịch; `effectiveTo >= effectiveFrom` (sai → `400` `fieldErrors`); vi phạm `crew_members_effective_dates_ck`/`revocation_ck` → `400`. Lỗi DB/I-O khác → `500` (không `400`).
+- **D6 — tra cứu:** default chỉ active (`id`, `userId`, `memberRole`, `effectiveFrom`, `effectiveTo`, `isActive`, `addedBy`, `createdAt` + `userName`/`userCode` join từ users). `?at=` point-in-time (`[effective_from, effective_to]` INCLUSIVE hai đầu, `effective_to` NULL = open-ended, bất kể `is_active`). `includeInactive=true` toàn bộ lịch sử, `effective_from DESC`.
+- **D7 — roles:** đọc + ghi dùng chung `CREW_ROLES` (`ADMIN` + `PROJECT_MANAGER`; SRS actor Điều phối viên — như crews `#29`).
+- **D8 — audit:** `ORG_CREW_MEMBER_ADDED` (before `null`, after member row + `crew code`) / `ORG_CREW_MEMBER_REMOVED` (before/after + `crew code`, `reason` ở cột `audit_logs.reason`), `entityType` `CREW`, `entityId` = crewId, tx-embedded `logWithClient`; audit thất bại → `500` rollback.
+- Hai shape `400` như crews mục 8 (ValidationPipe shape không `fieldErrors` cho body sai format; business-invalid có `fieldErrors`).
 
 ## References
 

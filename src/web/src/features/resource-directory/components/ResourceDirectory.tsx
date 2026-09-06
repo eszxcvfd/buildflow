@@ -56,6 +56,8 @@ interface DirectoryQuery {
   status: string;
   trade: string;
   skill: string;
+  /** ORG-SRS-007 (issue #30, D9) — lọc workers theo đội (?crew=<crewId>), chỉ tab workers. */
+  crew: string;
   q: string;
   sort: string;
   order: string;
@@ -71,6 +73,7 @@ function parseQuery(sp: URLSearchParams): DirectoryQuery {
     status: sp.get('status') ?? '',
     trade: sp.get('trade') ?? '',
     skill: sp.get('skill') ?? '',
+    crew: sp.get('crew') ?? '',
     q: sp.get('q') ?? '',
     sort: sp.get('sort') || 'createdAt',
     order: sp.get('order') || 'desc',
@@ -84,6 +87,7 @@ function toQueryString(q: DirectoryQuery): string {
   if (q.status) qs.set('status', q.status);
   if (q.tab === 'workers' && q.trade) qs.set('trade', q.trade);
   if (q.tab === 'workers' && q.skill) qs.set('skill', q.skill);
+  if (q.tab === 'workers' && q.crew) qs.set('crew', q.crew);
   if (q.q) qs.set('q', q.q);
   qs.set('sort', q.sort);
   qs.set('order', q.order);
@@ -114,7 +118,8 @@ function shortUuid(id: string): string {
  * khi quay lại; reads dùng cache no-store nên dữ liệu luôn hiện hành.
  * ORG-SRS-006 (issue #29) — bật tab Đội (listCrews, cùng pattern filter/sort/
  * pagination; rows read-only: code + tên + status + eligible + trưởng nhóm +
- * link chi tiết). KHÔNG thêm crew filter cho tab workers (defer #30).
+ * link chi tiết). ORG-SRS-007 (issue #30, D9) — tab workers có thêm lọc theo đội
+ * (?crew=<crewId> → listWorkers({ crewId }), options từ crews ACTIVE).
  */
 export function ResourceDirectory() {
   const router = useRouter();
@@ -138,7 +143,7 @@ export function ResourceDirectory() {
     const base = queryRef.current;
     const merged: DirectoryQuery = { ...base, ...next, page: next.page ?? (next.tab ? 1 : base.page) };
     // Đổi tab/filter → reset về trang 1 (trừ khi đang chuyển trang).
-    if ((next.tab && next.tab !== base.tab) || next.status !== undefined || next.trade !== undefined || next.skill !== undefined || next.q !== undefined || next.sort !== undefined || next.order !== undefined) {
+    if ((next.tab && next.tab !== base.tab) || next.status !== undefined || next.trade !== undefined || next.skill !== undefined || next.crew !== undefined || next.q !== undefined || next.sort !== undefined || next.order !== undefined) {
       if (next.page === undefined) merged.page = 1;
     }
     queryRef.current = merged;
@@ -167,6 +172,7 @@ export function ResourceDirectory() {
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [contractors, setContractors] = React.useState<Contractor[]>([]);
   const [crews, setCrews] = React.useState<Crew[]>([]);
+  const [activeCrews, setActiveCrews] = React.useState<Crew[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -174,6 +180,8 @@ export function ResourceDirectory() {
 
   // Tải danh mục trade một lần cho select filter + map tên (PM đọc được
   // GET /trades sau API slice #28; lỗi thì select trống, row fallback UUID).
+  // ORG-SRS-007 (issue #30, D9) — tải crews ACTIVE một lần cho select lọc
+  // theo đội ở tab workers (label `name · code`).
   React.useEffect(() => {
     let cancelled = false;
     async function loadTrades() {
@@ -184,7 +192,16 @@ export function ResourceDirectory() {
         if (!cancelled) setTrades([]);
       }
     }
+    async function loadActiveCrews() {
+      try {
+        const res = await listCrews({ status: 'ACTIVE', limit: 100 });
+        if (!cancelled) setActiveCrews(res.data);
+      } catch {
+        if (!cancelled) setActiveCrews([]);
+      }
+    }
     void loadTrades();
+    void loadActiveCrews();
     return () => {
       cancelled = true;
     };
@@ -207,6 +224,7 @@ export function ResourceDirectory() {
             status: query.status || undefined,
             tradeId: query.trade || undefined,
             skillLevel: query.skill ? Number(query.skill) : undefined,
+            crewId: query.crew || undefined,
             sort: query.sort,
             order: query.order,
             limit: PAGE_SIZE,
@@ -270,16 +288,17 @@ export function ResourceDirectory() {
   const statusError = pickFieldError(fieldErrors, ['status']);
   const tradeError = pickFieldError(fieldErrors, ['tradeId', 'trade']);
   const skillError = pickFieldError(fieldErrors, ['skillLevel', 'skill']);
+  const crewError = pickFieldError(fieldErrors, ['crewId', 'crew']);
   const sortError = pickFieldError(fieldErrors, ['sort']);
   const orderError = pickFieldError(fieldErrors, ['order']);
-  const globalFilterError = pickFieldError(fieldErrors, ['_global']) ?? (error?.status === 400 && !statusError && !tradeError && !skillError && !sortError && !orderError ? error.message : null);
+  const globalFilterError = pickFieldError(fieldErrors, ['_global']) ?? (error?.status === 400 && !statusError && !tradeError && !skillError && !crewError && !sortError && !orderError ? error.message : null);
 
   const statusOptions = query.tab === 'workers' ? WORKER_STATUSES : CONTRACTOR_STATUSES;  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasActiveFilter = Boolean(query.status || query.trade || query.skill || query.q);
+  const hasActiveFilter = Boolean(query.status || query.trade || query.skill || query.crew || query.q);
 
   function handleClear() {
     setQInput('');
-    apply({ status: '', trade: '', skill: '', q: '', sort: 'createdAt', order: 'desc', page: 1 });
+    apply({ status: '', trade: '', skill: '', crew: '', q: '', sort: 'createdAt', order: 'desc', page: 1 });
   }
 
   function renderError() {
@@ -457,6 +476,31 @@ export function ResourceDirectory() {
                 {skillError ? (
                   <p id="directory-skill-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                     {skillError}
+                  </p>
+                ) : null}
+              </div>
+              <div className="bf-field" style={{ minWidth: 180 }}>
+                <label className="bf-label" htmlFor="directory-crew">
+                  Đội thi công
+                </label>
+                <select
+                  id="directory-crew"
+                  className="bf-input"
+                  value={query.crew}
+                  onChange={(e) => apply({ crew: e.target.value })}
+                  aria-invalid={crewError ? true : undefined}
+                  aria-describedby={crewError ? 'directory-crew-error' : undefined}
+                >
+                  <option value="">Tất cả các đội</option>
+                  {activeCrews.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {c.code}
+                    </option>
+                  ))}
+                </select>
+                {crewError ? (
+                  <p id="directory-crew-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
+                    {crewError}
                   </p>
                 ) : null}
               </div>

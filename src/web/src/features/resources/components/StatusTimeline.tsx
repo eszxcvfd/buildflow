@@ -34,6 +34,8 @@ const LIFECYCLE_ACTION_LABEL: Record<string, string> = {
   ORG_CREW_REACTIVATED: 'Kích hoạt lại',
   ORG_CREW_SUSPENDED: 'Tạm ngừng',
   ORG_CREW_TERMINATED: 'Chấm dứt',
+  ORG_CREW_MEMBER_ADDED: 'Thêm thành viên',
+  ORG_CREW_MEMBER_REMOVED: 'Xóa thành viên',
 };
 
 const LIFECYCLE_STATUS_ACTIONS = new Set(Object.keys(LIFECYCLE_ACTION_LABEL));
