@@ -92,6 +92,28 @@ describe('web contractor API client ORG-SRS-002', () => {
     expect(res.total).toBe(1);
   });
 
+  describe('sort/order + fieldErrors (ORG-SRS-005, issue #28)', () => {
+    it('listContractors gửi sort/order query params', async () => {
+      fetchMock.mockResolvedValue(response(200, { data: [], total: 0, limit: 20, offset: 0 }));
+      await listContractors({ status: 'ACTIVE', sort: 'name', order: 'asc', limit: 20, offset: 0 });
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain('sort=name');
+      expect(url).toContain('order=asc');
+    });
+
+    it('giữ nguyên fieldErrors shape mới { message, fieldErrors } của API 400', async () => {
+      fetchMock.mockResolvedValue(response(400, {
+        statusCode: 400,
+        message: 'Sort không hợp lệ (name|createdAt)',
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      }));
+      await expect(listContractors({ sort: 'hacked' })).rejects.toMatchObject({
+        status: 400,
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      });
+    });
+  });
+
   describe('lifecycle status (ORG-SRS-004, issue #27)', () => {
     it('changeContractorLifecycleStatus PATCHes /contractors/:id/status với action + reason', async () => {
       const profile = makeContractor({ status: 'INACTIVE', eligible: false });

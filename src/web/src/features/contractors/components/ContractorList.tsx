@@ -74,7 +74,7 @@ export function ContractorList() {
         <Card>
           <Alert tone="info">Bạn không có quyền xem nhà thầu</Alert>
           <p style={{ margin: '0.75rem 0 0', color: 'var(--bf-muted)' }}>
-            Tài khoản hiện tại không đủ quyền để xem danh sách nhà thầu — cần vai trò quản trị.
+            Tài khoản hiện tại không đủ quyền để xem danh sách nhà thầu — cần vai trò ADMIN hoặc PROJECT_MANAGER.
           </p>
           <div style={{ marginTop: '0.75rem' }}>
             <Button variant="secondary" onClick={handleRetry}>Thử lại</Button>

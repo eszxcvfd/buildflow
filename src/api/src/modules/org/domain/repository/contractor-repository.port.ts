@@ -5,6 +5,8 @@ export interface ContractorFilter {
   status?: string;
   search?: string; // search code, name, contactName, email, scope
   scope?: string; // filter by scope substring
+  sort?: 'name' | 'createdAt'; // ORG-SRS-005 (#28): name → name, createdAt → created_at
+  order?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }

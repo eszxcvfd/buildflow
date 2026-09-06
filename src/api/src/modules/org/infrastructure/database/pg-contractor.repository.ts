@@ -78,9 +78,16 @@ export class PgContractorRepository implements ContractorRepositoryPort {
     const limit = Math.min(Math.max(filter.limit ?? 20, 1), 100);
     const offset = Math.max(filter.offset ?? 0, 0);
 
+    // ORG-SRS-005 (issue #28) — sort whitelist mapping (no client string
+    // interpolation): name → name, createdAt → created_at; default
+    // createdAt/desc. Invalid values are rejected at controller/use-case with
+    // 400; the fallback below is defense-in-depth only.
+    const sortColumn = filter.sort === 'name' ? 'name' : 'created_at';
+    const sortDirection = filter.order === 'asc' ? 'ASC' : 'DESC';
+
     const dataR = await this.pool().query(
       `SELECT id, code, name, contact_name, phone, email, status, note, created_by, created_at, updated_at
-       FROM public.contractors ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+       FROM public.contractors ${where} ORDER BY ${sortColumn} ${sortDirection} LIMIT $${idx++} OFFSET $${idx++}`,
       [...values, limit, offset],
     );
 

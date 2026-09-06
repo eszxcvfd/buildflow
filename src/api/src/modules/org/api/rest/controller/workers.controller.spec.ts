@@ -44,6 +44,10 @@ function workerReq(): unknown {
   return { user: { sub: 'user-1', roles: ['WORKER'] }, headers: {}, ip: '127.0.0.1' } as unknown;
 }
 
+function pmReq(): unknown {
+  return { user: { sub: 'pm-1', roles: ['PROJECT_MANAGER'] }, headers: { 'user-agent': 'jest' }, ip: '127.0.0.1' } as unknown;
+}
+
 describe('WorkersController ORG-SRS-001', () => {
   let createMock: jest.Mocked<CreateWorkerUseCase>;
   let updateMock: jest.Mocked<UpdateWorkerUseCase>;
@@ -72,20 +76,80 @@ describe('WorkersController ORG-SRS-001', () => {
 
   it('non-ADMIN bị chặn', async () => {
     await expect(controller.create({ email: 'a@b.com', password: 'Secret123!', fullName: 'Test' } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
-    await expect(controller.search(workerReq() as never, undefined, undefined, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
+    await expect(controller.search(workerReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
   });
 
   it('GET search filter đúng và server-side scope', async () => {
-    const res = await controller.search(adminReq() as never, 'ACTIVE', 'worker', '11111111-1111-4111-8111-111111111111', '3', '10', '0');
+    const res = await controller.search(adminReq() as never, 'ACTIVE', 'worker', '11111111-1111-4111-8111-111111111111', '3', undefined, undefined, '10', '0');
     expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE', search: 'worker', tradeId: '11111111-1111-4111-8111-111111111111', skillLevel: 3, limit: 10, offset: 0 }));
     expect(res.data).toHaveLength(2);
     expect(res.total).toBe(2);
   });
 
   it('validation limit/tradeId/skillLevel', async () => {
-    await expect(controller.search(adminReq() as never, undefined, undefined, 'not-uuid', undefined, undefined, undefined)).rejects.toThrow(BadRequestException);
-    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, '6', undefined, undefined)).rejects.toThrow(BadRequestException);
-    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, undefined, '0', undefined)).rejects.toThrow(BadRequestException);
+    await expect(controller.search(adminReq() as never, undefined, undefined, 'not-uuid', undefined, undefined, undefined, undefined, undefined)).rejects.toThrow(BadRequestException);
+    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, '6', undefined, undefined, undefined, undefined)).rejects.toThrow(BadRequestException);
+    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, '0', undefined)).rejects.toThrow(BadRequestException);
+  });
+
+  describe('ORG-SRS-005 role widen READ-only (issue #28)', () => {
+    it('PROJECT_MANAGER được đọc search + detail (read-only)', async () => {
+      const res = await controller.search(pmReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalled();
+      expect(res.total).toBe(2);
+      const one = await controller.getOne('w1', pmReq() as never);
+      expect(getMock.execute).toHaveBeenCalledWith({ workerId: 'w1' });
+      expect((one as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
+    });
+
+    it('PROJECT_MANAGER gọi write (PATCH/status/open-work) → 403', async () => {
+      await expect(controller.update('w1', { fullName: 'X' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.changeStatus('w1', { action: 'SUSPEND', reason: 'x' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.openWork('w1', pmReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(updateMock.execute).not.toHaveBeenCalled();
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+      expect(openWorkMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('sort/order hợp lệ được forward; sai → 400 kèm fieldErrors', async () => {
+      await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, 'name', 'asc', undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sort: 'name', order: 'asc' }));
+      await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, 'createdAt', 'desc', undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sort: 'createdAt', order: 'desc' }));
+
+      const badSort = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, 'salary', undefined, undefined, undefined).catch((e: unknown) => e);
+      expect(badSort).toBeInstanceOf(BadRequestException);
+      expect((badSort as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Sort không hợp lệ (name|createdAt)',
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      });
+      const badOrder = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, 'sideways', undefined, undefined).catch((e: unknown) => e);
+      expect((badOrder as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Order không hợp lệ (asc|desc)',
+        fieldErrors: { order: ['Order không hợp lệ (asc|desc)'] },
+      });
+    });
+
+    it('filter lỗi cũ giữ message text + thêm fieldErrors', async () => {
+      const err = await controller.search(adminReq() as never, 'NOPE', undefined, undefined, undefined, undefined, undefined, undefined, undefined).catch((e: unknown) => e);
+      expect((err as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Trạng thái không hợp lệ',
+        fieldErrors: { status: ['Trạng thái không hợp lệ'] },
+      });
+    });
+
+    it('filter kết hợp status+tradeId+skillLevel vẫn pass', async () => {
+      const res = await controller.search(adminReq() as never, 'ACTIVE', undefined, '11111111-1111-4111-8111-111111111111', '3', undefined, undefined, '10', '0');
+      expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'ACTIVE',
+        tradeId: '11111111-1111-4111-8111-111111111111',
+        skillLevel: 3,
+      }));
+      expect(res.total).toBe(2);
+    });
   });
 
   it('update không hard delete — controller không expose DELETE', async () => {

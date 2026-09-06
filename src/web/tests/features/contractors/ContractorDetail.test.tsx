@@ -34,6 +34,20 @@ const auditMock = listAuditLogs as jest.Mock;
 
 const CONTRACTOR_ID = '11111111-1111-4111-8111-111111111111';
 
+/** ORG-SRS-005 (#28): seed session ADMIN — lifecycle/edit/timeline là admin-only. */
+function seedAdminAuth() {
+  window.localStorage.setItem(
+    'buildflow.auth.v1',
+    JSON.stringify({
+      accessToken: 'jwt-test',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      user: { id: 'u-admin', email: 'admin@example.com', fullName: 'Admin', status: 'ACTIVE', userType: 'STAFF' },
+      roles: [{ id: 'r-1', code: 'ADMIN', name: 'Admin' }],
+      projectIds: [],
+    }),
+  );
+}
+
 function makeContractor(overrides: Partial<Contractor> = {}): Contractor {
   return {
     id: CONTRACTOR_ID,
@@ -58,9 +72,15 @@ describe('ContractorDetail (ORG-SRS-002 + #27)', () => {
     lifecycleMock.mockReset();
     openWorkMock.mockReset();
     auditMock.mockReset();
+    // ORG-SRS-005 (#28): lifecycle buttons/edit/timeline là admin-only — seed
+    // ADMIN để giữ intent admin-flow của suite này.
+    seedAdminAuth();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
 
   it('renders contractor details + lifecycle buttons + timeline section', async () => {
     getMock.mockResolvedValueOnce(makeContractor());
@@ -81,7 +101,7 @@ describe('ContractorDetail (ORG-SRS-002 + #27)', () => {
 
     getMock.mockRejectedValueOnce({ status: 403, message: 'Không có quyền' });
     const { unmount: unmount2 } = render(<ContractorDetail id={CONTRACTOR_ID} />);
-    expect(await screen.findByText(/Không có quyền truy cập — cần ADMIN \(403\)/)).toBeTruthy();
+    expect(await screen.findByText(/Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER \(403\)/)).toBeTruthy();
     unmount2();
 
     getMock.mockRejectedValueOnce({ status: 404, message: 'Không tìm thấy' });
@@ -206,5 +226,27 @@ describe('ContractorDetail (ORG-SRS-002 + #27)', () => {
     auditMock.mockResolvedValueOnce({ data: [], total: 0, limit: 10, offset: 0 });
     render(<ContractorDetail id={CONTRACTOR_ID} />);
     expect(await screen.findByText('Chưa có lịch sử thay đổi trạng thái')).toBeTruthy();
+  });
+
+  it('ORG-SRS-005 (#28): PROJECT_MANAGER đọc được nhưng ẩn lifecycle buttons/edit/timeline', async () => {
+    window.localStorage.setItem(
+      'buildflow.auth.v1',
+      JSON.stringify({
+        accessToken: 'jwt-test',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        user: { id: 'u-pm', email: 'pm@example.com', fullName: 'PM', status: 'ACTIVE', userType: 'STAFF' },
+        roles: [{ id: 'r-2', code: 'PROJECT_MANAGER', name: 'PM' }],
+        projectIds: [],
+      }),
+    );
+    getMock.mockResolvedValueOnce(makeContractor());
+    render(<ContractorDetail id={CONTRACTOR_ID} />);
+    expect(await screen.findByText('Alpha')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tạm ngừng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chấm dứt' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sửa hồ sơ' })).toBeNull();
+    expect(screen.getByText(/cần quyền ADMIN — tài khoản hiện tại chỉ xem/)).toBeTruthy();
+    expect(screen.getByText(/Lịch sử trạng thái chỉ dành cho ADMIN/)).toBeTruthy();
+    expect(auditMock).not.toHaveBeenCalled();
   });
 });

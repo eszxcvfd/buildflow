@@ -30,6 +30,9 @@ function adminReq(): unknown {
 function nonAdminReq(): unknown {
   return { user: { sub: 'user-1', roles: ['WORKER'] }, headers: {}, ip: '127.0.0.1' } as unknown;
 }
+function pmReq(): unknown {
+  return { user: { sub: 'pm-1', roles: ['PROJECT_MANAGER'] }, headers: { 'user-agent': 'jest' }, ip: '127.0.0.1' } as unknown;
+}
 
 const VALID_CORR = '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b';
 
@@ -65,19 +68,68 @@ describe('ContractorsController ORG-SRS-002', () => {
 
   it('non-ADMIN bị chặn', async () => {
     await expect(controller.create({ code: 'CTR-001', name: 'Alpha', contactName: 'Nguyen A', scope: 'Thi cong' } as never, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
-    await expect(controller.search(nonAdminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
+    await expect(controller.search(nonAdminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
   });
 
   it('GET search filter đúng và scope/eligibleOnly', async () => {
-    const res = await controller.search(adminReq() as never, 'ACTIVE', 'alpha', 'phan tho', 'true', '10', '0');
+    const res = await controller.search(adminReq() as never, 'ACTIVE', 'alpha', 'phan tho', 'true', undefined, undefined, '10', '0');
     expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE', search: 'alpha', scope: 'phan tho', eligibleOnly: true, limit: 10, offset: 0 }));
     expect(res.data).toHaveLength(2);
     expect(res.total).toBe(2);
   });
 
   it('validation limit và eligibleOnly với INACTIVE', async () => {
-    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, undefined, '0', undefined)).rejects.toThrow(BadRequestException);
-    await expect(controller.search(adminReq() as never, 'INACTIVE', undefined, undefined, 'true', undefined, undefined)).rejects.toThrow(BadRequestException);
+    await expect(controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, '0', undefined)).rejects.toThrow(BadRequestException);
+    await expect(controller.search(adminReq() as never, 'INACTIVE', undefined, undefined, 'true', undefined, undefined, undefined, undefined)).rejects.toThrow(BadRequestException);
+  });
+
+  describe('ORG-SRS-005 role widen READ-only (issue #28)', () => {
+    const CID = '11111111-1111-4111-8111-111111111111';
+
+    it('PROJECT_MANAGER được đọc search + detail (read-only)', async () => {
+      const res = await controller.search(pmReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalled();
+      expect(res.total).toBe(2);
+      const one = await controller.getOne(CID, pmReq() as never);
+      expect(getMock.execute).toHaveBeenCalledWith({ contractorId: CID });
+      expect(one.id).toBe(CID);
+    });
+
+    it('PROJECT_MANAGER gọi write (PATCH/status/open-work) → 403', async () => {
+      await expect(controller.update(CID, { name: 'X' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.changeStatus(CID, { action: 'SUSPEND', reason: 'x' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.openWork(CID, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(updateMock.execute).not.toHaveBeenCalled();
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+      expect(openWorkMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('sort/order hợp lệ được forward; sai → 400 kèm fieldErrors', async () => {
+      await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, 'name', 'asc', undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sort: 'name', order: 'asc' }));
+
+      const badSort = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, 'nope', undefined, undefined, undefined).catch((e: unknown) => e);
+      expect((badSort as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Sort không hợp lệ (name|createdAt)',
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      });
+      const badOrder = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, 'nope', undefined, undefined).catch((e: unknown) => e);
+      expect((badOrder as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Order không hợp lệ (asc|desc)',
+        fieldErrors: { order: ['Order không hợp lệ (asc|desc)'] },
+      });
+    });
+
+    it('eligibleOnly + INACTIVE giữ message text + thêm fieldErrors', async () => {
+      const err = await controller.search(adminReq() as never, 'INACTIVE', undefined, undefined, 'true', undefined, undefined, undefined, undefined).catch((e: unknown) => e);
+      expect((err as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Không thể lọc eligibleOnly với INACTIVE',
+        fieldErrors: { eligibleOnly: ['Không thể lọc eligibleOnly với INACTIVE'] },
+      });
+    });
   });
 
   it('update không hard delete — controller không expose DELETE', async () => {

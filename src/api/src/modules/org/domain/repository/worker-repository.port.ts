@@ -7,6 +7,8 @@ export interface WorkerFilter {
   search?: string; // search fullName, email, employeeCode
   tradeId?: string;
   skillLevel?: number;
+  sort?: 'name' | 'createdAt'; // ORG-SRS-005 (#28): name → full_name, createdAt → created_at
+  order?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }

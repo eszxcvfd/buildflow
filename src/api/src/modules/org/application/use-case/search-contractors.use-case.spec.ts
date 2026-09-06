@@ -40,4 +40,27 @@ describe('SearchContractorsUseCase ORG-SRS-002', () => {
     await useCase.execute({ search: 'CTR-001' });
     expect(repo.findMany).toHaveBeenCalledWith(expect.objectContaining({ search: 'CTR-001' }));
   });
+
+  describe('ORG-SRS-005 sort + fieldErrors (issue #28)', () => {
+    it('sort/order hợp lệ được forward xuống repository', async () => {
+      await useCase.execute({ sort: 'name', order: 'asc' });
+      expect(repo.findMany).toHaveBeenCalledWith(expect.objectContaining({ sort: 'name', order: 'asc' }));
+    });
+
+    it('sort/order sai → 400 kèm fieldErrors, không gọi repository', async () => {
+      const badSort = await useCase.execute({ sort: 'nope' as never }).catch((e: unknown) => e);
+      expect((badSort as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Sort không hợp lệ (name|createdAt)',
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      });
+      const badOrder = await useCase.execute({ order: 'nope' as never }).catch((e: unknown) => e);
+      expect((badOrder as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Order không hợp lệ (asc|desc)',
+        fieldErrors: { order: ['Order không hợp lệ (asc|desc)'] },
+      });
+      expect(repo.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

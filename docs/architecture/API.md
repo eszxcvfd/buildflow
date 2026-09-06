@@ -278,6 +278,23 @@ PostgreSQL và Redis được chọn cho data baseline; chi tiết Docker/Compos
 - [ ] Nếu endpoint thay đổi, đã route qua [`WORK-ROUTING.md`](../../WORK-ROUTING.md).
 - [ ] Nếu data adapter/schema/cache policy thay đổi, đã cập nhật [`DATA.md`](DATA.md), migration/TTL proof và ADR khi cần.
 
+## 13. Resource directory roles — ORG-SRS-005 (#28)
+
+Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng). Contract chi tiết thuộc [`ENDPOINTS.md`](ENDPOINTS.md) §1–§4 và bounded decisions §7.
+
+| Endpoint | ADMIN | PROJECT_MANAGER | WORKER-role | Anon |
+| --- | --- | --- | --- | --- |
+| `GET /api/v1/workers`, `GET /api/v1/workers/:id` | OK | OK (read-only) | `403` | `401` |
+| `GET /api/v1/contractors`, `GET /api/v1/contractors/:id` | OK | OK (read-only) | `403` | `401` |
+| `GET /api/v1/trades`, `GET /api/v1/trades/:id` | OK | OK (read-only) | `403` | `401` |
+| `POST`/`PATCH` workers/contractors/trades, `PATCH .../:id/status`, `GET .../:id/open-work` | OK | `403` | `403` | `401` |
+
+- **Helper dùng chung:** `requireRoles(req, roles)` trong `modules/iam/api/rest/guard/roles.guard.ts` (RolesGuard đã có logic tương tự nhưng không dùng ở các controller này). Chỉ các GET path widen gọi `requireRoles(req, ['ADMIN', 'PROJECT_MANAGER'])`; write path giữ `assertAdmin` cục bộ.
+- **Sort:** `GET /workers` và `GET /contractors` nhận `sort` (`name`/`createdAt`) + `order` (`asc`/`desc`, default `createdAt`/`desc`); whitelist mapping sang cột ở repository layer (worker `name`→`full_name`, contractor `name`→`name`, cả hai `createdAt`→`created_at`); sai giá trị → `400 { statusCode, message, fieldErrors }`. `GET /trades` giữ `ORDER BY name` cố định.
+- **Field-level filter errors:** lỗi validation filter trả `400 { statusCode, message, fieldErrors: { <field>: [msg] } }`, `message` giữ nguyên text cũ (web hiện chỉ đọc `message` nên không break).
+- **Current data:** các GET search + detail trả `Cache-Control: no-store` (qua `@Header`).
+- **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29`; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
+
 ## References
 
 - [NestJS documentation](https://docs.nestjs.com/)

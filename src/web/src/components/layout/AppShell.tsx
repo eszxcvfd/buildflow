@@ -5,12 +5,20 @@ import * as React from 'react';
 import { logoutAndClear } from '@/features/auth';
 import { BrandMark } from './BrandMark';
 import { AUTH_CHANGED_EVENT, getAuth, isTokenExpired, type StoredAuth } from '@/lib/auth/storage';
+// ORG-SRS-005 (issue #28) — nguồn role duy nhất: lib/auth/roles.ts
+// (roles.code thật: ADMIN + PROJECT_MANAGER; không alias project_role).
+import { canViewResourceDirectory, hasAdminRole } from '@/lib/auth/roles';
 
 interface NavItem {
   href: string;
   label: string;
   /** mã role được phép thấy; undefined = mọi người đã đăng nhập */
   adminOnly?: boolean;
+  /**
+   * ORG-SRS-005 (issue #28) — hiển thị cho ADMIN + PROJECT_MANAGER
+   * (directory tra cứu nguồn lực, read-only).
+   */
+  resourceViewer?: boolean;
 }
 
 const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
@@ -28,6 +36,7 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   {
     title: 'Nguồn lực',
     items: [
+      { href: '/resources', label: 'Tra cứu nguồn lực', resourceViewer: true },
       { href: '/workers', label: 'Công nhân', adminOnly: true },
       { href: '/trades', label: 'Ngành nghề', adminOnly: true },
     ],
@@ -45,6 +54,7 @@ const TITLES: Array<[prefix: string, title: string]> = [
   ['/dashboard', 'Tổng quan'],
   ['/projects', 'Dự án'],
   ['/contractors', 'Nhà thầu'],
+  ['/resources', 'Tra cứu nguồn lực'],
   ['/workers', 'Công nhân'],
   ['/trades', 'Ngành nghề'],
   ['/admin/users', 'Tài khoản'],
@@ -52,15 +62,17 @@ const TITLES: Array<[prefix: string, title: string]> = [
   ['/profile', 'Hồ sơ cá nhân'],
 ];
 
-const ADMIN_CODES = new Set(['ADMIN', 'SYSTEM_ADMIN', 'ADMINISTRATOR']);
+function isAdmin(roles: Array<{ code: string }>): boolean {
+  return hasAdminRole(roles.map((r) => r.code));
+}
+
+function canViewResources(roles: Array<{ code: string }>): boolean {
+  return canViewResourceDirectory(roles.map((r) => r.code));
+}
 
 function pageTitle(pathname: string): string {
   const hit = TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
   return hit ? hit[1] : 'Buildflow';
-}
-
-function isAdmin(roles: Array<{ code: string }>): boolean {
-  return roles.some((r) => ADMIN_CODES.has(r.code.toUpperCase()));
 }
 
 function initials(fullName: string): string {
@@ -111,6 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   const admin = isAdmin(auth.roles);
+  const resourceViewer = canViewResources(auth.roles);
 
   async function handleLogout() {
     try {
@@ -132,7 +145,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </a>
         <nav className="bf-nav" aria-label="Điều hướng chính">
           {NAV_GROUPS.map((group) => {
-            const items = group.items.filter((it) => !it.adminOnly || admin);
+            const items = group.items.filter((it) => {
+              if (it.adminOnly) return admin;
+              if (it.resourceViewer) return resourceViewer;
+              return true;
+            });
             if (!items.length) return null;
             return (
               <React.Fragment key={group.title}>

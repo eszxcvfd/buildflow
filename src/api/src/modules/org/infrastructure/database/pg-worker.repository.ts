@@ -122,9 +122,16 @@ export class PgWorkerRepository implements WorkerRepositoryPort {
     const limit = Math.min(Math.max(filter.limit ?? 20, 1), 100);
     const offset = Math.max(filter.offset ?? 0, 0);
 
+    // ORG-SRS-005 (issue #28) — sort whitelist mapping (no client string
+    // interpolation): name → full_name, createdAt → created_at; default
+    // createdAt/desc. Invalid values are rejected at controller/use-case with
+    // 400; the fallback below is defense-in-depth only.
+    const sortColumn = filter.sort === 'name' ? 'full_name' : 'created_at';
+    const sortDirection = filter.order === 'asc' ? 'ASC' : 'DESC';
+
     const dataR = await this.pool().query(
       `SELECT id, email, password_hash, full_name, phone, avatar_url, employee_code, user_type, contractor_id, status, failed_login_count, locked_until, last_login_at, created_at, updated_at
-       FROM public.users users ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+       FROM public.users users ${where} ORDER BY ${sortColumn} ${sortDirection} LIMIT $${idx++} OFFSET $${idx++}`,
       [...values, limit, offset],
     );
 

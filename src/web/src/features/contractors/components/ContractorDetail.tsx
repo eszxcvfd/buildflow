@@ -10,6 +10,7 @@ import {
   RESOURCE_ACTION_LABEL,
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
+import { useIsAdmin } from '@/lib/auth/roles';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
@@ -27,6 +28,9 @@ function statusLabel(status: string): string {
  * theo field, `alreadyInState` → thông tin không lỗi. Kèm section 'Lịch sử trạng thái'.
  */
 export function ContractorDetail({ id }: { id: string }) {
+  // ORG-SRS-005 (issue #28) — PM đọc được chi tiết nhưng lifecycle/edit/timeline
+  // là admin-only (PATCH status/open-work/audit-logs giữ assertAdmin ở API).
+  const isAdmin = useIsAdmin();
   const [contractor, setContractor] = React.useState<Contractor | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -122,7 +126,7 @@ export function ContractorDetail({ id }: { id: string }) {
   if (loading) return <Card><p aria-busy="true">Đang tải chi tiết nhà thầu…</p></Card>;
   if (error) {
     if (error.status === 401) return <Card><Alert tone="error">Phiên hết hạn, vui lòng đăng nhập lại (401)</Alert><div style={{ marginTop: '0.75rem' }}><a href="/login">Đến trang đăng nhập</a></div></Card>;
-    if (error.status === 403) return <Card><Alert tone="error">Không có quyền truy cập — cần ADMIN (403)</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
+    if (error.status === 403) return <Card><Alert tone="error">Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER (403)</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
     if (error.status === 404) return <Card><Alert tone="error">Không tìm thấy nhà thầu (404) — kiểm tra lại đường dẫn</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
     return <Card><Alert tone="error">{error.message || 'Không thể tải chi tiết'}</Alert><div style={{ marginTop: '0.75rem' }}><Button variant="secondary" onClick={handleRetry}>Thử lại</Button></div></Card>;
   }
@@ -136,9 +140,11 @@ export function ContractorDetail({ id }: { id: string }) {
         title={contractor.name}
         subtitle={`${contractor.code} · ${statusLabel(contractor.status)}`}
         actions={
-          <a className="bf-btn bf-btn-secondary" href={`/contractors/${contractor.id}/edit`}>
-            Sửa hồ sơ
-          </a>
+          isAdmin ? (
+            <a className="bf-btn bf-btn-secondary" href={`/contractors/${contractor.id}/edit`}>
+              Sửa hồ sơ
+            </a>
+          ) : undefined
         }
       />
 
@@ -193,18 +199,28 @@ export function ContractorDetail({ id }: { id: string }) {
 
         <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {isActive ? (
-            <>
-              <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
-                Tạm ngừng
-              </Button>
-              <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
-                Chấm dứt
-              </Button>
-            </>
-          ) : (
+            isAdmin ? (
+              <>
+                <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
+                  Tạm ngừng
+                </Button>
+                <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
+                  Chấm dứt
+                </Button>
+              </>
+            ) : (
+              <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
+                Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
+              </span>
+            )
+          ) : isAdmin ? (
             <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
               Kích hoạt lại
             </Button>
+          ) : (
+            <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
+              Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
+            </span>
           )}
           <a href="/contractors" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
         </div>
@@ -234,10 +250,18 @@ export function ContractorDetail({ id }: { id: string }) {
         <div className="bf-card-head">
           <span className="bf-card-title">Lịch sử trạng thái</span>
         </div>
-        <p style={{ margin: '0 0 0.75rem', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
-          Các lần kích hoạt, tạm ngừng, chấm dứt — kèm lý do và người thực hiện (10 bản ghi mới nhất).
-        </p>
-        <StatusTimeline key={timelineKey} id={contractor.id} entityType="CONTRACTOR" />
+        {isAdmin ? (
+          <>
+            <p style={{ margin: '0 0 0.75rem', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+              Các lần kích hoạt, tạm ngừng, chấm dứt — kèm lý do và người thực hiện (10 bản ghi mới nhất).
+            </p>
+            <StatusTimeline key={timelineKey} id={contractor.id} entityType="CONTRACTOR" />
+          </>
+        ) : (
+          <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+            Lịch sử trạng thái chỉ dành cho ADMIN (nhật ký thao tác).
+          </p>
+        )}
       </Card>
     </div>
   );

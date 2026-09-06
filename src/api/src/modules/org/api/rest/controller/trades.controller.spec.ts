@@ -26,6 +26,9 @@ function adminReq(): unknown {
 function nonAdminReq(): unknown {
   return { user: { sub: 'user-1', roles: ['WORKER'] }, headers: {}, ip: '127.0.0.1' } as unknown;
 }
+function pmReq(): unknown {
+  return { user: { sub: 'pm-1', roles: ['PROJECT_MANAGER'] }, headers: { 'user-agent': 'jest' }, ip: '127.0.0.1' } as unknown;
+}
 function unauthReq(): unknown {
   return { headers: {}, ip: '127.0.0.1' } as unknown;
 }
@@ -65,15 +68,45 @@ describe('TradesController ORG-SRS-003', () => {
     expect(res.warning).toBeUndefined();
   });
 
-  it('non-ADMIN bị Forbidden trên mọi endpoint; unauth bị Forbidden (guard chặn 401 trước)', async () => {
+  it('non-ADMIN (WORKER) bị Forbidden trên write; unauth bị Forbidden (guard chặn 401 trước)', async () => {
     await expect(controller.create({ code: 'TRD-001', name: 'A' } as never, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
-    await expect(controller.search(nonAdminReq() as never, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
-    await expect(controller.getOne(TRADE_ID, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
     await expect(controller.update(TRADE_ID, { name: 'B' } as never, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
     await expect(controller.changeStatus(TRADE_ID, { status: 'INACTIVE' } as never, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
     // không bypass qua sửa URL/ID: thiếu user payload → 403 (JWT guard đã đảm bảo 401 trước khi vào controller)
     await expect(controller.create({ code: 'TRD-001', name: 'A' } as never, unauthReq() as never)).rejects.toThrow(ForbiddenException);
     await expect(controller.getOne(TRADE_ID, unauthReq() as never)).rejects.toThrow(ForbiddenException);
+  });
+
+  describe('ORG-SRS-005 role widen READ-only (issue #28)', () => {
+    it('PROJECT_MANAGER được đọc search + detail; WORKER vẫn 403 trên GET', async () => {
+      const res = await controller.search(pmReq() as never, undefined, undefined, undefined, undefined);
+      expect(searchMock.execute).toHaveBeenCalled();
+      expect(res.total).toBe(2);
+      const one = await controller.getOne(TRADE_ID, pmReq() as never);
+      expect(getMock.execute).toHaveBeenCalledWith({ tradeId: TRADE_ID });
+      expect(one.id).toBe(TRADE_ID);
+
+      await expect(controller.search(nonAdminReq() as never, undefined, undefined, undefined, undefined)).rejects.toThrow(ForbiddenException);
+      await expect(controller.getOne(TRADE_ID, nonAdminReq() as never)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('PROJECT_MANAGER gọi write → 403', async () => {
+      await expect(controller.create({ code: 'TRD-001', name: 'A' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.update(TRADE_ID, { name: 'B' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      await expect(controller.changeStatus(TRADE_ID, { status: 'INACTIVE' } as never, pmReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(createMock.execute).not.toHaveBeenCalled();
+      expect(updateMock.execute).not.toHaveBeenCalled();
+      expect(changeStatusMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('filter lỗi giữ message text + thêm fieldErrors', async () => {
+      const err = await controller.search(pmReq() as never, 'UNKNOWN', undefined, undefined, undefined).catch((e: unknown) => e);
+      expect((err as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Trạng thái không hợp lệ',
+        fieldErrors: { status: ['Trạng thái không hợp lệ'] },
+      });
+    });
   });
 
   it('GET search filter đúng và trả list contract { data, total, limit, offset }', async () => {

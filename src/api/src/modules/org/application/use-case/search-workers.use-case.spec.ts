@@ -85,6 +85,32 @@ describe('SearchWorkersUseCase ORG-SRS-001', () => {
     await expect(useCase.execute({ skillLevel: 6 })).rejects.toThrow(BadRequestException);
   });
 
+  describe('ORG-SRS-005 sort + fieldErrors (issue #28)', () => {
+    it('sort/order hợp lệ được forward xuống repository', async () => {
+      await useCase.execute({ sort: 'name', order: 'asc' });
+      expect(workerRepo.findMany).toHaveBeenCalledWith(expect.objectContaining({ sort: 'name', order: 'asc' }));
+      await useCase.execute({ sort: 'createdAt', order: 'desc' });
+      expect(workerRepo.findMany).toHaveBeenCalledWith(expect.objectContaining({ sort: 'createdAt', order: 'desc' }));
+    });
+
+    it('sort/order sai → 400 kèm fieldErrors, không gọi repository', async () => {
+      const badSort = await useCase.execute({ sort: 'salary' as never }).catch((e: unknown) => e);
+      expect(badSort).toBeInstanceOf(BadRequestException);
+      expect((badSort as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Sort không hợp lệ (name|createdAt)',
+        fieldErrors: { sort: ['Sort không hợp lệ (name|createdAt)'] },
+      });
+      const badOrder = await useCase.execute({ order: 'sideways' as never }).catch((e: unknown) => e);
+      expect((badOrder as BadRequestException).getResponse()).toEqual({
+        statusCode: 400,
+        message: 'Order không hợp lệ (asc|desc)',
+        fieldErrors: { order: ['Order không hợp lệ (asc|desc)'] },
+      });
+      expect(workerRepo.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   it('inactive worker bị chặn khi assign/self-claim — eligibility false', async () => {
     const inactive = makeWorker('w2', 'INACTIVE');
     expect(inactive.isEligibleForAssignment()).toBe(false);

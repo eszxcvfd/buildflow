@@ -47,6 +47,10 @@ export interface ListWorkersParams {
   search?: string;
   tradeId?: string;
   skillLevel?: number;
+  /** ORG-SRS-005 (issue #28) — sort whitelist: name|createdAt */
+  sort?: string;
+  /** ORG-SRS-005 (issue #28) — order whitelist: asc|desc */
+  order?: string;
   limit?: number;
   offset?: number;
 }
@@ -104,6 +108,25 @@ function getAuthToken(): string | null {
   }
 }
 
+/**
+ * ORG-SRS-005 (issue #28) — chuẩn hóa fieldErrors từ API shape
+ * `{ statusCode, message, fieldErrors: { <field>: [msg] } }`. Trả undefined
+ * khi shape lạ để caller fallback về message chung; an toàn cả hai shape.
+ */
+function toFieldErrors(raw: unknown): Record<string, string[]> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (Array.isArray(value)) {
+      const msgs = value.filter((m): m is string => typeof m === 'string');
+      if (msgs.length) out[key] = msgs;
+    } else if (typeof value === 'string') {
+      out[key] = [value];
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 async function parseError(res: Response, fallback: string): Promise<never> {
   const contentType = res.headers.get('content-type') ?? '';
   const isJson = contentType.includes('application/json');
@@ -137,7 +160,9 @@ async function parseError(res: Response, fallback: string): Promise<never> {
       if (res.status === 400 && /(lý do|reason)/i.test(msg)) {
         throw { status: res.status, message: msg, code, fieldErrors: { reason: [msg] }, traceId } satisfies ApiError;
       }
-      throw { status: res.status, message: msg, code, traceId } satisfies ApiError;
+      // ORG-SRS-005 (issue #28) — API filter 400 shape { message, fieldErrors }:
+      // giữ nguyên fieldErrors server để UI hiển thị lỗi theo field.
+      throw { status: res.status, message: msg, code, fieldErrors: toFieldErrors(b.fieldErrors), traceId } satisfies ApiError;
     }
   }
   if (typeof body === 'string' && body.length > 0) {
@@ -154,6 +179,8 @@ export async function listWorkers(params: ListWorkersParams = {}): Promise<ListW
   if (params.search) qs.set('search', params.search);
   if (params.tradeId) qs.set('tradeId', params.tradeId);
   if (params.skillLevel !== undefined) qs.set('skillLevel', String(params.skillLevel));
+  if (params.sort) qs.set('sort', params.sort);
+  if (params.order) qs.set('order', params.order);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset !== undefined) qs.set('offset', String(params.offset));
   const url = `${base}/api/v1/workers${qs.toString() ? `?${qs.toString()}` : ''}`;

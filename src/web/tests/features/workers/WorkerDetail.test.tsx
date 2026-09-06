@@ -56,6 +56,20 @@ const worker = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+/** ORG-SRS-005 (#28): seed session ADMIN — lifecycle/edit/timeline là admin-only. */
+function seedAdminAuth() {
+  window.localStorage.setItem(
+    'buildflow.auth.v1',
+    JSON.stringify({
+      accessToken: 'jwt-test',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      user: { id: 'u-admin', email: 'admin@example.com', fullName: 'Admin', status: 'ACTIVE', userType: 'STAFF' },
+      roles: [{ id: 'r-1', code: 'ADMIN', name: 'Admin' }],
+      projectIds: [],
+    }),
+  );
+}
+
 function makeAuditLog(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'log-1',
@@ -82,9 +96,15 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     lifecycleMock.mockReset();
     openWorkMock.mockReset();
     auditMock.mockReset();
+    // ORG-SRS-005 (#28): lifecycle buttons/edit/timeline là admin-only — seed
+    // ADMIN để giữ intent admin-flow của suite này.
+    seedAdminAuth();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
 
   it('renders worker details with eligible state and lifecycle buttons', async () => {
     getMock.mockResolvedValueOnce(worker);
@@ -217,5 +237,27 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     auditMock.mockResolvedValueOnce({ data: [], total: 0, limit: 10, offset: 0 });
     render(<WorkerDetail id="w-1" />);
     expect(await screen.findByText('Chưa có lịch sử thay đổi trạng thái')).toBeTruthy();
+  });
+
+  it('ORG-SRS-005 (#28): PROJECT_MANAGER đọc được nhưng ẩn lifecycle buttons/edit/timeline', async () => {
+    window.localStorage.setItem(
+      'buildflow.auth.v1',
+      JSON.stringify({
+        accessToken: 'jwt-test',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        user: { id: 'u-pm', email: 'pm@example.com', fullName: 'PM', status: 'ACTIVE', userType: 'STAFF' },
+        roles: [{ id: 'r-2', code: 'PROJECT_MANAGER', name: 'PM' }],
+        projectIds: [],
+      }),
+    );
+    getMock.mockResolvedValueOnce(worker);
+    render(<WorkerDetail id="w-1" />);
+    expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tạm ngừng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Chấm dứt' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sửa hồ sơ' })).toBeNull();
+    expect(screen.getByText(/cần quyền ADMIN — tài khoản hiện tại chỉ xem/)).toBeTruthy();
+    expect(screen.getByText(/Lịch sử trạng thái chỉ dành cho ADMIN/)).toBeTruthy();
+    expect(auditMock).not.toHaveBeenCalled();
   });
 });

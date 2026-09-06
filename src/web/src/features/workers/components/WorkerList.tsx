@@ -185,7 +185,7 @@ export function WorkerList() {
     if (error.status === 403) {
       return (
         <Card>
-          <Alert tone="error">Không có quyền truy cập — cần vai trò ADMIN (403)</Alert>
+          <Alert tone="error">Không có quyền truy cập — cần vai trò ADMIN hoặc PROJECT_MANAGER (403)</Alert>
           <p style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '0.5rem' }}>
             Tài khoản hiện tại không đủ quyền để xem danh sách worker.
           </p>

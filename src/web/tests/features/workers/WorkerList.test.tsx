@@ -58,14 +58,34 @@ const workerB = {
 
 const LOCKED_REASON = 'Lý do là bắt buộc khi tạm ngừng/chấm dứt';
 
+/** ORG-SRS-005 (#28): seed session ADMIN — lifecycle buttons là admin-only. */
+function seedAdminAuth() {
+  window.localStorage.setItem(
+    'buildflow.auth.v1',
+    JSON.stringify({
+      accessToken: 'jwt-test',
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+      user: { id: 'u-admin', email: 'admin@example.com', fullName: 'Admin', status: 'ACTIVE', userType: 'STAFF' },
+      roles: [{ id: 'r-1', code: 'ADMIN', name: 'Admin' }],
+      projectIds: [],
+    }),
+  );
+}
+
 describe('WorkerList (ORG-SRS-001 + #27)', () => {
   beforeEach(() => {
     listMock.mockReset();
     lifecycleMock.mockReset();
     openWorkMock.mockReset();
+    // ORG-SRS-005 (#28): lifecycle buttons là admin-only — seed ADMIN để giữ
+    // intent admin-flow của suite này.
+    seedAdminAuth();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
 
   it('renders loaded workers with status, eligible flag and lifecycle action links', async () => {
     listMock.mockResolvedValueOnce({ data: [workerA, workerB], total: 2, limit: 20, offset: 0 });
@@ -98,7 +118,7 @@ describe('WorkerList (ORG-SRS-001 + #27)', () => {
   it('shows 403 permission error with retry', async () => {
     listMock.mockRejectedValueOnce({ status: 403, message: 'Không có quyền truy cập' });
     render(<WorkerList />);
-    const alert403l = await screen.findAllByText((_, el) => (el?.textContent ?? '').includes('cần vai trò ADMIN (403)'));
+    const alert403l = await screen.findAllByText((_, el) => (el?.textContent ?? '').includes('cần vai trò ADMIN hoặc PROJECT_MANAGER (403)'));
     expect(alert403l.length).toBeGreaterThan(0);
   });
 
