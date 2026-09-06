@@ -25,6 +25,15 @@ jest.mock('@/lib/api/audit-logs', () => ({
   listAuditLogs: jest.fn(),
 }));
 
+// ORG-SRS-008 (issue #31): 'Điều kiện phân công' boolean cũ đã gộp vào
+// EligibilityChecklist qua GET /api/v1/eligibility/workers/:id.
+jest.mock('@/lib/api/eligibility', () => ({
+  __esModule: true,
+  checkWorkerEligibility: jest.fn(),
+  checkCrewEligibility: jest.fn(),
+  checkMyEligibility: jest.fn(),
+}));
+
 // #26: WorkerDetail hiển thị tên ngành nghề thay UUID thô qua useTradeNames.
 const tradeNames = new Map([['11111111-1111-4111-8111-111111111111', 'TR-001 — Tho xay']]);
 jest.mock('@/features/workers/hooks/useTradeNames', () => ({
@@ -33,12 +42,14 @@ jest.mock('@/features/workers/hooks/useTradeNames', () => ({
 
 import { getWorker, updateWorker, changeWorkerLifecycleStatus, getWorkerOpenWork } from '@/lib/api/workers';
 import { listAuditLogs } from '@/lib/api/audit-logs';
+import { checkWorkerEligibility } from '@/lib/api/eligibility';
 
 const getMock = getWorker as jest.Mock;
 const updateMock = updateWorker as jest.Mock;
 const lifecycleMock = changeWorkerLifecycleStatus as jest.Mock;
 const openWorkMock = getWorkerOpenWork as jest.Mock;
 const auditMock = listAuditLogs as jest.Mock;
+const eligibilityMock = checkWorkerEligibility as jest.Mock;
 
 const worker = {
   id: 'w-1',
@@ -96,6 +107,18 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     lifecycleMock.mockReset();
     openWorkMock.mockReset();
     auditMock.mockReset();
+    eligibilityMock.mockReset();
+    // Mặc định checklist có dữ liệu để các flow lifecycle/timeline không bị
+    // nhiễu bởi fetch thật (jsdom không mock fetch ở suite này).
+    eligibilityMock.mockResolvedValue({
+      resourceType: 'WORKER',
+      resourceId: 'w-1',
+      eligible: true,
+      checkedAt: '2026-02-01T08:00:00.000Z',
+      correlationId: 'corr-default',
+      conditions: [],
+      crews: [],
+    });
     // ORG-SRS-005 (#28): lifecycle buttons/edit/timeline là admin-only — seed
     // ADMIN để giữ intent admin-flow của suite này.
     seedAdminAuth();
@@ -106,13 +129,31 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     window.localStorage.clear();
   });
 
-  it('renders worker details with eligible state and lifecycle buttons', async () => {
+  it('renders worker details with eligibility checklist and lifecycle buttons', async () => {
     getMock.mockResolvedValueOnce(worker);
     auditMock.mockResolvedValueOnce({ data: [], total: 0, limit: 10, offset: 0 });
+    eligibilityMock.mockResolvedValueOnce({
+      resourceType: 'WORKER',
+      resourceId: 'w-1',
+      eligible: true,
+      checkedAt: '2026-02-01T08:00:00.000Z',
+      correlationId: 'corr-w-1',
+      conditions: [
+        { code: 'RESOURCE_ACTIVE', passed: true, reasonCode: 'OK', detail: 'Hồ sơ worker đang hiệu lực' },
+        { code: 'TRADE_SKILL_MATCH', passed: null, reasonCode: 'NOT_REQUESTED', detail: 'Không yêu cầu kiểm tra ngành nghề' },
+        { code: 'TRADE_CAPABILITY_DATA', passed: true, reasonCode: 'OK', detail: 'Worker có 1 ngành nghề hiệu lực' },
+        { code: 'WORKLOAD', passed: true, reasonCode: 'OK', detail: 'Đang có 0 công việc mở' },
+        { code: 'SCHEDULE_CONFLICT', passed: null, reasonCode: 'NOT_EVALUABLE', detail: 'Chưa có dữ liệu work-order' },
+      ],
+      crews: [],
+    });
     render(<WorkerDetail id="w-1" />);
     expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
     expect(screen.getByText('EMP-1')).toBeTruthy();
-    expect(screen.getByText('Đủ điều kiện — cho phép phân công')).toBeTruthy();
+    // ORG-SRS-008: nguồn duy nhất là checklist (không còn boolean-only cũ).
+    expect(await screen.findByText('Điều kiện nhận việc')).toBeTruthy();
+    expect(screen.getByText(/Đủ điều kiện nhận việc/)).toBeTruthy();
+    expect(screen.getByText(/Mã đối chiếu: corr-w-1/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tạm ngừng' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chấm dứt' })).toBeTruthy();
     // timeline section present

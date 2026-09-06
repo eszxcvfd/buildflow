@@ -1,4 +1,4 @@
-import { loginRequest, logoutRequest, changePasswordRequest, requestPasswordResetRequest, confirmPasswordResetRequest, LoginError } from './client';
+import { loginRequest, logoutRequest, changePasswordRequest, requestPasswordResetRequest, confirmPasswordResetRequest, fetchMyEligibility, LoginError } from './client';
 
 const successBody = {
   accessToken: 'token-123',
@@ -261,5 +261,72 @@ describe('password actions (IAM-SRS-007, issue #22)', () => {
     );
     expect(err.status).toBe(400);
     expect(err.fieldErrors).toEqual({ _global: ['email must be an email'] });
+  });
+});
+
+describe('fetchMyEligibility (ORG-SRS-008, issue #31)', () => {
+  const jsonResponse = (body: unknown, status: number) => ({
+    ok: status < 400,
+    status,
+    headers: { get: () => 'application/json' },
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  });
+
+  const eligibilityBody = {
+    resourceType: 'WORKER',
+    resourceId: 'w1',
+    eligible: true,
+    checkedAt: '2026-09-06T10:00:00.000Z',
+    correlationId: 'corr-123',
+    conditions: [{ code: 'RESOURCE_ACTIVE', passed: true, reasonCode: 'OK', detail: 'ok' }],
+    crews: [{ crewId: 'c1', crewCode: 'DOI-01', crewName: 'Đội 1', memberRole: 'MEMBER', effectiveFrom: '2026-01-01', effectiveTo: null }],
+  };
+
+  afterEach(() => {
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = globalThis.fetch;
+  });
+
+  it('200: GETs /api/v1/eligibility/me with the Bearer token and maps the payload', async () => {
+    const mock = jest.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
+      expect(url).toContain('/api/v1/eligibility/me');
+      expect(init?.headers?.Authorization).toBe('Bearer tok-1');
+      return jsonResponse(eligibilityBody, 200);
+    });
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = mock as unknown as typeof fetch;
+
+    const out = await fetchMyEligibility('tok-1');
+    expect(out.resourceType).toBe('WORKER');
+    expect(out.eligible).toBe(true);
+    expect(out.correlationId).toBe('corr-123');
+    expect(out.conditions).toHaveLength(1);
+    expect(out.crews[0].crewCode).toBe('DOI-01');
+  });
+
+  it('404: exposes code RESOURCE_NOT_FOUND so the screen can render the empty state', async () => {
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = jest.fn(async () =>
+      jsonResponse({ message: 'user không có hồ sơ worker', code: 'RESOURCE_NOT_FOUND', statusCode: 404 }, 404),
+    ) as unknown as typeof fetch;
+
+    const err: LoginError = await fetchMyEligibility('tok-1').then(
+      () => { throw new Error('should have thrown'); },
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(LoginError);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('RESOURCE_NOT_FOUND');
+    expect(err.message).toBe('user không có hồ sơ worker');
+  });
+
+  it('401: maps the expired-session message', async () => {
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = jest.fn(async () =>
+      jsonResponse({ message: 'Unauthorized', statusCode: 401 }, 401),
+    ) as unknown as typeof fetch;
+
+    await expect(fetchMyEligibility('tok-1')).rejects.toMatchObject({ name: 'LoginError', status: 401 });
   });
 });

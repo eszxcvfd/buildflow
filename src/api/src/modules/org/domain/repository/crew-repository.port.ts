@@ -94,6 +94,28 @@ export interface CrewRepositoryPort {
     effectiveTo: string,
   ): Promise<CrewMemberRow | null>;
   /**
+   * ORG-SRS-008 (issue #31) — pool read thuần SELECT cho eligibility pre-check
+   * (không mở write transaction; pattern search-crews/findMany).
+   * Memberships hiệu lực (is_active) của user trên mọi đội, kèm code/tên đội
+   * và ngày hiệu lực (phục vụ response `crews[]` + lọc point-in-time `at`).
+   */
+  findActiveMembershipsByUserId(
+    userId: string,
+  ): Promise<Array<{
+    crewId: string;
+    crewCode: string;
+    crewName: string;
+    memberRole: 'LEAD' | 'MEMBER';
+    effectiveFrom: string;
+    effectiveTo: string | null;
+  }>>;
+  /**
+   * ORG-SRS-008 (issue #31) — trades hiệu lực của đội
+   * (`resource_trades` resource_type='CREW', is_active) cho
+   * TRADE_CAPABILITY_DATA. Pool read, không transaction.
+   */
+  findActiveTradesByCrewId(crewId: string): Promise<Array<{ tradeId: string; skillLevel: number }>>;
+  /**
    * Re-check crew status trong tx ngay trước insert (SELECT ... FOR UPDATE) —
    * đóng race đổi trạng thái đội (D4). Trả null khi crew không tồn tại.
    */

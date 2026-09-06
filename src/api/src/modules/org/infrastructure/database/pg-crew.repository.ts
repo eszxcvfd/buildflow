@@ -155,6 +155,43 @@ export class PgCrewRepository implements CrewRepositoryPort {
     return Number(r.rows[0].total ?? 0);
   }
 
+  async findActiveMembershipsByUserId(
+    userId: string,
+  ): Promise<Array<{ crewId: string; crewCode: string; crewName: string; memberRole: 'LEAD' | 'MEMBER'; effectiveFrom: string; effectiveTo: string | null }>> {
+    // ORG-SRS-008 (issue #31) — pool read thuần SELECT (không tx): memberships
+    // hiệu lực của user trên mọi đội, effective_from DESC.
+    const r = await this.pool().query(
+      `SELECT m.crew_id AS crew_id, c.code AS crew_code, c.name AS crew_name,
+        m.member_role AS member_role, m.effective_from AS effective_from, m.effective_to AS effective_to
+       FROM public.crew_members m JOIN public.crews c ON c.id = m.crew_id
+       WHERE m.user_id = $1 AND m.is_active ORDER BY m.effective_from DESC`,
+      [userId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => ({
+      crewId: String(row['crew_id']),
+      crewCode: String(row['crew_code']),
+      crewName: String(row['crew_name']),
+      memberRole: row['member_role'] as 'LEAD' | 'MEMBER',
+      effectiveFrom: toDateOnly(row['effective_from']),
+      effectiveTo: row['effective_to'] === null || row['effective_to'] === undefined
+        ? null
+        : toDateOnly(row['effective_to']),
+    }));
+  }
+
+  async findActiveTradesByCrewId(crewId: string): Promise<Array<{ tradeId: string; skillLevel: number }>> {
+    // ORG-SRS-008 (issue #31) — trades hiệu lực của đội (resource_type='CREW').
+    const r = await this.pool().query(
+      `SELECT trade_id, skill_level FROM public.resource_trades
+       WHERE resource_type = 'CREW' AND crew_id = $1 AND is_active = true`,
+      [crewId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => ({
+      tradeId: String(row['trade_id']),
+      skillLevel: Number(row['skill_level']),
+    }));
+  }
+
   /**
    * ORG-SRS-007 (issue #30) — map một row crew_members (+ join users rẻ:
    * full_name/employee_code). Date-only cột trả về dưới dạng string

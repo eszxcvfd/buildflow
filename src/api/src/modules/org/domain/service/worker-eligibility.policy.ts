@@ -1,12 +1,10 @@
-import { WorkerEntity } from '../entity/worker.entity';
-
 /**
- * ORG-SRS-001 policy: Inactive worker cannot be assigned/self-claim.
- * History assignments still viewable (not hard deleted).
+ * ORG-SRS-001 policy helpers (trade validation).
+ * NOTE: the legacy `isWorkerEligible` wrapper was removed (ORG-SRS-008, issue #31)
+ * — it had no non-spec importers. Lifecycle state lives on `WorkerEntity`
+ * (`isEligibleForAssignment` / `toPublicProfile().eligible`, see worker.entity.ts);
+ * the §9 fail-closed eligibility verdict is computed by the eligibility use case.
  */
-export function isWorkerEligible(worker: WorkerEntity): boolean {
-  return worker.isEligibleForAssignment();
-}
 
 export function validateTradeAssignment(tradeIds: string[], skillLevels?: number[]): void {
   if (!tradeIds || tradeIds.length === 0) return; // trades optional on create, but if provided must be valid

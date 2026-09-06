@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { WorkersController } from './api/rest/controller/workers.controller';
+import { EligibilityController } from './api/rest/controller/eligibility.controller';
 import { ContractorsController } from './api/rest/controller/contractors.controller';
 import { TradesController } from './api/rest/controller/trades.controller';
 import { CrewsController } from './api/rest/controller/crews.controller';
@@ -28,6 +29,8 @@ import { AddCrewMemberUseCase } from './application/use-case/add-crew-member.use
 import { RemoveCrewMemberUseCase } from './application/use-case/remove-crew-member.use-case';
 import { ListCrewMembersUseCase } from './application/use-case/list-crew-members.use-case';
 import { GetWorkerOpenWorkUseCase } from './application/use-case/get-worker-open-work.use-case';
+import { CheckWorkerEligibilityUseCase } from './application/use-case/check-worker-eligibility.use-case';
+import { CheckCrewEligibilityUseCase } from './application/use-case/check-crew-eligibility.use-case';
 import { GetContractorOpenWorkUseCase } from './application/use-case/get-contractor-open-work.use-case';
 import { PgWorkerRepository } from './infrastructure/database/pg-worker.repository';
 import { PgTradeRepository } from './infrastructure/database/pg-trade.repository';
@@ -50,7 +53,7 @@ import { PgUserRepository } from '../iam/infrastructure/database/pg-user.reposit
 import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
 
 @Module({
-  controllers: [WorkersController, ContractorsController, TradesController, CrewsController],
+  controllers: [WorkersController, EligibilityController, ContractorsController, TradesController, CrewsController],
   providers: [
     CreateWorkerUseCase,
     UpdateWorkerUseCase,
@@ -77,6 +80,8 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     RemoveCrewMemberUseCase,
     ListCrewMembersUseCase,
     GetWorkerOpenWorkUseCase,
+    CheckWorkerEligibilityUseCase,
+    CheckCrewEligibilityUseCase,
     GetContractorOpenWorkUseCase,
     JwtAuthGuard,
     JwtTokenService,

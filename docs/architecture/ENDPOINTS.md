@@ -182,3 +182,40 @@ Quản lý thành viên đội (bảng `public.crew_members`, migration 0001 —
 - [`docs/architecture/API.md`](API.md) — module/domain conventions, audit policy (8.2/8.3/8.4/8.5)
 - [`docs/architecture/NETCODE.md`](NETCODE.md) — transport/error contract
 - SRS/issue: workers `#24`, contractors `#25`, trades `#26`, lifecycle `#27`, resource directory `#28`, crews `#29`
+
+## 9. Eligibility — ORG-SRS-008 (#31) bounded decisions
+
+Dữ liệu điều kiện nhận việc cho worker và crew (advisory pre-check phục vụ điều phối; KHÔNG có module JOB/assignments — assignment CREATE thuộc slice JOB-SRS tương lai).
+
+| Method | Path | Auth | Query | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/eligibility/workers/:workerId` | **ADMIN + PROJECT_MANAGER** | `tradeId` (uuid), `skillLevel` (1-5), `at` (`YYYY-MM-DD`, default today) | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai (`fieldErrors`); `404` `RESOURCE_NOT_FOUND` |
+| GET | `/api/v1/eligibility/me` | JWT bắt buộc, **mọi role** (server resolve worker theo JWT `sub`) | như trên | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai; `404` `RESOURCE_NOT_FOUND` (`user không có hồ sơ worker`) |
+| GET | `/api/v1/eligibility/crews/:crewId` | **ADMIN + PROJECT_MANAGER** | — | `200` crew eligibility + header `Cache-Control: no-store` | `404` `RESOURCE_NOT_FOUND` |
+
+Response worker:
+
+```json
+{
+  "resourceType": "WORKER",
+  "resourceId": "11111111-1111-4111-8111-111111111111",
+  "eligible": true,
+  "checkedAt": "2026-09-06T00:00:00.000Z",
+  "correlationId": "6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b",
+  "conditions": [
+    { "code": "RESOURCE_ACTIVE", "passed": true, "reasonCode": "OK", "detail": "..." }
+  ],
+  "crews": [
+    { "crewId": "…", "crewCode": "CREW-A", "crewName": "Đội A", "memberRole": "MEMBER", "effectiveFrom": "2026-09-01", "effectiveTo": null }
+  ]
+}
+```
+
+Response crew: cùng shape với `resourceType: 'CREW'` và `members[]` (`memberId`, `userId`, `memberRole`, `effectiveFrom`, `effectiveTo`) thay cho `crews[]`.
+
+- **E1 — conditions worker (đúng thứ tự):** `RESOURCE_ACTIVE` (users.status ACTIVE + user_type WORKER + không khóa; `INACTIVE`→`RESOURCE_INACTIVE`, `LOCKED`→`RESOURCE_LOCKED`; worker/user không tồn tại → `404` cả request); `TRADE_SKILL_MATCH` (chỉ khi có `tradeId`/`skillLevel`: trade không có trong catalog → `TRADE_NOT_FOUND`, trade có nhưng worker không có row hiệu lực → `TRADE_INACTIVE`, cấp thấp hơn yêu cầu → `SKILL_LEVEL_TOO_LOW`; không yêu cầu → `passed:null` `NOT_REQUESTED`); `TRADE_CAPABILITY_DATA` (0 trade hiệu lực → `passed:false` `CAPABILITY_DATA_MISSING`, fail closed); `WORKLOAD` (đếm open assignments `PENDING_ACCEPTANCE`/`ACTIVE`, luôn `passed:true`, KHÔNG ngưỡng); `SCHEDULE_CONFLICT` (luôn `passed:null` `NOT_EVALUABLE`). `eligible` = AND trên mọi `passed === false` (null bỏ qua). `crews[]` = memberships hiệu lực lọc point-in-time theo `at` (`[effective_from, effective_to]` INCLUSIVE, NULL = open-ended — logic `#30`).
+- **E2 — `/me`:** resolve worker theo JWT `sub` (claim `TokenPayload.sub`; roles server-derived); không check role; thiếu worker row → `404` `RESOURCE_NOT_FOUND`. `X-Correlation-Id`: reuse khi là UUID, ngược lại generate mới (lenient — read-only, không audit nên không `400` như strict policy).
+- **E3 — conditions crew:** `RESOURCE_ACTIVE` (crews.status), `TRADE_CAPABILITY_DATA` (≥1 trade `resource_type='CREW'` hiệu lực), `WORKLOAD` (countOpenAssignments đội), `MEMBER_COVERAGE` (≥1 active member, LEAD/MEMBER đều tính qua `listMembers` default active — 0 member → `NO_ACTIVE_MEMBERS`), `SCHEDULE_CONFLICT` `NOT_EVALUABLE`.
+- **E4 — read-only:** use case chỉ pool reads (`findById`, catalog trade, `countOpenAssignments`, memberships/trades) — KHÔNG transaction, KHÔNG ghi `audit_logs`; mọi GET trả `Cache-Control: no-store`.
+- **E5 — roles:** xem bảng trên (`requireRoles`; `/me` chỉ `JwtAuthGuard`).
+- **JOB-SRS future scope (KHÔNG thuộc slice này):** assignment CREATE, snapshot persistence, atomic re-check-at-write, schedule conflict evaluation, workload limit/threshold. Kết quả eligibility là advisory pre-check, KHÔNG phải authorization — assignment creation phải re-check server-side trước khi ghi.

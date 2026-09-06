@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, Pressable, ActivityIndicator, ScrollView, StyleSheet,
 } from 'react-native';
 import { fetchProfile, updateProfileRequest, changePasswordRequest, LoginError, type Profile } from '../../api/client';
+import { router } from 'expo-router';
 
 export function ProfileScreen({ token, onPasswordChanged }: { token: string; onPasswordChanged?: () => void }) {
   const [profile, setProfile] = React.useState<Profile | null>(null);
@@ -156,6 +157,12 @@ export function ProfileScreen({ token, onPasswordChanged }: { token: string; onP
         >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Lưu thay đổi</Text>}
         </Pressable>
+        <Pressable
+          accessibilityRole="button" accessibilityLabel="view eligibility"
+          onPress={() => router.push('/eligibility')} style={[styles.button, styles.secondaryButton]}
+        >
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Xem điều kiện nhận việc</Text>
+        </Pressable>
         <Text style={styles.hint}>
           Email, vai trò và trạng thái chỉ đọc — không thể tự thay đổi (IAM-SRS-003).
         </Text>
@@ -217,5 +224,7 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  secondaryButton: { backgroundColor: '#f3f4f6', marginTop: 12 },
+  secondaryButtonText: { color: '#374151' },
   hint: { fontSize: 12, color: '#6b7280', marginTop: 4 },
 });

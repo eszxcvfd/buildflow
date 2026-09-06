@@ -85,6 +85,61 @@ export async function fetchProfile(token: string): Promise<Profile> {
   return res.json();
 }
 
+/**
+ * ORG-SRS-008 (issue #31) — self eligibility pre-check.
+ * Contract: GET /api/v1/eligibility/me (JwtAuthGuard only, any role; server
+ * resolves the worker from the JWT sub). Success shape:
+ * `{ resourceType: 'WORKER', resourceId, eligible, checkedAt, correlationId,
+ *    conditions: [{ code, passed: boolean|null, reasonCode, detail }],
+ *    crews: [{ crewId, crewCode, crewName, memberRole, effectiveFrom, effectiveTo }] }`.
+ * Errors reuse LoginError (status + code) so screens can branch: 404 with
+ * code RESOURCE_NOT_FOUND means the user has no worker profile; 401 means the
+ * session is dead and the user must re-login.
+ */
+export interface EligibilityCondition {
+  code: string;
+  passed: boolean | null;
+  reasonCode: string;
+  detail: string;
+}
+
+export interface EligibilityCrewMembership {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+  memberRole: 'LEAD' | 'MEMBER';
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+export interface MyEligibility {
+  resourceType: 'WORKER';
+  resourceId: string;
+  eligible: boolean;
+  checkedAt: string;
+  correlationId: string;
+  conditions: EligibilityCondition[];
+  crews: EligibilityCrewMembership[];
+}
+
+export async function fetchMyEligibility(token: string): Promise<MyEligibility> {
+  const res = await fetch(`${API_URL}/api/v1/eligibility/me`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    // Web-export correctness: never serve a cached eligibility verdict; harmless on native.
+    cache: 'no-store',
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body && typeof body === 'object') return body as MyEligibility;
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const message = typeof b.message === 'string' ? b.message : undefined;
+  const code = typeof b.code === 'string' ? b.code : undefined;
+  const fallback: Record<number, string> = {
+    401: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+    404: 'user không có hồ sơ worker',
+  };
+  throw new LoginError(message ?? fallback[res.status] ?? `Không tải được điều kiện nhận việc (${res.status})`, res.status, code);
+}
+
 export async function updateProfileRequest(token: string, payload: { fullName?: string; phone?: string | null }): Promise<Profile> {
   const res = await fetch(`${API_URL}/api/v1/me/profile`, {
     method: 'PATCH',

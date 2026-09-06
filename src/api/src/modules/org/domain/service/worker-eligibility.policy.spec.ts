@@ -1,6 +1,6 @@
 import { UserEntity } from '../../../iam/domain/entity/user.entity';
 import { WorkerEntity } from '../entity/worker.entity';
-import { isWorkerEligible, validateTradeAssignment } from './worker-eligibility.policy';
+import { validateTradeAssignment } from './worker-eligibility.policy';
 
 function makeWorker(status: 'ACTIVE' | 'INACTIVE' | 'LOCKED', lockedUntil: Date | null = null): WorkerEntity {
   const user = new UserEntity({
@@ -24,19 +24,6 @@ function makeWorker(status: 'ACTIVE' | 'INACTIVE' | 'LOCKED', lockedUntil: Date 
 }
 
 describe('WorkerEligibility ORG-SRS-001', () => {
-  it('ACTIVE worker eligible', () => {
-    expect(isWorkerEligible(makeWorker('ACTIVE'))).toBe(true);
-  });
-
-  it('INACTIVE worker không được phân công', () => {
-    expect(isWorkerEligible(makeWorker('INACTIVE'))).toBe(false);
-  });
-
-  it('LOCKED worker không eligible', () => {
-    expect(isWorkerEligible(makeWorker('LOCKED'))).toBe(false);
-    expect(isWorkerEligible(makeWorker('ACTIVE', new Date(Date.now() + 10000)))).toBe(false);
-  });
-
   it('history sau status change vẫn giữ (entity still exists, isActive false)', () => {
     const w = makeWorker('ACTIVE');
     expect(w.isActive()).toBe(true);

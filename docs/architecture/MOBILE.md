@@ -1,6 +1,8 @@
 # Mobile Architecture — React Native
 
-> **Status:** đề xuất target design cho `src/mobile`; hiện chưa có source code hoặc package manifest.
+> **Status:** thin Expo client đã triển khai tại `src/mobile` (shell + IAM
+> sign-in/session/profile/password + eligibility self-check ORG-SRS-008, issue #31);
+> tài liệu này giữ vai trò owner cho routing, screen, storage và platform capability.
 > **Owner:** mobile client, native lifecycle, screen routing và platform capability.
 
 ## 1. Khuyến nghị
@@ -52,6 +54,8 @@ src/mobile/
 `app/` là routing adapter; screen composition và business behavior thuộc feature. Không đặt domain logic vào file route. Nếu sau này không dùng Expo Router, chỉ thay `app/` bằng một navigation adapter trong workspace; feature interface vẫn giữ nguyên.
 
 Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): `forgot-password`/`reset-password` thuộc nhóm `(auth)`, form đổi mật khẩu nằm trong profile flow. Các screen chỉ gọi ba endpoint password trong [`API.md`](API.md); đổi/đặt lại thành công cắt session cũ nên app phải reset session state và quay về sign-in.
+
+Màn hình điều kiện nhận việc (ORG-SRS-008, issue #31): route `app/eligibility.tsx` (token gate qua session đã lưu; chưa đăng nhập → gợi ý đăng nhập) render feature `src/features/eligibility/EligibilityScreen.tsx`. Screen gọi typed client `fetchMyEligibility` → `GET /api/v1/eligibility/me`, hiển thị verdict banner (`Đủ điều kiện` / `Chưa đủ điều kiện`) + `checkedAt` + mã đối chiếu (`correlationId`), danh sách condition (`ĐẠT` / `KHÔNG ĐẠT` / `KHÔNG ĐÁNH GIÁ ĐƯỢC` cho `passed` true/false/null) và tư cách thành viên `crews[]` (mã đội · tên · vai trò · hiệu lực). Trạng thái: loading (`ActivityIndicator`), error + `Thử lại`, 404 `RESOURCE_NOT_FOUND` → empty `Tài khoản không có hồ sơ worker`, 401 → gợi ý đăng nhập lại; nút `Kiểm tra lại` re-fetch (stale → force refresh, không blind submit). Entry point: nút `Xem điều kiện nhận việc` trên `ProfileScreen` → `router.push('/eligibility')`. Mobile không suy luận eligibility cục bộ — mọi đánh giá do API trả về.
 
 ## 3. Dependency rules
 

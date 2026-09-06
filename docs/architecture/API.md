@@ -298,6 +298,7 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 - **Sort:** `GET /workers` và `GET /contractors` nhận `sort` (`name`/`createdAt`) + `order` (`asc`/`desc`, default `createdAt`/`desc`); whitelist mapping sang cột ở repository layer (worker `name`→`full_name`, contractor `name`→`name`, cả hai `createdAt`→`created_at`); sai giá trị → `400 { statusCode, message, fieldErrors }`. `GET /trades` giữ `ORDER BY name` cố định.
 - **Field-level filter errors:** lỗi validation filter trả `400 { statusCode, message, fieldErrors: { <field>: [msg] } }`, `message` giữ nguyên text cũ (web hiện chỉ đọc `message` nên không break).
 - **Current data:** các GET search + detail trả `Cache-Control: no-store` (qua `@Header`).
+- **Eligibility (ORG-SRS-008, `#31`):** endpoint điều kiện nhận việc thuộc [`ENDPOINTS.md`](ENDPOINTS.md) §9 — read-only, không ghi audit.
 - **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29` đã resolved cho crews; team filter workers defer `#30` (D9) đã đóng; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
 
 ## References

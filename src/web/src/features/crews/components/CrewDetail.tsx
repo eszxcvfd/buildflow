@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { getCrew, changeCrewLifecycleStatus, getCrewOpenWork, type Crew } from '@/lib/api/crews';
 import type { ApiError } from '@/lib/api/crews';
+import { checkCrewEligibility, type ApiError as EligibilityApiError, type CrewEligibilityResult } from '@/lib/api/eligibility';
+import { EligibilityChecklist } from '@/features/eligibility';
 import { listWorkers, type Worker } from '@/lib/api/workers';
 import {
   ResourceStatusDialog,
@@ -42,6 +44,11 @@ export function CrewDetail({ id }: { id: string }) {
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);
   const [leaderName, setLeaderName] = React.useState<string | null>(null);
+  // ORG-SRS-008 (issue #31) — section 'Điều kiện nhận việc':
+  // GET /api/v1/eligibility/crews/:id (auto-load, skeleton, error retry).
+  const [eligResult, setEligResult] = React.useState<CrewEligibilityResult | null>(null);
+  const [eligLoading, setEligLoading] = React.useState(true);
+  const [eligError, setEligError] = React.useState<EligibilityApiError | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -57,6 +64,21 @@ export function CrewDetail({ id }: { id: string }) {
   }, [id]);
 
   React.useEffect(() => { void load(); }, [load]);
+
+  const loadEligibility = React.useCallback(async () => {
+    setEligLoading(true);
+    setEligError(null);
+    try {
+      const r = await checkCrewEligibility(id);
+      setEligResult(r);
+    } catch (e) {
+      setEligError(e as EligibilityApiError);
+    } finally {
+      setEligLoading(false);
+    }
+  }, [id]);
+
+  React.useEffect(() => { void loadEligibility(); }, [loadEligibility]);
 
   // Tra tên trưởng nhóm từ worker ACTIVE (fallback hiển thị rút gọn id).
   React.useEffect(() => {
@@ -276,6 +298,22 @@ export function CrewDetail({ id }: { id: string }) {
 
         {actionError ? <div style={{ marginTop: '0.75rem' }}><Alert tone="error">{actionError}</Alert></div> : null}
         {actionSuccess ? <div style={{ marginTop: '0.75rem' }}><Alert tone="success">{actionSuccess}</Alert></div> : null}
+      </Card>
+
+      <Card>
+        <div className="bf-card-head">
+          <span className="bf-card-title">Điều kiện nhận việc</span>
+        </div>
+        <p style={{ margin: '0 0 0.75rem', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+          Kết quả kiểm tra từng điều kiện trước khi giao việc cho đội — bấm kiểm tra lại để làm mới.
+        </p>
+        <EligibilityChecklist
+          result={eligResult}
+          loading={eligLoading}
+          error={eligError}
+          onRefresh={() => void loadEligibility()}
+          compact
+        />
       </Card>
 
       <Card>

@@ -3,6 +3,7 @@ import { CrewDetail } from './CrewDetail';
 import { getCrew, changeCrewLifecycleStatus, getCrewOpenWork, listCrewMembers } from '@/lib/api/crews';
 import { listWorkers } from '@/lib/api/workers';
 import { listAuditLogs } from '@/lib/api/audit-logs';
+import { checkCrewEligibility } from '@/lib/api/eligibility';
 
 jest.mock('@/lib/api/crews', () => ({
   listCrews: jest.fn(),
@@ -17,6 +18,11 @@ jest.mock('@/lib/api/crews', () => ({
 }));
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
+jest.mock('@/lib/api/eligibility', () => ({
+  checkWorkerEligibility: jest.fn(),
+  checkCrewEligibility: jest.fn(),
+  checkMyEligibility: jest.fn(),
+}));
 
 const getCrewMock = getCrew as jest.Mock;
 const changeStatusMock = changeCrewLifecycleStatus as jest.Mock;
@@ -24,6 +30,26 @@ const getOpenWorkMock = getCrewOpenWork as jest.Mock;
 const listMembersMock = listCrewMembers as jest.Mock;
 const listWorkersMock = listWorkers as jest.Mock;
 const listAuditLogsMock = listAuditLogs as jest.Mock;
+const checkCrewEligibilityMock = checkCrewEligibility as jest.Mock;
+
+function crewEligibility(overrides = {}) {
+  return {
+    resourceType: 'CREW',
+    resourceId: 'crew-1',
+    eligible: true,
+    checkedAt: '2026-02-01T00:00:00.000Z',
+    correlationId: 'corr-crew-1',
+    conditions: [
+      { code: 'RESOURCE_ACTIVE', passed: true, reasonCode: 'OK', detail: 'Đội đang hiệu lực (ACTIVE)' },
+      { code: 'TRADE_CAPABILITY_DATA', passed: true, reasonCode: 'OK', detail: 'Đội có 1 ngành nghề hiệu lực' },
+      { code: 'WORKLOAD', passed: true, reasonCode: 'OK', detail: 'Đang có 0 công việc mở' },
+      { code: 'MEMBER_COVERAGE', passed: true, reasonCode: 'OK', detail: 'Đội có 2 thành viên hiệu lực' },
+      { code: 'SCHEDULE_CONFLICT', passed: null, reasonCode: 'NOT_EVALUABLE', detail: 'Chưa có dữ liệu work-order' },
+    ],
+    members: [],
+    ...overrides,
+  };
+}
 
 function crew(overrides = {}) {
   return {
@@ -66,6 +92,7 @@ beforeEach(() => {
   listMembersMock.mockResolvedValue({ data: [], total: 0 });
   listWorkersMock.mockResolvedValue({ data: [leadWorker()], total: 1, limit: 100, offset: 0 });
   listAuditLogsMock.mockResolvedValue({ data: [], total: 0, limit: 10, offset: 0 });
+  checkCrewEligibilityMock.mockResolvedValue(crewEligibility());
 });
 
 describe('CrewDetail ORG-SRS-006', () => {
@@ -124,5 +151,23 @@ describe('CrewDetail ORG-SRS-006', () => {
     expect(listAuditLogsMock).toHaveBeenCalledWith(
       expect.objectContaining({ entityType: 'CREW', entityId: 'crew-1' }),
     );
+  });
+
+  it('ORG-SRS-008 section Điều kiện nhận việc render checklist + mã đối chiếu', async () => {
+    render(<CrewDetail id="crew-1" />);
+    await waitFor(() => expect(checkCrewEligibilityMock).toHaveBeenCalledWith('crew-1'));
+    expect(screen.getByText('Điều kiện nhận việc')).not.toBeNull();
+    expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull();
+    expect(screen.getByText(/Mã đối chiếu: corr-crew-1/)).not.toBeNull();
+    expect(screen.getByText('KHÔNG ĐÁNH GIÁ ĐƯỢC')).not.toBeNull();
+  });
+
+  it('ORG-SRS-008 section hiển thị retry khi eligibility lỗi', async () => {
+    checkCrewEligibilityMock.mockRejectedValue({ status: 500, message: 'Lỗi máy chủ' });
+    render(<CrewDetail id="crew-1" />);
+    await waitFor(() => expect(screen.getByText('Lỗi máy chủ')).not.toBeNull());
+    checkCrewEligibilityMock.mockResolvedValue(crewEligibility());
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());
   });
 });

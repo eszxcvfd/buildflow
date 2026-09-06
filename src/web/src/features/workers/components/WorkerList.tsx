@@ -296,7 +296,7 @@ export function WorkerList() {
                     <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
                       Mã: <strong>{w.employeeCode ?? '—'}</strong> · SĐT: {w.phone ?? '—'} ·{' '}
                       <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span> ·{' '}
-                      <span style={{ color: w.eligible ? '#065f46' : '#991b1b' }}>{w.eligible ? 'Đủ điều kiện phân công' : 'Không đủ điều kiện (inactive/locked)'}</span>
+                      <span style={{ color: w.eligible ? '#065f46' : '#991b1b' }}>{w.eligible ? 'Đang hoạt động' : 'Không hoạt động (không nhận việc mới)'}</span>
                     </div>
                     <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
                       Ngành nghề: {w.trades.length
@@ -310,7 +310,7 @@ export function WorkerList() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {!w.eligible ? <span style={{ fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 6, padding: '0.2rem 0.5rem' }}>Chặn phân công</span> : null}
+                    {!w.eligible ? <span style={{ fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 6, padding: '0.2rem 0.5rem' }}>Không nhận việc mới</span> : null}
                     {w.status === 'ACTIVE' ? (
                       <>
                         <Button

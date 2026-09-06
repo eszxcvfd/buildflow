@@ -9,6 +9,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+// ProfileScreen navigates to the /eligibility expo-router route; stub the
+// router so the transitive native-stack import does not load under jest.
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+}));
+
 // Session persistence now goes through expo-secure-store on native (Keychain/Keystore);
 // AsyncStorage is only the web fallback + legacy migration source.
 jest.mock('expo-secure-store', () => ({

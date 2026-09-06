@@ -27,6 +27,9 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
     items: [
       { href: '/dashboard', label: 'Tổng quan' },
       { href: '/projects', label: 'Dự án' },
+      // ORG-SRS-008 (issue #31) — tự kiểm tra điều kiện nhận việc:
+      // mọi user đã đăng nhập (GET /api/v1/eligibility/me, không check role).
+      { href: '/my-eligibility', label: 'Điều kiện nhận việc của tôi' },
     ],
   },
   {
@@ -55,6 +58,7 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
 const TITLES: Array<[prefix: string, title: string]> = [
   ['/dashboard', 'Tổng quan'],
   ['/projects', 'Dự án'],
+  ['/my-eligibility', 'Điều kiện nhận việc của tôi'],
   ['/contractors', 'Nhà thầu'],
   ['/resources', 'Tra cứu nguồn lực'],
   ['/workers', 'Công nhân'],

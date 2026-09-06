@@ -1,8 +1,13 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { router } from 'expo-router';
 import { ProfileScreen } from './ProfileScreen';
 import * as client from '../../api/client';
 import type { Profile } from '../../api/client';
+
+jest.mock('expo-router', () => ({
+  router: { push: jest.fn() },
+}));
 
 const profileFixture: Profile = {
   id: 'u1',
@@ -112,4 +117,13 @@ describe('ProfileScreen change password (IAM-SRS-007, issue #22)', () => {
     expect(changeSpy).toHaveBeenCalledTimes(1);
     unmount();
   }, 15000);
+
+  it('eligibility link (ORG-SRS-008, issue #31): navigates to the /eligibility route', async () => {
+    jest.spyOn(client, 'fetchProfile').mockResolvedValue(profileFixture);
+    render(<ProfileScreen token="tok-1" />);
+    await screen.findByText('Hồ sơ cá nhân');
+
+    fireEvent.press(screen.getByLabelText('view eligibility'));
+    expect((router.push as jest.Mock)).toHaveBeenCalledWith('/eligibility');
+  });
 });

@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { getWorker, updateWorker, changeWorkerLifecycleStatus, getWorkerOpenWork, type Worker } from '@/lib/api/workers';
 import type { ApiError } from '@/lib/api/workers';
+import { checkWorkerEligibility, type ApiError as EligibilityApiError, type WorkerEligibilityResult } from '@/lib/api/eligibility';
+import { EligibilityChecklist } from '@/features/eligibility';
 import { useTradeNames } from '@/features/workers/hooks/useTradeNames';
 import { useIsAdmin } from '@/lib/auth/roles';
 import {
@@ -50,6 +52,11 @@ export function WorkerDetail({ id }: { id: string }) {
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);
+  // ORG-SRS-008 (issue #31) — nguồn duy nhất cho 'Điều kiện phân công':
+  // GET /api/v1/eligibility/workers/:id (auto-load, skeleton, error retry).
+  const [eligResult, setEligResult] = React.useState<WorkerEligibilityResult | null>(null);
+  const [eligLoading, setEligLoading] = React.useState(true);
+  const [eligError, setEligError] = React.useState<EligibilityApiError | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -65,6 +72,21 @@ export function WorkerDetail({ id }: { id: string }) {
   }, [id]);
 
   React.useEffect(() => { void load(); }, [load]);
+
+  const loadEligibility = React.useCallback(async () => {
+    setEligLoading(true);
+    setEligError(null);
+    try {
+      const r = await checkWorkerEligibility(id);
+      setEligResult(r);
+    } catch (e) {
+      setEligError(e as EligibilityApiError);
+    } finally {
+      setEligLoading(false);
+    }
+  }, [id]);
+
+  React.useEffect(() => { void loadEligibility(); }, [loadEligibility]);
 
   function handleRetry() {
     void load();
@@ -206,12 +228,6 @@ export function WorkerDetail({ id }: { id: string }) {
             </dd>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Điều kiện phân công</dt>
-            <dd style={{ margin: 0, color: worker.eligible ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
-              {worker.eligible ? 'Đủ điều kiện — cho phép phân công' : 'Không đủ điều kiện — chặn phân công mới, lịch sử vẫn giữ'}
-            </dd>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
             <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tạo</dt>
             <dd style={{ margin: 0 }}>{new Date(worker.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
@@ -220,15 +236,6 @@ export function WorkerDetail({ id }: { id: string }) {
             <dd style={{ margin: 0 }}>{new Date(worker.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
-
-        {!worker.eligible ? (
-          <div style={{ marginTop: '0.75rem' }}>
-            <Alert tone="info">
-              Worker đang ngừng hoạt động hoặc bị khóa nên không chọn được cho phân công mới.
-              Các phân công cũ vẫn truy được bình thường.
-            </Alert>
-          </div>
-        ) : null}
 
         <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {isAdmin ? (
@@ -273,6 +280,21 @@ export function WorkerDetail({ id }: { id: string }) {
 
         {actionError ? <div style={{ marginTop: '0.75rem' }}><Alert tone="error">{actionError}</Alert></div> : null}
         {actionSuccess ? <div style={{ marginTop: '0.75rem' }}><Alert tone="success">{actionSuccess}</Alert></div> : null}
+      </Card>
+
+      <Card>
+        <div className="bf-card-head">
+          <span className="bf-card-title">Điều kiện nhận việc</span>
+        </div>
+        <p style={{ margin: '0 0 0.75rem', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+          Kết quả kiểm tra từng điều kiện trước khi phân công — dữ liệu có thể cũ, bấm kiểm tra lại để làm mới.
+        </p>
+        <EligibilityChecklist
+          result={eligResult}
+          loading={eligLoading}
+          error={eligError}
+          onRefresh={() => void loadEligibility()}
+        />
       </Card>
 
       <Card>

@@ -92,9 +92,9 @@ describe('WorkerList (ORG-SRS-001 + #27)', () => {
     render(<WorkerList />);
     expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
     expect(screen.getByText('Tran Thi Tho')).toBeTruthy();
-    expect(screen.getByText('Đủ điều kiện phân công')).toBeTruthy();
-    expect(screen.getByText('Không đủ điều kiện (inactive/locked)')).toBeTruthy();
-    expect(screen.getByText('Chặn phân công')).toBeTruthy();
+    expect(screen.getByText('Đang hoạt động')).toBeTruthy();
+    expect(screen.getByText('Không hoạt động (không nhận việc mới)')).toBeTruthy();
+    expect(screen.getByText('Không nhận việc mới')).toBeTruthy();
     // ACTIVE row: SUSPEND + TERMINATE buttons
     expect(screen.getByRole('button', { name: 'Tạm ngừng' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chấm dứt' })).toBeTruthy();
