@@ -38,14 +38,6 @@ function validateRequiredContactName(v?: string | null): string {
   return t;
 }
 
-function validateContactName(v?: string | null): string | null {
-  if (v === null || v === undefined || v === '') return null;
-  const t = v.trim();
-  if (t.length === 0) return null;
-  if (t.length > 150) throw new Error('Tên liên hệ tối đa 150 ký tự');
-  return t;
-}
-
 function validatePhone(v?: string | null): string | null {
   if (v === null || v === undefined || v === '') return null;
   const normalized = v.trim();
@@ -67,14 +59,6 @@ function validateRequiredScope(v?: string | null): string {
   if (v === null || v === undefined) throw new Error('Phạm vi công việc không được để trống');
   const t = String(v).trim();
   if (t.length === 0) throw new Error('Phạm vi công việc không được để trống');
-  if (t.length > 1000) throw new Error('Phạm vi công việc tối đa 1000 ký tự');
-  return t;
-}
-
-function validateScope(v?: string | null): string | null {
-  if (v === null || v === undefined || v === '') return null;
-  const t = v.trim();
-  if (t.length === 0) return null;
   if (t.length > 1000) throw new Error('Phạm vi công việc tối đa 1000 ký tự');
   return t;
 }

@@ -40,11 +40,11 @@ export function ContractorList() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, scopeFilter, eligibleOnly, retryKey]);
+  }, [search, statusFilter, scopeFilter, eligibleOnly]);
 
   React.useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, retryKey]);
 
   function handleRetry() {
     setRetryKey((k) => k + 1);

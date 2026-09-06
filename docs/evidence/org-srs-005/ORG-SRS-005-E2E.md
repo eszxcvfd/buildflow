@@ -193,8 +193,15 @@ PATCH E2E4-CON scope → 200, verify 'seed ORG-SRS-004 (E2E28)', revert → 200,
 docs/evidence/org-srs-005/
 ├── ORG-SRS-005-E2E.md              (file này)
 ├── e2e-driver-org-srs-005.cjs      (driver S1–S12, playwright-core + Chrome)
+├── e2e-driver-pagination.cjs       (driver P1–P7 pagination dataset >20 — mới, §10)
 ├── e2e-vars.json                   (kết quả machine-readable 12 PASS / 0 FAIL — post-fix, khớp driver §4a)
-└── shots/ (15 ảnh)
+└── shots/ (15 ảnh + 7 ảnh pagination §10)
+     ├── S1-nav.png / S1-directory.png
+     ├── S2-combined.png (post-fix — 3 select dồn dập, Tổng=1) / S2-combined-fix.png / S2-search-fix.png
+     ├── S3-desc.png / S4-page2.png / S5-empty.png / S5-persist.png
+     ├── S6-inactive.png / S6-search.png / S7.png / S8-detail.png
+     ├── S10-fresh.png / S12-admin.png
+     └── P1-page1.png / P2-page2.png / P3-sort-page2.png / P4-filter.png / P5-back.png / P6-contractors.png / P7-edge.png
     ├── S1-nav.png / S1-directory.png
     ├── S2-combined.png (post-fix — 3 select dồn dập, Tổng=1) / S2-combined-fix.png / S2-search-fix.png
     ├── S3-desc.png / S4-page2.png / S5-empty.png / S5-persist.png
@@ -240,11 +247,84 @@ audit_logs chỉ tăng (append-only) — đúng thiết kế.
 | `src/web` `lint` | ✅ 1 warning (= baseline `ContractorList` exhaustive-deps) |
 | `src/web` `build` (`next build`) | ✅ pass, route `/resources` 8.48 kB (dynamic ƒ) trong route map |
 
+## 10. Pagination với dataset >20 (follow-up after close — 2026-09-06 UTC)
+
+> **Bối cảnh:** §4/S4 và §9 đã ghi trung thực rằng pagination UI chưa demo được dataset >20
+> (PAGE_SIZE=20, DB chỉ 5 workers → nav `Phân trang` không render). Mục này补 bằng chứng còn thiếu:
+> seed tạm 21 workers → 26 workers (25 ACTIVE) → chạy driver pagination riêng → cleanup toàn bộ seed.
+> **Kết quả: 7/7 PASS.** Driver KHÔNG mutate dữ liệu (chỉ GET UI/API + SQL COUNT).
+
+### 10.1 Seed SQL (đã chạy — admin-side, trực tiếp SQL, không qua API)
+
+```sql
+-- users: user_type WORKER, status ACTIVE, bcrypt hash dùng chung của worker1@example.com
+-- ($2b$10$x559fcmNdbdnTURNfPVMYO92dCTAo.d3NeNk0lGlQH5IYMite2Opu), employee_code E2E5PAG01..21
+INSERT INTO users (email, password_hash, full_name, employee_code, user_type, status)
+SELECT 'e2e5.pag.' || lpad(g::text, 2, '0') || '@example.com',
+       (SELECT password_hash FROM users WHERE email='worker1@example.com'),
+       'E2E Pag Worker ' || lpad(g::text, 2, '0'),
+       'E2E5PAG' || lpad(g::text, 2, '0'),
+       'WORKER', 'ACTIVE'
+FROM generate_series(1, 21) g;
+-- role WORKER (roles.code='WORKER')
+INSERT INTO user_roles (user_id, role_id, is_active)
+SELECT u.id, (SELECT id FROM roles WHERE code='WORKER'), true
+FROM users u WHERE u.email LIKE 'e2e5.pag.%'
+  AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=u.id
+                  AND ur.role_id=(SELECT id FROM roles WHERE code='WORKER') AND ur.is_active);
+-- output thật: INSERT 0 21 / INSERT 0 21
+```
+
+> **Ghi chú audit:** seed là SQL admin-side, không qua API nên **không sinh audit row**
+> (verify: `SELECT count(*) FROM audit_logs a WHERE EXISTS (SELECT 1 FROM users u
+> WHERE u.email LIKE 'e2e5.pag.%' AND u.id = a.entity_id)` → **0**). Đó là dữ liệu demo thuần túy.
+
+COUNT thật:
+
+| Thời điểm | workers all | workers ACTIVE | `e2e5.pag.%` | contractors | API `GET /workers?limit=1` total |
+| --- | --- | --- | --- | --- | --- |
+| Trước seed | 5 | 4 | 0 | 3 | — |
+| Sau seed | **26** | **25** | 21 (+21 user_roles ACTIVE) | 3 | **26** |
+| Sau cleanup | 5 | 4 | **0** | 3 | **5** (+0 orphan user_roles) |
+
+### 10.2 Kịch bản & kết quả (driver `e2e-driver-pagination.cjs`, login PM → `/resources`)
+
+| # | Bước | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| P1 | Tab Workers: UI Tổng=26 = SQL all=26 = API total=26 (ACTIVE SQL=25); đúng 20 rows/trang; nav hiện `Trang 1/2`, `Trang trước` disabled, `Trang sau` enabled | 🟢 PASS | `P1-page1.png` |
+| P2 | Bấm `Trang sau` → URL `?tab=workers&sort=createdAt&order=desc&page=2`; 6 rows (26−20), tên không trùng trang 1 (overlap=0), khớp API `offset=20&limit=20` sort mặc định: `[E2E Pag Worker 15\|E2E4 Worker Lifecycle\|E2E Worker Renamed\|E2E Worker ONZFUF\|Lê Văn Thợ\|Nguyễn Văn Thợ]` | 🟢 PASS | `P2-page2.png` |
+| P3 | Đổi sort=name asc → trang 1 `p1[0]=E2E Pag Worker 01, p1[19]=E2E Pag Worker 20` khớp API (cả thứ tự đầu/cuối); trang 2 `[E2E Pag Worker 21\|…\|Nguyễn Văn Thợ]` khớp API `offset=20` sort mới, overlap=0 | 🟢 PASS | `P3-sort-page2.png` |
+| P4 | Đang ở page=2, filter INACTIVE → URL rớt `page=2`, Tổng=1 = SQL INACTIVE=1, caption `Trang 1/1`, nav ẩn; combo ACTIVE → Tổng=25 = SQL, 20 rows, nav hiện lại `Trang 1/2` | 🟢 PASS | `P4-filter.png` |
+| P5 | Giữ filter `status=ACTIVE` ở page=2 → mở detail `/workers/cf27011d-…` → back → URL vẫn `?tab=workers&status=ACTIVE&sort=createdAt&order=desc&page=2`, Tổng=25, `Trang 2/2` | 🟢 PASS | `P5-back.png` |
+| P6 | Tab Contractors: UI Tổng=3 = API total=3, 3 rows, `nav[aria-label="Phân trang"]` **không render** (total ≤ limit) | 🟢 PASS | `P6-contractors.png` |
+| P7 | Biên: trang 1 `prevDisabled=true/nextDisabled=false`; trang cuối 2/2 `prevDisabled=false/nextDisabled=true` | 🟢 PASS | `P7-edge.png` |
+
+**Tổng pagination: 7 PASS / 0 FAIL** (`===== TỔNG PAGINATION: 7 PASS / 0 FAIL / 7 bước =====`).
+
+### 10.3 Tái sinh + cleanup
+
+```bash
+# 1. Seed (SQL §10.1 — psql qua container postgres)
+# 2. Chạy driver (không mutate dữ liệu):
+node docs/evidence/org-srs-005/e2e-driver-pagination.cjs
+# → ===== TỔNG PAGINATION: 7 PASS / 0 FAIL / 7 bước =====
+# 3. Cleanup seed (ĐÃ CHẠY 2026-09-06 — DELETE 21 + DELETE 21):
+docker exec buildflow-postgres-1 psql -U buildflow -d buildflow -v ON_ERROR_STOP=1 \
+  -c "DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'e2e5.pag.%'); \
+      DELETE FROM users WHERE user_type='WORKER' AND email LIKE 'e2e5.pag.%';"
+# verify: workers all=5, ACTIVE=4, e2e5.pag.%=0, contractors=3, API total=5, orphan user_roles=0
+```
+
+> ✅ **Đã cleanup**: seed pagination xóa toàn bộ (users + user_roles), COUNT về đúng như trước seed
+> (5 workers / 4 ACTIVE / 3 contractors). Shots P1..P7 + driver giữ lại làm bằng chứng.
+> Không còn việc tồn đọng cho #28: pagination UI đã demo đủ với dataset >20 (nav, offset, sort,
+> filter-reset, back-persist, biên, contractors-no-nav).
+
 ## 9. Rủi ro / việc không làm
 
 - S2 FAIL gốc (minor UI race) đã fix triệt để (§4a) và tái chạy driver PASS 12/12 — không còn việc tồn đọng.
 - Slice là read-only (GET) không ghi DB/audit → double-submit/retry N/A cho tra cứu; đã test ở các slice write (lifecycle #27).
 - Sort ORDER BY chỉ có SQL-assert ở unit test (cùng mức proof các slice trước); E2E này assert thứ tự qua API+UI với dataset 5 workers.
-- Pagination UI không có dataset > 20 để hiện nút Trang trước/sau — chỉ verify `page` param + total (trung thực, không giả vờ có nav).
+- Pagination UI đã có bằng chứng dataset >20 ở **§10** (7/7 PASS, seed đã cleanup) — dòng ghi nhận thiếu dataset ở bản trước được thay bằng §10.
 - Không browser-E2E cho role ADMIN trên `/resources` ngoài smoke mở trang (S12); matrix write-admin đã có ở ORG-SRS-004.
 - worker1 password giữ `E2EWorker@2025` (ghi §2); không trả về password cũ vì unknown từ trước.
