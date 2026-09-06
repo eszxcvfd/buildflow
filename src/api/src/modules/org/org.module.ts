@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { WorkersController } from './api/rest/controller/workers.controller';
 import { ContractorsController } from './api/rest/controller/contractors.controller';
 import { TradesController } from './api/rest/controller/trades.controller';
+import { CrewsController } from './api/rest/controller/crews.controller';
 import { CreateWorkerUseCase } from './application/use-case/create-worker.use-case';
 import { UpdateWorkerUseCase } from './application/use-case/update-worker.use-case';
 import { GetWorkerUseCase } from './application/use-case/get-worker.use-case';
@@ -17,14 +18,22 @@ import { GetTradeUseCase } from './application/use-case/get-trade.use-case';
 import { SearchTradesUseCase } from './application/use-case/search-trades.use-case';
 import { StatusTransitionWorkerUseCase } from './application/use-case/status-transition-worker.use-case';
 import { StatusTransitionContractorUseCase } from './application/use-case/status-transition-contractor.use-case';
+import { StatusTransitionCrewUseCase } from './application/use-case/status-transition-crew.use-case';
+import { CreateCrewUseCase } from './application/use-case/create-crew.use-case';
+import { UpdateCrewUseCase } from './application/use-case/update-crew.use-case';
+import { GetCrewUseCase } from './application/use-case/get-crew.use-case';
+import { SearchCrewsUseCase } from './application/use-case/search-crews.use-case';
+import { GetCrewOpenWorkUseCase } from './application/use-case/get-crew-open-work.use-case';
 import { GetWorkerOpenWorkUseCase } from './application/use-case/get-worker-open-work.use-case';
 import { GetContractorOpenWorkUseCase } from './application/use-case/get-contractor-open-work.use-case';
 import { PgWorkerRepository } from './infrastructure/database/pg-worker.repository';
 import { PgTradeRepository } from './infrastructure/database/pg-trade.repository';
 import { PgContractorRepository } from './infrastructure/database/pg-contractor.repository';
+import { PgCrewRepository } from './infrastructure/database/pg-crew.repository';
 import { WORKER_REPOSITORY } from './domain/repository/worker-repository.port';
 import { TRADE_REPOSITORY } from './domain/repository/trade-repository.port';
 import { CONTRACTOR_REPOSITORY } from './domain/repository/contractor-repository.port';
+import { CREW_REPOSITORY } from './domain/repository/crew-repository.port';
 import { PgAuditRepository } from '../iam/infrastructure/database/pg-audit.repository';
 import { PgTransactionManager } from '../iam/infrastructure/database/pg-transaction.manager';
 import { BcryptHasherService } from '../iam/infrastructure/security/bcrypt-hasher.service';
@@ -38,7 +47,7 @@ import { PgUserRepository } from '../iam/infrastructure/database/pg-user.reposit
 import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
 
 @Module({
-  controllers: [WorkersController, ContractorsController, TradesController],
+  controllers: [WorkersController, ContractorsController, TradesController, CrewsController],
   providers: [
     CreateWorkerUseCase,
     UpdateWorkerUseCase,
@@ -55,6 +64,12 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     SearchTradesUseCase,
     StatusTransitionWorkerUseCase,
     StatusTransitionContractorUseCase,
+    StatusTransitionCrewUseCase,
+    CreateCrewUseCase,
+    UpdateCrewUseCase,
+    GetCrewUseCase,
+    SearchCrewsUseCase,
+    GetCrewOpenWorkUseCase,
     GetWorkerOpenWorkUseCase,
     GetContractorOpenWorkUseCase,
     JwtAuthGuard,
@@ -62,6 +77,7 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     { provide: WORKER_REPOSITORY, useClass: PgWorkerRepository },
     { provide: TRADE_REPOSITORY, useClass: PgTradeRepository },
     { provide: CONTRACTOR_REPOSITORY, useClass: PgContractorRepository },
+    { provide: CREW_REPOSITORY, useClass: PgCrewRepository },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: HASHER_PORT, useClass: BcryptHasherService },

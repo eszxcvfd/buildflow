@@ -4,6 +4,7 @@ import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { listWorkers, type ApiError as WorkerApiError, type Worker } from '@/lib/api/workers';
 import { listContractors, type ApiError as ContractorApiError, type Contractor } from '@/lib/api/contractors';
+import { listCrews, type ApiError as CrewApiError, type Crew } from '@/lib/api/crews';
 import { listTrades, type Trade } from '@/lib/api/trades';
 import { useCanViewResourceDirectory } from '@/lib/auth/roles';
 import { Alert } from '@/components/ui/alert/Alert';
@@ -13,8 +14,8 @@ import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
 
-type ApiError = WorkerApiError | ContractorApiError;
-type Tab = 'workers' | 'contractors';
+type ApiError = WorkerApiError | ContractorApiError | CrewApiError;
+type Tab = 'workers' | 'contractors' | 'crews';
 
 const PAGE_SIZE = 20;
 
@@ -62,7 +63,8 @@ interface DirectoryQuery {
 }
 
 function parseQuery(sp: URLSearchParams): DirectoryQuery {
-  const tab = sp.get('tab') === 'contractors' ? 'contractors' : 'workers';
+  const raw = sp.get('tab');
+  const tab: Tab = raw === 'contractors' ? 'contractors' : raw === 'crews' ? 'crews' : 'workers';
   const page = Math.max(1, Number.parseInt(sp.get('page') ?? '1', 10) || 1);
   return {
     tab,
@@ -110,7 +112,9 @@ function shortUuid(id: string): string {
  * ORG-SRS-005 (issue #28) — trang tra cứu nguồn lực read-only cho
  * ADMIN + PROJECT_MANAGER. Filter/sort/pagination đồng bộ URL query để giữ
  * khi quay lại; reads dùng cache no-store nên dữ liệu luôn hiện hành.
- * Tab Đội bị disabled (team defer #29 → ORG-SRS-006).
+ * ORG-SRS-006 (issue #29) — bật tab Đội (listCrews, cùng pattern filter/sort/
+ * pagination; rows read-only: code + tên + status + eligible + trưởng nhóm +
+ * link chi tiết). KHÔNG thêm crew filter cho tab workers (defer #30).
  */
 export function ResourceDirectory() {
   const router = useRouter();
@@ -162,6 +166,7 @@ export function ResourceDirectory() {
 
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [contractors, setContractors] = React.useState<Contractor[]>([]);
+  const [crews, setCrews] = React.useState<Crew[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -211,7 +216,7 @@ export function ResourceDirectory() {
             setWorkers(res.data);
             setTotal(res.total);
           }
-        } else {
+        } else if (query.tab === 'contractors') {
           const res = await listContractors({
             search: query.q.trim() || undefined,
             status: query.status || undefined,
@@ -222,6 +227,19 @@ export function ResourceDirectory() {
           });
           if (!cancelled) {
             setContractors(res.data);
+            setTotal(res.total);
+          }
+        } else {
+          const res = await listCrews({
+            search: query.q.trim() || undefined,
+            status: query.status || undefined,
+            sort: query.sort,
+            order: query.order,
+            limit: PAGE_SIZE,
+            offset,
+          });
+          if (!cancelled) {
+            setCrews(res.data);
             setTotal(res.total);
           }
         }
@@ -256,8 +274,7 @@ export function ResourceDirectory() {
   const orderError = pickFieldError(fieldErrors, ['order']);
   const globalFilterError = pickFieldError(fieldErrors, ['_global']) ?? (error?.status === 400 && !statusError && !tradeError && !skillError && !sortError && !orderError ? error.message : null);
 
-  const statusOptions = query.tab === 'workers' ? WORKER_STATUSES : CONTRACTOR_STATUSES;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const statusOptions = query.tab === 'workers' ? WORKER_STATUSES : CONTRACTOR_STATUSES;  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasActiveFilter = Boolean(query.status || query.trade || query.skill || query.q);
 
   function handleClear() {
@@ -340,12 +357,16 @@ export function ResourceDirectory() {
         >
           Nhà thầu
         </button>
-        <button type="button" role="tab" aria-selected={false} aria-disabled="true" disabled className="bf-btn" title="Sắp có — ORG-SRS-006">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={query.tab === 'crews'}
+          onClick={() => apply({ tab: 'crews' })}
+          className="bf-btn"
+          style={query.tab === 'crews' ? { borderColor: 'var(--bf-accent)' } : undefined}
+        >
           Đội
         </button>
-        <span style={{ alignSelf: 'center', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
-          Tab Đội: Sắp có — ORG-SRS-006
-        </span>
       </div>
 
       <Card>
@@ -356,7 +377,7 @@ export function ResourceDirectory() {
             </label>
             <Input
               id="directory-q"
-              placeholder={query.tab === 'workers' ? 'Tên, email, mã nhân viên…' : 'Mã, tên, liên hệ, email…'}
+              placeholder={query.tab === 'workers' ? 'Tên, email, mã nhân viên…' : query.tab === 'crews' ? 'Mã, tên, mô tả đội…' : 'Mã, tên, liên hệ, email…'}
               value={qInput}
               onChange={(e) => setQInput(e.target.value)}
               onKeyDown={(e) => {
@@ -504,7 +525,7 @@ export function ResourceDirectory() {
           </div>
         ) : null}
         <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} hồ sơ · Hiển thị {query.tab === 'workers' ? workers.length : contractors.length} · Dữ liệu
+          Tổng: {total} hồ sơ · Hiển thị {query.tab === 'workers' ? workers.length : query.tab === 'crews' ? crews.length : contractors.length} · Dữ liệu
           hiện hành (không cache) · Trang {query.page}/{totalPages}
         </p>
       </Card>
@@ -571,7 +592,53 @@ export function ResourceDirectory() {
               <Pagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} />
             </>
           ))
-          : (contractors.length === 0 ? (
+          : query.tab === 'crews'
+            ? (crews.length === 0 ? (
+              <Card>
+                <EmptyState title="Chưa có đội thi công nào phù hợp bộ lọc">
+                  Thử đổi từ khóa hoặc trạng thái — hoặc{' '}
+                  <button type="button" onClick={handleClear} style={{ color: '#1d4ed8', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer' }}>
+                    xóa bộ lọc
+                  </button>
+                  .
+                </EmptyState>
+              </Card>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  {crews.map((c) => (
+                    <Card key={c.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>
+                            <a href={`/crews/${c.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+                              {c.name}
+                            </a>{' '}
+                            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.9rem' }}>· {c.code}</span>
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
+                            <StatusBadge status={c.status} /> ·{' '}
+                            <span style={{ color: c.eligible ? '#065f46' : '#991b1b' }}>
+                              {c.eligible ? 'Đủ điều kiện phân công' : 'Không nhận việc mới'}
+                            </span>
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
+                            Trưởng nhóm: {c.leaderUserId ? shortUuid(c.leaderUserId) : '— chưa chỉ định —'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <a href={`/crews/${c.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
+                            Chi tiết
+                          </a>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+                <Pagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} />
+              </>
+            ))
+            : (contractors.length === 0 ? (
             <Card>
               <EmptyState title="Chưa có nhà thầu nào phù hợp bộ lọc">
                 Thử đổi từ khóa hoặc trạng thái — hoặc{' '}

@@ -2,11 +2,13 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ResourceDirectory } from './ResourceDirectory';
 import { listWorkers } from '@/lib/api/workers';
 import { listContractors } from '@/lib/api/contractors';
+import { listCrews } from '@/lib/api/crews';
 import { listTrades } from '@/lib/api/trades';
 import { useCanViewResourceDirectory } from '@/lib/auth/roles';
 
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/contractors', () => ({ listContractors: jest.fn() }));
+jest.mock('@/lib/api/crews', () => ({ listCrews: jest.fn() }));
 jest.mock('@/lib/api/trades', () => ({ listTrades: jest.fn() }));
 jest.mock('@/lib/auth/roles', () => ({ useCanViewResourceDirectory: jest.fn() }));
 
@@ -28,6 +30,7 @@ jest.mock('next/navigation', () => ({
 
 const listWorkersMock = listWorkers as jest.Mock;
 const listContractorsMock = listContractors as jest.Mock;
+const listCrewsMock = listCrews as jest.Mock;
 const listTradesMock = listTrades as jest.Mock;
 const canViewMock = useCanViewResourceDirectory as jest.Mock;
 
@@ -88,6 +91,7 @@ beforeEach(() => {
   listTradesMock.mockResolvedValue({ data: [trade()], total: 1, limit: 100, offset: 0 });
   listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 20, offset: 0 });
   listContractorsMock.mockResolvedValue({ data: [contractor()], total: 1, limit: 20, offset: 0 });
+  listCrewsMock.mockResolvedValue({ data: [], total: 0, limit: 20, offset: 0 });
 });
 
 describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
@@ -223,11 +227,13 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     expect(screen.getByText(/Thi cong phan tho/)).toBeTruthy();
   });
 
-  it('tab Đội disabled với note ORG-SRS-006', async () => {
+  it('tab Đội khả dụng (ORG-SRS-006) — chuyển tab gọi listCrews', async () => {
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
     const teamTab = screen.getByRole('tab', { name: 'Đội' });
-    expect((teamTab as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Tab Đội: Sắp có — ORG-SRS-006')).toBeTruthy();
+    expect((teamTab as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(teamTab);
+    const url = mockReplace.mock.calls[mockReplace.mock.calls.length - 1][0] as string;
+    expect(url).toContain('tab=crews');
   });
 });

@@ -1,0 +1,65 @@
+{
+  "crewCode": "E2E-CREW-01",
+  "dsCode": "E2E-CREW-DS",
+  "woE2e6": "e2e6b300-0000-4000-8000-0000000000b4",
+  "asnE2e6": "e2e6c100-0000-4000-8000-0000000000c2",
+  "worker1": "33333333-3333-4333-8333-333333333333",
+  "worker2": "44444444-4444-4444-8444-444444444444",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "crewId=11e39f5f-d468-4539-9553-b3b1bd9ab00d UI list thấy E2E-CREW-01; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "dup→409; leader ảo→400 fieldErrors.leaderUserId; corr sai→400; UI field-level OK (thiếu field→400 {\"message\":[\"Trưởng nhóm không hợp lệ\"],\"error\":\"Bad Request\",\"statusCode\":400})"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "LEAD cũ off false|2026-09-06; LEAD mới LEAD|true|-; audit +1 có before/after leader"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "open-work=1 → warning UI + 200; DB INACTIVE; audit SUSPENDED có reason + _warning"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "alreadyInState=true; audit 1→1 (delta 0)"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "UI + DB ACTIVE; audit ORG_CREW_REACTIVATED=1"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "TERMINATED=1, DB INACTIVE; eligibleOnly loại crew; directory vẫn hiện + badge không đủ điều kiện"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "API asc/desc đảo đúng (2 crews); INACTIVE chứa crew; UI khớp"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "PM write crews 200; worker 403 (API+UI); anon 401; PM workers/status 403 (không widen); ghost 404"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=ca79acc3…)"
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "assignment e2e6c100-0000-4000-8000-0000000000c2 status=ACTIVE, crew_id giữ nguyên sau INACTIVE"
+    }
+  ]
+}

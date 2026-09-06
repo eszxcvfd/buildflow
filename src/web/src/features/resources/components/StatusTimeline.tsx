@@ -13,6 +13,9 @@ import { EmptyState } from '@/components/ui/empty-state/EmptyState';
  * của worker/contractor, đọc từ audit API hiện có
  * GET /api/v1/audit-logs?entityType=WORKER|CONTRACTOR&entityId=:id (admin-only;
  * repo lọc entity_type/entity_id + ORDER BY created_at DESC).
+ * ORG-SRS-006 (issue #29) — mở rộng cho đội thi công (`entityType: 'CREW'`,
+ * audit actions ORG_CREW_*). Audit-logs API giữ admin-only nên non-admin thấy
+ * ghi chú quyền (branch 401/403 có sẵn).
  * Render tối đa 10 dòng + link 'Xem tất cả' sang /admin/audit-logs với filter sẵn.
  * Actor hiển thị short-id; không render beforeData/afterData (có thể chứa dữ liệu nhạy cảm).
  */
@@ -25,6 +28,12 @@ const LIFECYCLE_ACTION_LABEL: Record<string, string> = {
   ORG_CONTRACTOR_REACTIVATED: 'Kích hoạt lại',
   ORG_CONTRACTOR_SUSPENDED: 'Tạm ngừng',
   ORG_CONTRACTOR_TERMINATED: 'Chấm dứt',
+  ORG_CREW_CREATED: 'Tạo đội',
+  ORG_CREW_UPDATED: 'Cập nhật hồ sơ',
+  ORG_CREW_LEAD_CHANGED: 'Đổi trưởng nhóm',
+  ORG_CREW_REACTIVATED: 'Kích hoạt lại',
+  ORG_CREW_SUSPENDED: 'Tạm ngừng',
+  ORG_CREW_TERMINATED: 'Chấm dứt',
 };
 
 const LIFECYCLE_STATUS_ACTIONS = new Set(Object.keys(LIFECYCLE_ACTION_LABEL));
@@ -41,7 +50,7 @@ function shortenActor(v: string | null): string {
   return v.length > 12 ? `${v.slice(0, 8)}…` : v;
 }
 
-export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WORKER' | 'CONTRACTOR' }) {
+export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' }) {
   const [logs, setLogs] = React.useState<AuditLog[] | null>(null);
   const [total, setTotal] = React.useState(0);
   const [error, setError] = React.useState<AuditLogError | null>(null);

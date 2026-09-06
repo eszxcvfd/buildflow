@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button/Button';
 /**
  * ORG-SRS-004 (issue #27) — confirm dialog lifecycle dùng chung cho worker và
  * contractor (state policy API layer: ACTIVATE→ACTIVE, SUSPEND/TERMINATE→INACTIVE).
+ * ORG-SRS-006 (issue #29) — mở rộng cho đội thi công (`entityType: 'CREW'`):
+ * cùng policy, open-work đếm trực tiếp assignments của đội.
  *
  * Flow chuẩn (SRS): chọn action → pre-check open work (GET .../open-work của
  * caller) hiển thị cảnh báo ảnh hưởng → nhập lý do (bắt buộc khi
@@ -39,10 +41,16 @@ export type OpenWorkCheck =
   | { state: 'failed' };
 
 export interface ResourceStatusDialogProps {
-  /** Tên hiển thị của nguồn lực (worker.fullName / contractor.name). */
+  /** Tên hiển thị của nguồn lực (worker.fullName / contractor.name / crew.name). */
   resourceName: string;
   currentStatus: string;
   action: ResourceAction;
+  /**
+   * ORG-SRS-006 (issue #29) — loại thực thể; 'CREW' đổi text cảnh báo sang
+   * 'công việc/lịch mở của đội'. Mặc định giữ nguyên text worker/contractor
+   * để caller cũ không đổi behavior.
+   */
+  entityType?: 'WORKER' | 'CONTRACTOR' | 'CREW';
   /** Kết quả pre-check open work; caller giữ state để không fetch lại khi bấm. */
   openCheck: OpenWorkCheck;
   submitting?: boolean;
@@ -60,6 +68,7 @@ export function ResourceStatusDialog({
   resourceName,
   currentStatus,
   action,
+  entityType = 'WORKER',
   openCheck,
   submitting,
   serverMessage,
@@ -89,12 +98,20 @@ export function ResourceStatusDialog({
   }
 
   const confirmLabel = RESOURCE_ACTION_LABEL[action];
+  // ORG-SRS-006 — text open-work theo loại thực thể. Nhánh mặc định giữ
+  // nguyên từng chữ cũ (WorkerList test khớp regex 'công việc/lịch đang mở').
+  const crewTexts = entityType === 'CREW';
+  const checkingNoun = crewTexts ? 'công việc/lịch đang mở của đội' : 'công việc/lịch đang mở';
+  const failedNoun = crewTexts ? 'công việc/lịch mở của đội' : 'công việc/lịch đang mở';
+  const failedSubject = crewTexts ? 'đội đang có việc mở' : 'nguồn lực đang có việc mở';
+  const warnSubject = crewTexts ? 'Đội đang có' : 'Nguồn lực đang có';
+  const warnNoun = crewTexts ? 'công việc/lịch mở của đội' : 'công việc/lịch mở';
   const title =
     action === 'ACTIVATE'
-      ? 'Xác nhận kích hoạt lại nguồn lực'
+      ? `Xác nhận kích hoạt lại ${entityType === 'CREW' ? 'đội thi công' : 'nguồn lực'}`
       : action === 'SUSPEND'
-        ? 'Xác nhận tạm ngừng nguồn lực'
-        : 'Xác nhận chấm dứt nguồn lực';
+        ? `Xác nhận tạm ngừng ${entityType === 'CREW' ? 'đội thi công' : 'nguồn lực'}`
+        : `Xác nhận chấm dứt ${entityType === 'CREW' ? 'đội thi công' : 'nguồn lực'}`;
 
   const showFieldError = fieldError ?? serverFieldError ?? null;
   const openDone = openCheck.state === 'done' ? openCheck.openAssignments : null;
@@ -113,14 +130,14 @@ export function ResourceStatusDialog({
 
       {openCheck.state === 'loading' ? (
         <p style={{ margin: '0.5rem 0 0', color: '#6b7280', fontSize: '0.85rem' }} aria-busy="true">
-          Đang kiểm tra công việc/lịch đang mở…
+          Đang kiểm tra {checkingNoun}…
         </p>
       ) : null}
       {openCheck.state === 'failed' ? (
         <div style={{ marginTop: '0.5rem' }}>
           <Alert tone="info">
-            Chưa kiểm tra được công việc/lịch đang mở. Khi thực hiện, hệ thống vẫn cảnh báo trong
-            kết quả nếu nguồn lực đang có việc mở.
+            Chưa kiểm tra được {failedNoun}. Khi thực hiện, hệ thống vẫn cảnh báo trong
+            kết quả nếu {failedSubject}.
           </Alert>
           {onRetryCheck ? (
             <div style={{ marginTop: '0.5rem' }}>
@@ -134,7 +151,8 @@ export function ResourceStatusDialog({
       {openCheck.state === 'done' && openDone !== null && openDone > 0 ? (
         <div style={{ marginTop: '0.5rem' }}>
           <Alert tone="info">
-            Nguồn lực đang có <strong>{openDone} công việc/lịch mở</strong>. Cảnh báo ảnh hưởng
+            {warnSubject}{' '}
+            <strong>{openDone} {warnNoun}</strong>. Cảnh báo ảnh hưởng
             trước khi ngừng hoạt động: lịch sử đã phát sinh vẫn được giữ nguyên; công việc mở không
             bị xóa bởi thao tác này.
           </Alert>
