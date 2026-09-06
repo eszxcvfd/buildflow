@@ -80,19 +80,6 @@ export function MyEligibility() {
         </div>
       );
     }
-    if (error.status === 403) {
-      return (
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          <PageHeader title="Điều kiện nhận việc của tôi" subtitle="Tự kiểm tra trước khi nhận phân công" />
-          <Card>
-            <Alert tone="error">Không có quyền xem điều kiện nhận việc (403)</Alert>
-            <div style={{ marginTop: '0.75rem' }}>
-              <Button variant="secondary" onClick={() => void load()}>Thử lại</Button>
-            </div>
-          </Card>
-        </div>
-      );
-    }
     return (
       <div style={{ display: 'grid', gap: '1rem' }}>
         <PageHeader title="Điều kiện nhận việc của tôi" subtitle="Tự kiểm tra trước khi nhận phân công" />

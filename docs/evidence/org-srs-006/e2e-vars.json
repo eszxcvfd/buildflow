@@ -1,4 +1,5 @@
 {
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
   "crewCode": "E2E-CREW-01",
   "dsCode": "E2E-CREW-DS",
   "woE2e6": "e2e6b300-0000-4000-8000-0000000000b4",

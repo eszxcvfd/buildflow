@@ -1,4 +1,5 @@
 {
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
   "workerId": "e2e4a000-0000-4000-8000-0000000000a1",
   "contractorId": "e2e4c000-0000-4000-8000-0000000000c1",
   "assignmentOpen": "e2e4c100-0000-4000-8000-0000000000c2",

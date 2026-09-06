@@ -1,4 +1,5 @@
 {
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
   "uniq": "ol9ob9",
   "workerEmail": "e2e.w.ol9ob9@example.com",
   "workerCode": "E2EWOL9OB9",

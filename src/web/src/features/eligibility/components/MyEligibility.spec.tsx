@@ -66,10 +66,12 @@ describe('MyEligibility ORG-SRS-008', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('403 hiển thị lỗi quyền + retry', async () => {
-    checkMyMock.mockRejectedValue({ status: 403, message: 'Forbidden' });
+  it('lỗi máy chủ rơi vào lỗi chung + retry', async () => {
+    // GET /api/v1/eligibility/me chỉ có JwtAuthGuard, không check role → không có nhánh 403 riêng;
+    // mọi lỗi ngoài 401/404 đi vào nhánh lỗi chung, không nhánh riêng.
+    checkMyMock.mockRejectedValue({ status: 502, message: 'Bad Gateway' });
     render(<MyEligibility />);
-    await waitFor(() => expect(screen.getByText(/Không có quyền xem điều kiện nhận việc \(403\)/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Bad Gateway')).not.toBeNull());
     checkMyMock.mockResolvedValue(myResult());
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());

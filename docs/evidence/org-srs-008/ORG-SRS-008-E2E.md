@@ -38,6 +38,7 @@
 Seed E2E8 (driver tạo qua API, cleanup cuối run): `e2e8-zero@example.com` (zero-trade, fail-closed),
 `e2e8-skill3@example.com` (trade `THO-CAT` Lv3), crew `E2E8-CREW` (leader worker2, member worker1, trade `THO-CAT` Lv3 qua `seed-008.sql`).
 Không reset password — cả 3 login gốc đều còn hiệu lực.
+> _Note: Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production._
 
 ## 3. Seed / cleanup
 
@@ -132,8 +133,10 @@ DOCKER_HOST=unix:///home/trung/.docker/desktop/docker.sock \
 
 ## 7. Rủi ro / ghi chú
 
-- **Waiver native-emulator:** mobile proof = Expo web export E2E (S8/S9/S10, API thật qua `EXPO_PUBLIC_API_URL=http://localhost:3000`)
-  + jest + typecheck/lint per `MOBILE.md:106`; native device smoke deferred, reason: no SDK/emulator in env.
+- **Native device smoke: DONE (2026-09-06 UTC, xem §8 — thay thế waiver cũ).**
+  mobile proof trước đây = Expo web export E2E (S8/S9/S10, API thật qua `EXPO_PUBLIC_API_URL=http://localhost:3000`)
+  + jest + typecheck/lint per `MOBILE.md:106`; native smoke đã thực hiện thành công trên Android emulator
+  (KVM accel, Expo Go 2.31.2 = SDK 51) — login → profile → eligibility với dữ liệu API thật + correlation đối chiếu.
   Mobile container chạy Expo Metro dev (`npm start`, bundle `dev=true`) — load lần đầu chậm (timeout driver 60–120s); static export chỉ dùng cho proof `npm run build` (`dist/`, git-ignored).
 - Fix §4a.1 chỉ chạm `MyEligibility` (crews của self-check). `WorkerDetail`/`CrewDetail` dùng checklist chung vẫn không render
   `crews[]`/`members[]` — có chủ ý: WorkerDetail không có yêu cầu crews trong slice; CrewDetail đã có panel `CrewMembers` đầy đủ.
@@ -141,3 +144,43 @@ DOCKER_HOST=unix:///home/trung/.docker/desktop/docker.sock \
 - `checkMyEligibility` hỗ trợ query `tradeId/skillLevel/at` nhưng trang `/my-eligibility` gọi bare (không UI filter) — giữ theo stage-2 scope.
 - Playwright import kiểu `docs/evidence/org-srs-007` (absolute path `playwright-core` trong `@playwright/mcp`), Chrome `/usr/bin/google-chrome --no-sandbox` —
   `playwright-core` không có trong `node_modules` của repo nên không `require('playwright-core')` trần được.
+
+## 8. Native device smoke — Expo Go trên Android emulator (2026-09-06 UTC, NATIVE PROOF)
+
+> **Kết quả: NATIVE PROOF — PASS.** Flow eligibility mobile chạy thật trên Android emulator
+> (Expo Go native, Metro bundler, API + PostgreSQL thật): login → session → profile → eligibility,
+> dữ liệu màn hình khớp API (`eligible=false`, đủ 5 conditions, `crews: []`), screenshots trong repo.
+
+### 8.1. Môi trường native
+
+| Hạng mục | Giá trị |
+| --- | --- |
+| Host | x86_64 (AMD, `svm`), 16 cores / 14GB RAM; KVM **khả dụng** (`/dev/kvm` mở OK, `kvm_amd` đã load) — khác giả định ban đầu "no /dev/kvm" nên boot dùng accel thay vì `-no-accel` |
+| SDK | `docs/`-ngoài: `.tmp-sdk/` (git-ignored, tái dùng từ attempt trước: cmdline-tools 12.0, emulator 37.1.11.0, `system-images;android-34;google_apis;x86_64`) |
+| AVD | `bf` (pixel_5, android-34), boot `-no-window -gpu swiftshader_indirect -no-boot-anim -no-snapshot -no-audio`, **boot_completed=1 sau ~28s** (`Boot completed in 28164 ms`) |
+| Expo Go | **2.31.2** = build đúng cho SDK 51 (xác định qua `https://exp.host/--/api/v2/versions`: `51.0.0 → Exponent-2.31.2.apk`), `adb install` |
+| Metro | `cd src/mobile && EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --port 8081 --clear` (log `/tmp/metro2.log`) |
+| Kết nối | `adb reverse tcp:8081 tcp:8081` (metro) + `adb reverse tcp:3000 tcp:3100` (API); mở app bằng `am start -a VIEW -d exp://localhost:8081 host.exp.exponent` |
+| API | `buildflow-api-1` **rebuild từ working tree** (image cũ thiếu route eligibility — `Cannot GET /api/v1/eligibility/me`; rebuild xong `200 OK`), host ports `3100/3101/31906` (api/web/mobile; `5433/6380` cho postgres/redis do port mặc định bị stale Docker Desktop forwarders giữ) |
+| Nhập liệu | `adb input tap/text` không tới được React state (native text đổi nhưng `onChangeText` không fire → validation "không được để trống"); dùng **ADBKeyboard IME** (`com.android.adbkeyboard/.AdbIME`, test-harness only, broadcast `ADB_INPUT_TEXT`) — login thật qua UI thành công |
+
+### 8.2. Fix sản phẩm phát hiện bởi smoke (retry 1, theo stop conditions)
+
+- *Triệu chứng:* Metro `Android Bundling failed`: `react-native-screens/.../ScreenStackNativeComponent.ts: Unknown prop type for "onFinishTransitioning": "undefined"` (984 modules) → RedBox.
+- *Nguyên nhân:* `node_modules` chứa **`react-native-screens@4.27.0`** (dành cho RN 0.75+/new-arch codegen), trong khi Expo SDK 51 + RN 0.74.5 yêu cầu `~3.31.1`; package này còn **vắng khỏi `dependencies`** (transitive resolve sai). Web export không lộ lỗi vì không bundle fabric specs.
+- *Fix* (`src/mobile/package.json`): pin `react-native-screens@3.31.1` + bổ sung `react-native-gesture-handler@~2.16.1` + `react-native-reanimated@~3.10.1` (SDK-51-pinned qua `npx expo install`; `tsconfig.json` chỉ reformat whitespace).
+  Lỗi kế tiếp `Unable to resolve ./native-stack/contexts/GHContext` là cache Metro cũ — restart `expo start --clear` → **`Android Bundled 4560ms (958 modules)`**.
+- *Verify:* `tsc --noEmit` exit 0 · `eslint` 0 errors · `jest` **5 suites / 54 tests pass**.
+
+### 8.3. Flow table (adb-driven, screenshots `docs/evidence/org-srs-008/native-shots/`)
+
+| # | Bước (adb → UI → API thật) | Kết quả | Bằng chứng |
+| --- | --- | --- | --- |
+| N1 | Deep-link `exp://localhost:8081` → Expo Go mở `buildflow-mobile` SDK 51, form `Đăng nhập` (Email + Mật khẩu) | 🟢 PASS | `01-login.png` |
+| N2 | Nhập `worker1@example.com` / `E2EWorker@2025` (ADBKeyboard) → submit → `Xin chào, Nguyễn Văn Thợ`, `Vai trò: WORKER`, `Phiên hết hạn` | 🟢 PASS | `02-logged-in.png` |
+| N3 | `Xem hồ sơ` → `Hồ sơ cá nhân`: email/vai trò/trạng thái read-only, `ACTIVE`, họ tên + SĐT | 🟢 PASS | `03-profile.png` |
+| N4 | `Xem điều kiện nhận việc` → `Điều kiện nhận việc`: verdict `Chưa đủ điều kiện nhận việc`, `Mã đối chiếu: 0e8f71dc-0e5c-47c3-879d-7f87c80ef2f5`, đủ conditions (RESOURCE_ACTIVE ĐẠT …) | 🟢 PASS | `04-eligibility.png` |
+| N5 | Scroll → `SCHEDULE_CONFLICT` + `Đội thi công: Chưa thuộc đội nào` + `Kiểm tra lại` | 🟢 PASS | `05-eligibility-bottom.png` |
+| N6 | Đối chiếu API: `POST /auth/login` (worker1) → `GET /eligibility/me` = `eligible=false`, `resourceId=33333333-…`, conditions `RESOURCE_ACTIVE true/OK · TRADE_SKILL_MATCH null/NOT_REQUESTED · TRADE_CAPABILITY_DATA false/CAPABILITY_DATA_MISSING · WORKLOAD true/OK · SCHEDULE_CONFLICT null/NOT_EVALUABLE`, `crews: []`, `Cache-Control: no-store` — khớp màn hình N4/N5 (correlationId mỗi request sinh mới: app `0e8f71dc-…` vs curl `4b80ff80-…`, đúng semantics S11) | 🟢 PASS | `curl` §8.3 |
+
+**Tổng native: 6 PASS / 0 FAIL.** Sau smoke: `pm clear host.exp.exponent` (trả Expo Go về trạng thái sạch) — DB demo và audit giữ nguyên (không seed/cleanup gì thêm ngoài login GET).

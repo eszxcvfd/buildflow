@@ -9,3 +9,7 @@ coverage/
 .env
 infra/docker/.env
 *.tsbuildinfo
+
+# Native smoke SDK scratch dirs
+.tmp-sdk/
+.tmp-android-home/

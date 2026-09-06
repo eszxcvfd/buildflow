@@ -1,4 +1,5 @@
 {
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
   "crewA": "dbf1cd63-cb8e-4e27-96e5-ff89176ccc76",
   "crewB": "eba90b93-2ab9-4baf-af81-6de39eea6bc6",
   "memberB": "c14e99f0-15dc-4c7f-b357-798f94cbf549",

@@ -109,6 +109,12 @@ Chỉ thêm offline cache, background sync, push notification hoặc native modu
 
 Với mobile ít dùng, proof ưu tiên typecheck/lint và một critical-path device smoke test; chưa cần test mọi platform-specific permutation khi chưa có native feature.
 
+> **Native smoke đã thực hiện (ORG-SRS-008, issue #31, 2026-09-06):** flow eligibility (login → profile → `/eligibility`)
+> chạy PASS trên Android emulator (android-34, KVM accel, Expo Go 2.31.2 = SDK 51, Metro + API/PostgreSQL thật),
+> proof đầy đủ tại `docs/evidence/org-srs-008/ORG-SRS-008-E2E.md` §8 (screenshots `native-shots/`).
+> Smoke này phát hiện 1 bug product thật (native dep tree: `react-native-screens@4.27.0` thay vì `3.31.1` + thiếu
+> `gesture-handler`/`reanimated` — xem `src/mobile/package.json`) mà web export không lộ.
+
 ## 7. Lộ trình đề xuất
 
 1. **Chưa triển khai native:** chốt API contract và web vertical slice trước.
