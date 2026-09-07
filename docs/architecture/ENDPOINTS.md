@@ -183,6 +183,43 @@ Quản lý thành viên đội (bảng `public.crew_members`, migration 0001 —
 - [`docs/architecture/NETCODE.md`](NETCODE.md) — transport/error contract
 - SRS/issue: workers `#24`, contractors `#25`, trades `#26`, lifecycle `#27`, resource directory `#28`, crews `#29`
 
+## 9. Eligibility — ORG-SRS-008 (#31) bounded decisions
+
+Dữ liệu điều kiện nhận việc cho worker và crew (advisory pre-check phục vụ điều phối; KHÔNG có module JOB/assignments — assignment CREATE thuộc slice JOB-SRS tương lai).
+
+| Method | Path | Auth | Query | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/eligibility/workers/:workerId` | **ADMIN + PROJECT_MANAGER** | `tradeId` (uuid), `skillLevel` (1-5), `at` (`YYYY-MM-DD`, default today) | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai (`fieldErrors`); `404` `RESOURCE_NOT_FOUND` |
+| GET | `/api/v1/eligibility/me` | JWT bắt buộc, **mọi role** (server resolve worker theo JWT `sub`) | như trên | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai; `404` `RESOURCE_NOT_FOUND` (`user không có hồ sơ worker`) |
+| GET | `/api/v1/eligibility/crews/:crewId` | **ADMIN + PROJECT_MANAGER** | — | `200` crew eligibility + header `Cache-Control: no-store` | `404` `RESOURCE_NOT_FOUND` |
+
+Response worker:
+
+```json
+{
+  "resourceType": "WORKER",
+  "resourceId": "11111111-1111-4111-8111-111111111111",
+  "eligible": true,
+  "checkedAt": "2026-09-06T00:00:00.000Z",
+  "correlationId": "6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b",
+  "conditions": [
+    { "code": "RESOURCE_ACTIVE", "passed": true, "reasonCode": "OK", "detail": "..." }
+  ],
+  "crews": [
+    { "crewId": "…", "crewCode": "CREW-A", "crewName": "Đội A", "memberRole": "MEMBER", "effectiveFrom": "2026-09-01", "effectiveTo": null }
+  ]
+}
+```
+
+Response crew: cùng shape với `resourceType: 'CREW'` và `members[]` (`memberId`, `userId`, `memberRole`, `effectiveFrom`, `effectiveTo`) thay cho `crews[]`.
+
+- **E1 — conditions worker (đúng thứ tự):** `RESOURCE_ACTIVE` (users.status ACTIVE + user_type WORKER + không khóa; `INACTIVE`→`RESOURCE_INACTIVE`, `LOCKED`→`RESOURCE_LOCKED`; worker/user không tồn tại → `404` cả request); `TRADE_SKILL_MATCH` (chỉ khi có `tradeId`/`skillLevel`: trade không có trong catalog → `TRADE_NOT_FOUND`, trade có nhưng worker không có row hiệu lực → `TRADE_INACTIVE`, cấp thấp hơn yêu cầu → `SKILL_LEVEL_TOO_LOW`; không yêu cầu → `passed:null` `NOT_REQUESTED`); `TRADE_CAPABILITY_DATA` (0 trade hiệu lực → `passed:false` `CAPABILITY_DATA_MISSING`, fail closed); `WORKLOAD` (đếm open assignments `PENDING_ACCEPTANCE`/`ACTIVE`, luôn `passed:true`, KHÔNG ngưỡng); `SCHEDULE_CONFLICT` (luôn `passed:null` `NOT_EVALUABLE`). `eligible` = AND trên mọi `passed === false` (null bỏ qua). `crews[]` = memberships hiệu lực lọc point-in-time theo `at` (`[effective_from, effective_to]` INCLUSIVE, NULL = open-ended — logic `#30`).
+- **E2 — `/me`:** resolve worker theo JWT `sub` (claim `TokenPayload.sub`; roles server-derived); không check role; thiếu worker row → `404` `RESOURCE_NOT_FOUND`. `X-Correlation-Id`: reuse khi là UUID, ngược lại generate mới (lenient — read-only, không audit nên không `400` như strict policy).
+- **E3 — conditions crew:** `RESOURCE_ACTIVE` (crews.status), `TRADE_CAPABILITY_DATA` (≥1 trade `resource_type='CREW'` hiệu lực), `WORKLOAD` (countOpenAssignments đội), `MEMBER_COVERAGE` (≥1 active member, LEAD/MEMBER đều tính qua `listMembers` default active — 0 member → `NO_ACTIVE_MEMBERS`), `SCHEDULE_CONFLICT` `NOT_EVALUABLE`.
+- **E4 — read-only:** use case chỉ pool reads (`findById`, catalog trade, `countOpenAssignments`, memberships/trades) — KHÔNG transaction, KHÔNG ghi `audit_logs`; mọi GET trả `Cache-Control: no-store`.
+- **E5 — roles:** xem bảng trên (`requireRoles`; `/me` chỉ `JwtAuthGuard`).
+- **JOB-SRS future scope (KHÔNG thuộc slice này):** assignment CREATE, snapshot persistence, atomic re-check-at-write, schedule conflict evaluation, workload limit/threshold. Kết quả eligibility là advisory pre-check, KHÔNG phải authorization — assignment creation phải re-check server-side trước khi ghi.
+
 ## 10. Projects — PRJ-SRS-001 (#32) bounded decisions
 
 Tạo và cập nhật dự án (API slice; lifecycle trạng thái thuộc `#33` PRJ-SRS-002, project-scope write checks thuộc `#37` PRJ-SRS-006).
@@ -234,39 +271,24 @@ Transition table (L1 — duy nhất được phép):
 - Use-case `transition-project-status.use-case.ts` (+ pure transition map/reason policy trong `project.policy.ts`). Entity `changeStatus(target)` validate đích nằm trong map (ném Error → 409).
 - Response = ProjectProfileDto (P8) + `alreadyInState`.
 
-## 9. Eligibility — ORG-SRS-008 (#31) bounded decisions
+## 12. Project members — PRJ-SRS-005 (#36) bounded decisions
 
-Dữ liệu điều kiện nhận việc cho worker và crew (advisory pre-check phục vụ điều phối; KHÔNG có module JOB/assignments — assignment CREATE thuộc slice JOB-SRS tương lai).
+Quản lý thành viên dự án (API slice; per-project scope write checks thuộc `#37` PRJ-SRS-006). Bảng `public.project_members` (migration 0001 — không migration mới, không đổi constraint): `project_role CHECK IN ('MANAGER','COORDINATOR','QC','WORKER','VIEWER')`, partial unique `ux_project_members_active (project_id, user_id) WHERE is_active`, `revocation_ck (is_active OR left_at IS NOT NULL)`, `membership_dates_ck (left_at IS NULL OR left_at >= joined_at)`. Closest precedent: org crew members `#30` (add/remove/list use-cases + idempotent `alreadyRemoved` + constraint-order 23505 + audit shape) — slice này mirror cấu trúc đó.
 
-| Method | Path | Auth | Query | Response | Lỗi |
+| Method | Path | Auth | Body | Response | Lỗi |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/api/v1/eligibility/workers/:workerId` | **ADMIN + PROJECT_MANAGER** | `tradeId` (uuid), `skillLevel` (1-5), `at` (`YYYY-MM-DD`, default today) | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai (`fieldErrors`); `404` `RESOURCE_NOT_FOUND` |
-| GET | `/api/v1/eligibility/me` | JWT bắt buộc, **mọi role** (server resolve worker theo JWT `sub`) | như trên | `200` worker eligibility + header `Cache-Control: no-store` | `400` query sai; `404` `RESOURCE_NOT_FOUND` (`user không có hồ sơ worker`) |
-| GET | `/api/v1/eligibility/crews/:crewId` | **ADMIN + PROJECT_MANAGER** | — | `200` crew eligibility + header `Cache-Control: no-store` | `404` `RESOURCE_NOT_FOUND` |
+| GET | `/api/v1/projects/:id/members` | **ADMIN + PROJECT_MANAGER** | query `includeInactive` (`true`/`1`) | `200 { data[], total }` + header `Cache-Control: no-store` | `404` dự án |
+| POST | `/api/v1/projects/:id/members` | **ADMIN + PROJECT_MANAGER** | `{ userId (uuid, bắt buộc), projectRole: 'COORDINATOR' \| 'QC' \| 'WORKER' \| 'VIEWER' }` | `201` member | `400`/`404`/`409` (xem rules) |
+| DELETE | `/api/v1/projects/:id/members/:memberId` | **ADMIN + PROJECT_MANAGER** | JSON `{ reason? (1-500, optional) }` | `200` member + `alreadyRemoved` | `400`/`404`/`409 MANAGER_MEMBER` |
 
-Response worker:
+Response `ProjectMemberDto`: `{ id, userId, userName, userCode, projectRole, joinedAt, leftAt, isActive, addedBy, createdAt }` (`joinedAt`/`leftAt` ISO từ timestamptz; `userName`/`userCode` join `users.full_name`/`employee_code`; `createdAt` = `joined_at` vì bảng không có cột `created_at` riêng).
 
-```json
-{
-  "resourceType": "WORKER",
-  "resourceId": "11111111-1111-4111-8111-111111111111",
-  "eligible": true,
-  "checkedAt": "2026-09-06T00:00:00.000Z",
-  "correlationId": "6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b",
-  "conditions": [
-    { "code": "RESOURCE_ACTIVE", "passed": true, "reasonCode": "OK", "detail": "..." }
-  ],
-  "crews": [
-    { "crewId": "…", "crewCode": "CREW-A", "crewName": "Đội A", "memberRole": "MEMBER", "effectiveFrom": "2026-09-01", "effectiveTo": null }
-  ]
-}
-```
-
-Response crew: cùng shape với `resourceType: 'CREW'` và `members[]` (`memberId`, `userId`, `memberRole`, `effectiveFrom`, `effectiveTo`) thay cho `crews[]`.
-
-- **E1 — conditions worker (đúng thứ tự):** `RESOURCE_ACTIVE` (users.status ACTIVE + user_type WORKER + không khóa; `INACTIVE`→`RESOURCE_INACTIVE`, `LOCKED`→`RESOURCE_LOCKED`; worker/user không tồn tại → `404` cả request); `TRADE_SKILL_MATCH` (chỉ khi có `tradeId`/`skillLevel`: trade không có trong catalog → `TRADE_NOT_FOUND`, trade có nhưng worker không có row hiệu lực → `TRADE_INACTIVE`, cấp thấp hơn yêu cầu → `SKILL_LEVEL_TOO_LOW`; không yêu cầu → `passed:null` `NOT_REQUESTED`); `TRADE_CAPABILITY_DATA` (0 trade hiệu lực → `passed:false` `CAPABILITY_DATA_MISSING`, fail closed); `WORKLOAD` (đếm open assignments `PENDING_ACCEPTANCE`/`ACTIVE`, luôn `passed:true`, KHÔNG ngưỡng); `SCHEDULE_CONFLICT` (luôn `passed:null` `NOT_EVALUABLE`). `eligible` = AND trên mọi `passed === false` (null bỏ qua). `crews[]` = memberships hiệu lực lọc point-in-time theo `at` (`[effective_from, effective_to]` INCLUSIVE, NULL = open-ended — logic `#30`).
-- **E2 — `/me`:** resolve worker theo JWT `sub` (claim `TokenPayload.sub`; roles server-derived); không check role; thiếu worker row → `404` `RESOURCE_NOT_FOUND`. `X-Correlation-Id`: reuse khi là UUID, ngược lại generate mới (lenient — read-only, không audit nên không `400` như strict policy).
-- **E3 — conditions crew:** `RESOURCE_ACTIVE` (crews.status), `TRADE_CAPABILITY_DATA` (≥1 trade `resource_type='CREW'` hiệu lực), `WORKLOAD` (countOpenAssignments đội), `MEMBER_COVERAGE` (≥1 active member, LEAD/MEMBER đều tính qua `listMembers` default active — 0 member → `NO_ACTIVE_MEMBERS`), `SCHEDULE_CONFLICT` `NOT_EVALUABLE`.
-- **E4 — read-only:** use case chỉ pool reads (`findById`, catalog trade, `countOpenAssignments`, memberships/trades) — KHÔNG transaction, KHÔNG ghi `audit_logs`; mọi GET trả `Cache-Control: no-store`.
-- **E5 — roles:** xem bảng trên (`requireRoles`; `/me` chỉ `JwtAuthGuard`).
-- **JOB-SRS future scope (KHÔNG thuộc slice này):** assignment CREATE, snapshot persistence, atomic re-check-at-write, schedule conflict evaluation, workload limit/threshold. Kết quả eligibility là advisory pre-check, KHÔNG phải authorization — assignment creation phải re-check server-side trước khi ghi.
+- **M1 — endpoints mới trong prj controller:** `GET /api/v1/projects/:id/members` (default active-only; `?includeInactive=true` toàn bộ lịch sử, cả hai sắp `joined_at` DESC), `POST /projects/:id/members` (`201`; `projectRole` chỉ 4 role non-MANAGER — `'MANAGER'` → `400` fieldErrors `{projectRole}` `'Quản lý dự án chỉ đặt qua PATCH /projects/:id managerId'`), `DELETE /projects/:id/members/:memberId` (`reason` optional 1-500).
+- **M2 — xóa mềm:** `DELETE` đặt `is_active=false`, `left_at=CURRENT_TIMESTAMP`; row KHÔNG bao giờ bị xóa. Đã inactive (non-manager) → `200 {alreadyRemoved:true}`, không mutation, không audit (mirror crews `#30`). **Deviation đã duyệt khi implement:** M2 gốc ghi `left_at=CURRENT_DATE`, nhưng `left_at` là timestamptz và `membership_dates_ck` yêu cầu `left_at >= joined_at` — `CURRENT_DATE` (nửa đêm) vi phạm check khi remove trong cùng ngày join; `CURRENT_TIMESTAMP` thỏa cả `revocation_ck` lẫn `membership_dates_ck`, giữ nguyên semantics M2 (soft-deactivate, giữ lịch sử).
+- **M3 — validations server-side:** project không tồn tại → `404`; user không tồn tại hoặc `users.status ≠ 'ACTIVE'` → `400` fieldErrors `{userId}` (khác crews `#30` dùng `404 USER_NOT_FOUND`/`409 USER_INACTIVE`); trùng ACTIVE membership cùng project → `409 {code:'MEMBER_DUPLICATE'}` (pre-check + race guard `23505`/`ux_project_members_active`, constraint-order trước generic `23505`); GUARD: row có `user_id == projects.manager_id` → `409 {code:'MANAGER_MEMBER'}` (mirror `MEMBER_IS_LEAD` `#30`; chạy trước nhánh idempotent nên membership của manager dù đã inactive vẫn `409`).
+- **M4 — P11 từ `#32`, implement tại slice này:** `update-project.use-case` — khi `managerId` THẬT SỰ đổi, trong CÙNG tx (sau save, trước audit): nếu manager mới chưa có ACTIVE membership trong project → insert `project_members` (`project_role='MANAGER'`, `is_active=true`, `added_by=actor`). Membership của manager cũ giữ nguyên (document — không deactivate). Đã là member → không insert (idempotent; race chỉ swallow khi constraint name khớp `ux_project_members_active`, bare `23505` rethrow). Asymmetry P9 (`#32`) đã đóng. `PRJ_PROJECT_UPDATED` afterData kèm `managerMembership: { userId, autoInserted }` (`autoInserted=true` khi insert thành công, `false` khi đã là member).
+- **M5 — roles = PROJECT_WRITE_ROLES** (`ADMIN` + `PROJECT_MANAGER`, crews precedent) trên cả 3 member endpoints (kể cả GET list); per-project scope write check thuộc `#37`. Strict `X-Correlation-Id` trên writes (POST/DELETE sai UUID → `400`; GET list miễn). Closed project: add/remove membership vẫn cho phép (document — không check status; 'CLOSED không tạo WO mới' vẫn defer slice JOB theo L6).
+- **Input cho `#37`:** add-member chỉ kiểm tra `users.status='ACTIVE'`, không gate `user_type` — mọi ACTIVE user (kể cả `ADMIN`) đều thêm được; revisit khi per-project scope (`#37`) landing.
+- **M6 — audit `PRJ_PROJECT_MEMBER_ADDED` / `PRJ_PROJECT_MEMBER_REMOVED`**, `entityType` `PROJECT`, `entityId`=projectId, tx-embedded `logWithClient` (fail closed — thiếu adapter → `500`), before/afterData = member row + `projectCode` (add: before null; remove: `reason` ở cột `audit_logs.reason`); catch-all audit fail → `500` rollback. Tx với `FOR UPDATE` trên project row (mirror status use-case `#33`).
+- New: `ProjectMemberRow` type trên port + `add-project-member.use-case.ts`, `remove-project-member.use-case.ts`, `list-project-members.use-case.ts` (+ policy helpers `project-member.policy.ts`).
+- Hai shape `400` như các slice trước (ValidationPipe shape không `fieldErrors` cho body thiếu/sai format cơ bản; business-invalid có `fieldErrors`).

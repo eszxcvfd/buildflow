@@ -1,0 +1,82 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "admin@example.com",
+  "pm": "pm@example.com",
+  "worker1": "worker1@example.com",
+  "worker2": "worker2@example.com",
+  "worker3": "e2e5.worker3@example.com",
+  "codes": {
+    "A": "E2E5-A",
+    "B": "E2E5-B",
+    "Cc": "E2E5-C",
+    "D": "E2E5-D"
+  },
+  "projectIds": {
+    "A": "bff3abe8-2f82-45b1-939a-69d6c2741985",
+    "B": "d0be5fb5-92bd-40e8-af3a-07c2c35bf87b",
+    "C": "fa2c74ca-804a-4790-a399-44f0d49a1028",
+    "D": "35fc3bb6-cd08-4507-85f8-acd055c3a41b"
+  },
+  "memberIdA": "99de0af4-8825-48d3-8d1f-f0d9dcd8e023",
+  "w2GetBefore": 200,
+  "auditBaseline": "740",
+  "auditFinal": "764",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "UI list Lê Văn Thợ ĐIỀU PHỐI; psql COORDINATOR|true|11111111-1111-4111-8111-111111111111; audit ADDED admin; worker2 GET=200"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "UI field error + API 409 MEMBER_DUPLICATE; active rows=1"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "B badge QC + C badge THÀNH VIÊN; psql [QC,WORKER]"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "UI Đã xóa + history Đã rời/Giai đoạn; psql false|set; audit reason đủ; REMOVED +1"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "GET 200→403 (per-project scope); admin audit 6 rows đủ ADDED+REMOVED; worker2 audit query=403"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "API alreadyRemoved=true audit 1→1; UI notice đã rời trước đó"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "API 409 MANAGER_MEMBER; UI hint + 0 nút xóa"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "API 400 projectRole→PATCH; UI roles [— Chọn vai trò —/ĐIỀU PHỐI/QC/THÀNH VIÊN/XEM]"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "worker3 MANAGER auto (added_by admin); cũ untouched; worker3 GET=200"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "note": "API add=403 del=403; UI 403 card"
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "race 201+409, rows=1; UI submit disabled khi thiếu field"
+    }
+  ]
+}

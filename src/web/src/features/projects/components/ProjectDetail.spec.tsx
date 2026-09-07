@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { ProjectDetail } from './ProjectDetail';
-import { getProject, changeProjectStatus } from '@/lib/api/projects';
+import { getProject, changeProjectStatus, listProjectMembers } from '@/lib/api/projects';
 import { listWorkers } from '@/lib/api/workers';
 import { listAuditLogs } from '@/lib/api/audit-logs';
 
@@ -10,12 +10,17 @@ jest.mock('@/lib/api/projects', () => ({
   createProject: jest.fn(),
   updateProject: jest.fn(),
   changeProjectStatus: jest.fn(),
+  listProjectMembers: jest.fn(),
+  addProjectMember: jest.fn(),
+  removeProjectMember: jest.fn(),
+  ADDABLE_PROJECT_MEMBER_ROLES: ['COORDINATOR', 'QC', 'WORKER', 'VIEWER'],
 }));
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
 
 const getProjectMock = getProject as jest.Mock;
 const changeProjectStatusMock = changeProjectStatus as jest.Mock;
+const listProjectMembersMock = listProjectMembers as jest.Mock;
 const listWorkersMock = listWorkers as jest.Mock;
 const listAuditLogsMock = listAuditLogs as jest.Mock;
 
@@ -49,6 +54,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
   getProjectMock.mockResolvedValue(project());
+  listProjectMembersMock.mockResolvedValue({ data: [], total: 0 });
   listWorkersMock.mockResolvedValue({ data: [], total: 0, limit: 100, offset: 0 });
   listAuditLogsMock.mockResolvedValue({ data: [], total: 0, limit: 10, offset: 0 });
 });
@@ -90,6 +96,14 @@ describe('ProjectDetail PRJ-SRS-001 (issue #32)', () => {
     getProjectMock.mockRejectedValue({ status: 404, message: 'Not found' });
     render(<ProjectDetail id="missing" />);
     await waitFor(() => expect(screen.getByText(/Không tìm thấy dự án \(404\)/)).not.toBeNull());
+  });
+
+  it('nhúng section Thành viên dự án (PRJ-SRS-005, issue #36)', async () => {
+    setSessionRoles(['ADMIN']);
+    render(<ProjectDetail id="p-1" />);
+    await waitFor(() => expect(screen.getAllByText('PRJ-001').length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getByText('Thành viên dự án')).not.toBeNull());
+    expect(listProjectMembersMock).toHaveBeenCalledWith('p-1', {});
   });
 });
 

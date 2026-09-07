@@ -50,6 +50,7 @@ describe('UpdateProjectUseCase PRJ-SRS-001 (issue #32)', () => {
       createWithClient: jest.fn(),
       saveWithClient: jest.fn(),
       insertManagerMembershipWithClient: jest.fn(),
+      findActiveMemberWithClient: jest.fn(async () => null),
     } as unknown as jest.Mocked<ProjectRepositoryPort>;
     userRepo = { findById: jest.fn(async () => activeUser(NEW_MANAGER) as never) } as unknown as jest.Mocked<UserRepositoryPort>;
     audit = { log: jest.fn(), logWithClient: jest.fn() } as unknown as jest.Mocked<AuditPort>;
@@ -141,10 +142,30 @@ describe('UpdateProjectUseCase PRJ-SRS-001 (issue #32)', () => {
     expect(projectRepo.saveWithClient).not.toHaveBeenCalled();
   });
 
-  it('P9 asymmetry: đổi manager KHÔNG đụng memberships (defer #36)', async () => {
+  it('P11/M4 (#36, đóng asymmetry P9): đổi manager → insert MANAGER membership cùng tx', async () => {
     await useCase.execute({ projectId: PID, managerId: NEW_MANAGER, actorUserId: ACTOR });
     expect(projectRepo.saveWithClient).toHaveBeenCalled();
+    expect(projectRepo.insertManagerMembershipWithClient).toHaveBeenCalledWith(expect.anything(), {
+      projectId: PID,
+      userId: NEW_MANAGER,
+      addedBy: ACTOR,
+    });
+    const payload = (audit.logWithClient as jest.Mock).mock.calls[0][1] as Record<string, unknown>;
+    expect((payload['afterData'] as Record<string, unknown>)['managerMembership']).toEqual({
+      userId: NEW_MANAGER,
+      autoInserted: true,
+    });
+  });
+
+  it('P11/M4: manager mới đã là member → afterData.managerMembership.autoInserted=false', async () => {
+    projectRepo.findActiveMemberWithClient.mockResolvedValue({ userId: NEW_MANAGER, isActive: true } as never);
+    await useCase.execute({ projectId: PID, managerId: NEW_MANAGER, actorUserId: ACTOR });
     expect(projectRepo.insertManagerMembershipWithClient).not.toHaveBeenCalled();
+    const payload = (audit.logWithClient as jest.Mock).mock.calls[0][1] as Record<string, unknown>;
+    expect((payload['afterData'] as Record<string, unknown>)['managerMembership']).toEqual({
+      userId: NEW_MANAGER,
+      autoInserted: false,
+    });
   });
 
   it('audit thất bại → 500 rollback', async () => {

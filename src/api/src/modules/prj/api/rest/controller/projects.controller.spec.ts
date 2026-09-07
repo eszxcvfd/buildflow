@@ -3,6 +3,9 @@ import { PrjProjectsController } from './projects.controller';
 import { CreateProjectUseCase } from '../../../application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from '../../../application/use-case/update-project.use-case';
 import { TransitionProjectStatusUseCase } from '../../../application/use-case/transition-project-status.use-case';
+import { AddProjectMemberUseCase } from '../../../application/use-case/add-project-member.use-case';
+import { RemoveProjectMemberUseCase } from '../../../application/use-case/remove-project-member.use-case';
+import { ListProjectMembersUseCase } from '../../../application/use-case/list-project-members.use-case';
 import { ProjectEntity } from '../../../domain/entity/project.entity';
 import { JwtAuthGuard } from '../../../../iam/api/rest/guard/jwt-auth.guard';
 
@@ -53,7 +56,29 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
   let createMock: jest.Mocked<CreateProjectUseCase>;
   let updateMock: jest.Mocked<UpdateProjectUseCase>;
   let transitionMock: jest.Mocked<TransitionProjectStatusUseCase>;
+  let addMemberMock: jest.Mocked<AddProjectMemberUseCase>;
+  let removeMemberMock: jest.Mocked<RemoveProjectMemberUseCase>;
+  let listMembersMock: jest.Mocked<ListProjectMembersUseCase>;
   let controller: PrjProjectsController;
+
+  const MEMBER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const USER_ID = '55555555-5555-4555-8555-555555555555';
+  function makeMemberRow(): Record<string, unknown> {
+    const joinedAt = new Date('2026-09-07T01:00:00.000Z');
+    return {
+      id: MEMBER_ID,
+      projectId: PID,
+      userId: USER_ID,
+      projectRole: 'WORKER',
+      joinedAt,
+      leftAt: null,
+      isActive: true,
+      addedBy: ACTOR,
+      createdAt: joinedAt,
+      userName: 'Nguyen Van A',
+      userCode: 'EMP-1',
+    };
+  }
 
   beforeEach(() => {
     createMock = {
@@ -65,7 +90,23 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
     transitionMock = {
       execute: jest.fn(async () => ({ entity: makeEntity(), managerName: 'Nguyen Van A', alreadyInState: false })),
     } as unknown as jest.Mocked<TransitionProjectStatusUseCase>;
-    controller = new PrjProjectsController(createMock, updateMock, transitionMock);
+    addMemberMock = {
+      execute: jest.fn(async () => ({ member: makeMemberRow() })),
+    } as unknown as jest.Mocked<AddProjectMemberUseCase>;
+    removeMemberMock = {
+      execute: jest.fn(async () => ({ member: makeMemberRow(), alreadyRemoved: false })),
+    } as unknown as jest.Mocked<RemoveProjectMemberUseCase>;
+    listMembersMock = {
+      execute: jest.fn(async () => ({ members: [makeMemberRow()] })),
+    } as unknown as jest.Mocked<ListProjectMembersUseCase>;
+    controller = new PrjProjectsController(
+      createMock,
+      updateMock,
+      transitionMock,
+      addMemberMock,
+      removeMemberMock,
+      listMembersMock,
+    );
   });
 
   describe('role matrix: ADMIN + PROJECT_MANAGER write; STAFF/WORKER 403; anon 401', () => {
@@ -246,6 +287,100 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       expect(err.getResponse()).toEqual(
         expect.objectContaining({ statusCode: 409, code: 'INVALID_TRANSITION', allowedTransitions: ['ACTIVATE', 'CLOSE'] }),
       );
+    });
+  });
+
+  describe('members PRJ-SRS-005 (issue #36, M1/M5)', () => {
+    it('ADMIN + PROJECT_MANAGER list/add/remove ok; response đủ ProjectMemberDto', async () => {
+      const listed = await controller.listMembers(PID, adminReq() as never, undefined);
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: false });
+      expect(listed).toEqual({
+        data: [
+          expect.objectContaining({
+            id: MEMBER_ID,
+            userId: USER_ID,
+            userName: 'Nguyen Van A',
+            userCode: 'EMP-1',
+            projectRole: 'WORKER',
+            isActive: true,
+            addedBy: ACTOR,
+          }),
+        ],
+        total: 1,
+      });
+
+      const added = await controller.addMember(PID, { userId: USER_ID, projectRole: 'QC' } as never, pmReq() as never);
+      expect(addMemberMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, userId: USER_ID, projectRole: 'QC', actorUserId: 'u-1' }),
+      );
+      expect(added).toEqual(expect.objectContaining({ id: MEMBER_ID, projectRole: 'WORKER' }));
+
+      const removed = await controller.removeMember(PID, MEMBER_ID, adminReq() as never, { reason: 'Hết việc' } as never);
+      expect(removeMemberMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, memberId: MEMBER_ID, reason: 'Hết việc', actorUserId: 'u-1' }),
+      );
+      expect(removed).toEqual(expect.objectContaining({ id: MEMBER_ID, alreadyRemoved: false }));
+    });
+
+    it('includeInactive=true/1 → true; thiếu/khác → false', async () => {
+      await controller.listMembers(PID, adminReq() as never, 'true');
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: true });
+      await controller.listMembers(PID, adminReq() as never, '1');
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: true });
+      await controller.listMembers(PID, adminReq() as never, '0');
+      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: false });
+    });
+
+    it('STAFF/WORKER mọi member endpoint → 403, không gọi use case', async () => {
+      await expect(controller.listMembers(PID, staffReq() as never, undefined)).rejects.toThrow(ForbiddenException);
+      await expect(
+        controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, staffReq() as never),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, workerReq() as never),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(controller.removeMember(PID, MEMBER_ID, workerReq() as never, undefined as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(listMembersMock.execute).not.toHaveBeenCalled();
+      expect(addMemberMock.execute).not.toHaveBeenCalled();
+      expect(removeMemberMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('X-Correlation-Id sai UUID trên writes → 400 strict, không gọi use case (GET list miễn)', async () => {
+      const bad = reqWithRoles(['ADMIN'], { 'x-correlation-id': 'not-a-uuid' });
+      await expect(
+        controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, bad as never),
+      ).rejects.toThrow(BadRequestException);
+      await expect(controller.removeMember(PID, MEMBER_ID, bad as never, undefined as never)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(addMemberMock.execute).not.toHaveBeenCalled();
+      expect(removeMemberMock.execute).not.toHaveBeenCalled();
+      await controller.listMembers(PID, bad as never, undefined);
+      expect(listMembersMock.execute).toHaveBeenCalled();
+    });
+
+    it('alreadyRemoved từ use case → truyền nguyên; 409 MEMBER_DUPLICATE/MANAGER_MEMBER giữ code', async () => {
+      removeMemberMock.execute.mockResolvedValue({ member: makeMemberRow() as never, alreadyRemoved: true });
+      const out = await controller.removeMember(PID, MEMBER_ID, adminReq() as never, undefined as never);
+      expect(out).toEqual(expect.objectContaining({ alreadyRemoved: true }));
+
+      addMemberMock.execute.mockRejectedValue(
+        new ConflictException({ statusCode: 409, message: 'Thành viên đã thuộc dự án', code: 'MEMBER_DUPLICATE' }),
+      );
+      const dup = (await controller
+        .addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, adminReq() as never)
+        .catch((e: unknown) => e)) as ConflictException;
+      expect(dup.getResponse()).toEqual(expect.objectContaining({ code: 'MEMBER_DUPLICATE' }));
+
+      removeMemberMock.execute.mockRejectedValue(
+        new ConflictException({ statusCode: 409, message: 'Quản lý dự án không thể xóa', code: 'MANAGER_MEMBER' }),
+      );
+      const guard = (await controller
+        .removeMember(PID, MEMBER_ID, adminReq() as never, undefined as never)
+        .catch((e: unknown) => e)) as ConflictException;
+      expect(guard.getResponse()).toEqual(expect.objectContaining({ code: 'MANAGER_MEMBER' }));
     });
   });
 });

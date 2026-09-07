@@ -2,9 +2,14 @@ import {
   Controller,
   Post,
   Patch,
+  Get,
+  Delete,
+  HttpCode,
   Param,
+  Query,
   Body,
   Req,
+  Header,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -17,8 +22,13 @@ import { requireRoles } from '../../../../iam/api/rest/guard/roles.guard';
 import { CreateProjectUseCase } from '../../../application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from '../../../application/use-case/update-project.use-case';
 import { TransitionProjectStatusUseCase } from '../../../application/use-case/transition-project-status.use-case';
+import { AddProjectMemberUseCase } from '../../../application/use-case/add-project-member.use-case';
+import { RemoveProjectMemberUseCase } from '../../../application/use-case/remove-project-member.use-case';
+import { ListProjectMembersUseCase } from '../../../application/use-case/list-project-members.use-case';
 import { CreateProjectDto, UpdateProjectDto, TransitionProjectStatusDto } from '../presentation/dto/project.dto';
+import { AddProjectMemberDto, RemoveProjectMemberDto } from '../presentation/dto/project-member.dto';
 import { toProjectProfileResponse } from '../presentation/mapper/project.mapper';
+import { toProjectMemberResponse, toProjectMemberListResponse } from '../presentation/mapper/project-member.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
 /**
@@ -26,6 +36,8 @@ import { TokenPayload } from '../../../../iam/application/port/token.port';
  * Chỉ sở hữu `POST /api/v1/projects` và `PATCH /api/v1/projects/:id`;
  * reads (`GET`, `GET :id`) ở lại iam `ProjectsController` (scope-integrated).
  * PRJ-SRS-002 (issue #33, L1-L6) — thêm `PATCH /api/v1/projects/:id/status`.
+ * PRJ-SRS-005 (issue #36, M1-M6) — thêm `GET|POST /api/v1/projects/:id/members`
+ * và `DELETE /api/v1/projects/:id/members/:memberId`.
  * Write roles = ADMIN + PROJECT_MANAGER (P2, L2); project-scope write checks
  * chi tiết defer sang #37 (PRJ-SRS-006).
  */
@@ -68,6 +80,9 @@ export class PrjProjectsController {
     private readonly createProject: CreateProjectUseCase,
     private readonly updateProject: UpdateProjectUseCase,
     private readonly transitionStatus: TransitionProjectStatusUseCase,
+    private readonly addProjectMember: AddProjectMemberUseCase,
+    private readonly removeProjectMember: RemoveProjectMemberUseCase,
+    private readonly listProjectMembers: ListProjectMembersUseCase,
   ) {}
 
   @Post()
@@ -142,5 +157,81 @@ export class PrjProjectsController {
       correlationId: meta.correlationId,
     });
     return { ...toProjectProfileResponse(entity, managerName, actor.sub), alreadyInState };
+  }
+
+  /**
+   * PRJ-SRS-005 (issue #36, M1/M5) — tra cứu thành viên dự án.
+   * Default chỉ active; `?includeInactive=true` toàn bộ lịch sử (`joined_at` DESC).
+   * Roles = PROJECT_WRITE_ROLES trên cả read (M5); current data → no-store.
+   */
+  @Get(':id/members')
+  @Header('Cache-Control', 'no-store')
+  async listMembers(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Req() req: Request,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
+    assertProjectWriteAccess(req);
+    const { members } = await this.listProjectMembers.execute({
+      projectId: id,
+      includeInactive: includeInactive === 'true' || includeInactive === '1',
+    });
+    return { data: toProjectMemberListResponse(members), total: members.length };
+  }
+
+  /**
+   * PRJ-SRS-005 (issue #36, M1) — thêm thành viên (`201`).
+   * `projectRole` chỉ `COORDINATOR`|`QC`|`WORKER`|`VIEWER`;
+   * `MANAGER` → 400 fieldErrors `{projectRole}` (đặt qua PATCH managerId).
+   */
+  @Post(':id/members')
+  @HttpCode(201)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async addMember(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Body() dto: AddProjectMemberDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertProjectWriteAccess(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { member } = await this.addProjectMember.execute({
+      projectId: id,
+      userId: dto.userId,
+      projectRole: dto.projectRole,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return toProjectMemberResponse(member);
+  }
+
+  /**
+   * PRJ-SRS-005 (issue #36, M2) — xóa mềm thành viên (soft-deactivate, giữ lịch sử).
+   * Idempotent: đã inactive → 200 `{alreadyRemoved:true}`, không audit.
+   * Membership của manager hiện tại → 409 `MANAGER_MEMBER`.
+   */
+  @Delete(':id/members/:memberId')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async removeMember(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Param('memberId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) memberId: string,
+    @Req() req: Request,
+    @Body() dto?: RemoveProjectMemberDto,
+  ) {
+    const actor = assertProjectWriteAccess(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { member, alreadyRemoved } = await this.removeProjectMember.execute({
+      projectId: id,
+      memberId,
+      reason: dto?.reason ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return { ...toProjectMemberResponse(member), alreadyRemoved };
   }
 }

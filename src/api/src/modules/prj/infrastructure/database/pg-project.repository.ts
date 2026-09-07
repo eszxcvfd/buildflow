@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { ProjectEntity } from '../../domain/entity/project.entity';
-import { ProjectProfile, ProjectRepositoryPort } from '../../domain/repository/project-repository.port';
+import {
+  ProjectProfile,
+  ProjectRepositoryPort,
+  ProjectMemberRow,
+  ProjectMemberFilter,
+  ProjectMemberRole,
+} from '../../domain/repository/project-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -140,5 +146,132 @@ export class PgProjectRepository implements ProjectRepositoryPort {
         p.plannedStartDate, p.plannedEndDate, p.managerId, p.status, p.updatedAt, p.id,
       ],
     );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* PRJ-SRS-005 (issue #36) — adapter thành viên dự án.                 */
+  /* `project_members` không có cột `created_at` riêng → `createdAt`    */
+  /* map từ `joined_at`. `joined_at`/`left_at` là timestamptz            */
+  /* (khác `effective_from`/`effective_to` date-only của crews #30).    */
+  /* ---------------------------------------------------------------- */
+
+  private mapMemberRow(row: Record<string, unknown>): ProjectMemberRow {
+    const joinedAt = new Date(String(row['joined_at']));
+    return {
+      id: String(row['id']),
+      projectId: String(row['project_id']),
+      userId: String(row['user_id']),
+      projectRole: row['project_role'] as ProjectMemberRole,
+      joinedAt,
+      leftAt:
+        row['left_at'] === null || row['left_at'] === undefined
+          ? null
+          : new Date(String(row['left_at'])),
+      isActive: Boolean(row['is_active']),
+      addedBy: String(row['added_by']),
+      createdAt: joinedAt,
+      userName: (row['user_name'] as string | null) ?? null,
+      userCode: (row['user_code'] as string | null) ?? null,
+    };
+  }
+
+  private memberSelect(): string {
+    return `m.id, m.project_id, m.user_id, m.project_role, m.joined_at, m.left_at,
+      m.is_active, m.added_by, u.full_name AS user_name, u.employee_code AS user_code
+      FROM public.project_members m LEFT JOIN public.users u ON u.id = m.user_id`;
+  }
+
+  async listMembers(filter: ProjectMemberFilter): Promise<ProjectMemberRow[]> {
+    return this.listMembersOn((text, values) => this.pool().query(text, values), filter);
+  }
+
+  async listMembersWithClient(
+    client: PoolClient,
+    filter: ProjectMemberFilter,
+  ): Promise<ProjectMemberRow[]> {
+    return this.listMembersOn((text, values) => client.query(text, values), filter);
+  }
+
+  private async listMembersOn(
+    query: (text: string, values: unknown[]) => Promise<{ rows: unknown[] }>,
+    filter: ProjectMemberFilter,
+  ): Promise<ProjectMemberRow[]> {
+    // M1: default active-only; `includeInactive=true` → toàn bộ lịch sử,
+    // cả hai sắp `joined_at` DESC.
+    if (filter.includeInactive) {
+      const r = await query(
+        `SELECT ${this.memberSelect()} WHERE m.project_id = $1 ORDER BY m.joined_at DESC`,
+        [filter.projectId],
+      );
+      return (r.rows as Record<string, unknown>[]).map((row) => this.mapMemberRow(row));
+    }
+    const r = await query(
+      `SELECT ${this.memberSelect()} WHERE m.project_id = $1 AND m.is_active ORDER BY m.joined_at DESC`,
+      [filter.projectId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => this.mapMemberRow(row));
+  }
+
+  async findMemberByIdWithClient(client: PoolClient, memberId: string): Promise<ProjectMemberRow | null> {
+    const r = await client.query(`SELECT ${this.memberSelect()} WHERE m.id = $1 LIMIT 1`, [memberId]);
+    if (r.rows.length === 0) return null;
+    return this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findActiveMemberWithClient(
+    client: PoolClient,
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectMemberRow | null> {
+    const r = await client.query(
+      `SELECT ${this.memberSelect()} WHERE m.project_id = $1 AND m.user_id = $2 AND m.is_active LIMIT 1`,
+      [projectId, userId],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async insertMemberWithClient(
+    client: PoolClient,
+    input: { projectId: string; userId: string; projectRole: string; addedBy: string },
+  ): Promise<ProjectMemberRow> {
+    // Trùng active cùng project → 23505 `ux_project_members_active` → use case map 409.
+    const r = await client.query(
+      `INSERT INTO public.project_members (id, project_id, user_id, project_role, is_active, added_by)
+       VALUES (gen_random_uuid(), $1, $2, $3, true, $4)
+       RETURNING id, project_id, user_id, project_role, joined_at, left_at, is_active, added_by`,
+      [input.projectId, input.userId, input.projectRole, input.addedBy],
+    );
+    const row = this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+    const u = await client.query(`SELECT full_name, employee_code FROM public.users WHERE id = $1`, [
+      input.userId,
+    ]);
+    if (u.rows.length > 0) {
+      row.userName = (u.rows[0]['full_name'] as string | null) ?? null;
+      row.userCode = (u.rows[0]['employee_code'] as string | null) ?? null;
+    }
+    return row;
+  }
+
+  async deactivateMemberWithClient(client: PoolClient, memberId: string): Promise<ProjectMemberRow | null> {
+    // M2 soft-deactivate: row KHÔNG bao giờ bị xóa. `left_at=CURRENT_TIMESTAMP`
+    // (thỏa `revocation_ck`; `CURRENT_DATE` nửa đêm vi phạm
+    // `membership_dates_ck` khi remove cùng ngày join — xem §12 M2).
+    const r = await client.query(
+      `UPDATE public.project_members SET is_active = false, left_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id, project_id, user_id, project_role, joined_at, left_at, is_active, added_by`,
+      [memberId],
+    );
+    if (r.rows.length === 0) return null;
+    const row = this.mapMemberRow(r.rows[0] as Record<string, unknown>);
+    const u = await client.query(`SELECT full_name, employee_code FROM public.users WHERE id = $1`, [
+      row.userId,
+    ]);
+    if (u.rows.length > 0) {
+      row.userName = (u.rows[0]['full_name'] as string | null) ?? null;
+      row.userCode = (u.rows[0]['employee_code'] as string | null) ?? null;
+    }
+    return row;
   }
 }

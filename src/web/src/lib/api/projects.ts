@@ -307,6 +307,190 @@ export type ChangeProjectStatusResult = ProjectProfile & {
   alreadyInState: boolean;
 };
 
+/**
+ * PRJ-SRS-005 (issue #36) — thành viên dự án.
+ *
+ * Contract: GET /api/v1/projects/:id/members (`?includeInactive=true` toàn bộ
+ * lịch sử, default chỉ active) → `{ data, total }`; POST `:id/members`
+ * `{ userId, projectRole }` (`201`; role chỉ COORDINATOR|QC|WORKER|VIEWER —
+ * MANAGER → 400 fieldErrors `{projectRole}`, đặt qua PATCH managerId; trùng
+ * cùng project → 409 MEMBER_DUPLICATE); DELETE `:id/members/:memberId`
+ * `{ reason? }` (soft-deactivate, giữ lịch sử; đã inactive → 200
+ * `{ alreadyRemoved: true }` không audit; membership của manager hiện tại →
+ * 409 MANAGER_MEMBER). Roles = PROJECT_WRITE_ROLES (ADMIN + PROJECT_MANAGER).
+ * Reads dùng `cache: 'no-store'`; 400 shape `{ message, fieldErrors }` giữ
+ * nguyên fieldErrors server (pattern crews.ts).
+ */
+export interface ProjectMember {
+  id: string;
+  userId: string;
+  userName: string | null;
+  userCode: string | null;
+  projectRole: 'MANAGER' | 'COORDINATOR' | 'QC' | 'WORKER' | 'VIEWER' | string;
+  joinedAt: string;
+  leftAt: string | null;
+  isActive: boolean;
+  addedBy: string;
+  /** Bảng `project_members` không có `created_at` riêng — server map = `joined_at`. */
+  createdAt: string;
+}
+
+export interface ListProjectMembersParams {
+  /** true → toàn bộ lịch sử (kể cả đã rời), false/default → chỉ active. */
+  includeInactive?: boolean;
+}
+
+export interface ListProjectMembersResult {
+  data: ProjectMember[];
+  total: number;
+}
+
+/** Roles được phép gán qua POST add-member (MANAGER bị chặn cả client lẫn server). */
+export const ADDABLE_PROJECT_MEMBER_ROLES = ['COORDINATOR', 'QC', 'WORKER', 'VIEWER'] as const;
+
+export type AddableProjectMemberRole = (typeof ADDABLE_PROJECT_MEMBER_ROLES)[number];
+
+export interface AddProjectMemberPayload {
+  userId: string;
+  projectRole: AddableProjectMemberRole | string;
+}
+
+export interface RemoveProjectMemberPayload {
+  /** Lý do rời dự án 1–500, optional — ghi vào audit_logs.reason. */
+  reason?: string | null;
+}
+
+/** DELETE → soft-deactivate; đã inactive → alreadyRemoved:true, không audit thêm. */
+export type RemoveProjectMemberResult = ProjectMember & {
+  alreadyRemoved: boolean;
+};
+
+function classifyMemberMessage(m: string): { field: string } | null {
+  const lower = m.toLowerCase();
+  if (lower.includes('người dùng') || lower.includes('nguoi dung') || lower.includes('userid')) return { field: 'userId' };
+  if (
+    lower.includes('vai trò') ||
+    lower.includes('vai tro') ||
+    lower.includes('projectrole') ||
+    lower.includes('project_role') ||
+    lower.includes('quản lý dự án chỉ đặt qua patch')
+  )
+    return { field: 'projectRole' };
+  if (lower.includes('lý do') || lower.includes('reason')) return { field: 'reason' };
+  return null;
+}
+
+async function parseMemberError(res: Response, fallback: string): Promise<never> {
+  const contentType = res.headers.get('content-type') ?? '';
+  const isJson = contentType.includes('application/json');
+  const body: unknown = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>;
+    const msg = typeof b.message === 'string' ? b.message : typeof b.error === 'string' ? b.error : undefined;
+    const code = typeof b.code === 'string' ? b.code : undefined;
+    const traceId = typeof b.traceId === 'string' ? b.traceId : undefined;
+    if (Array.isArray(b.message)) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const m of b.message as unknown[]) {
+        if (typeof m !== 'string') continue;
+        const hit = classifyMemberMessage(m);
+        const key = hit?.field ?? '_global';
+        fieldErrors[key] = [...(fieldErrors[key] ?? []), m];
+      }
+      throw { status: res.status, message: msg ?? fallback, code, fieldErrors, traceId } satisfies ApiError;
+    }
+    if (msg) {
+      // 409 trùng thành viên cùng project → map về field `userId`.
+      // 409 MANAGER_MEMBER giữ nguyên `code` để UI hiển thị message actionable.
+      if (res.status === 409 && (code === 'MEMBER_DUPLICATE' || /(đã thuộc dự án|duplicate|unique)/i.test(msg))) {
+        throw { status: res.status, message: msg, code, fieldErrors: { userId: [msg] }, traceId } satisfies ApiError;
+      }
+      // API 400 shape { message, fieldErrors }: giữ nguyên fieldErrors server.
+      throw { status: res.status, message: msg, code, fieldErrors: toFieldErrors(b.fieldErrors), traceId } satisfies ApiError;
+    }
+  }
+  if (typeof body === 'string' && body.length > 0) {
+    throw { status: res.status, message: body } satisfies ApiError;
+  }
+  throw { status: res.status, message: fallback } satisfies ApiError;
+}
+
+/**
+ * PRJ-SRS-005 — tra cứu thành viên: default chỉ active,
+ * `includeInactive=true` toàn bộ lịch sử (`joined_at` DESC).
+ */
+export async function listProjectMembers(
+  id: string,
+  params: ListProjectMembersParams = {},
+): Promise<ListProjectMembersResult> {
+  const qs = new URLSearchParams();
+  if (params.includeInactive) qs.set('includeInactive', 'true');
+  const query = qs.toString();
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(id)}/members${query ? `?${query}` : ''}`,
+    {
+      headers: authHeaders(),
+      cache: 'no-store',
+    },
+  );
+  if (!res.ok) {
+    await parseMemberError(res, `Tải danh sách thành viên dự án thất bại (${res.status})`);
+  }
+  return (await res.json()) as ListProjectMembersResult;
+}
+
+/**
+ * PRJ-SRS-005 — thêm thành viên (`201`). Lỗi: 400 fieldErrors (userId /
+ * projectRole — MANAGER qua đây bị từ chối, đặt qua PATCH managerId),
+ * 404 project, 409 MEMBER_DUPLICATE (code giữ nguyên, fieldErrors.userId).
+ */
+export async function addProjectMember(id: string, payload: AddProjectMemberPayload): Promise<ProjectMember> {
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(id)}/members`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseMemberError(res, `Thêm thành viên dự án thất bại (${res.status})`);
+  }
+  return (await res.json()) as ProjectMember;
+}
+
+/**
+ * PRJ-SRS-005 — xóa mềm thành viên (giữ lịch sử).
+ * Idempotent: đã inactive → 200 `{ alreadyRemoved: true }`, không audit thêm.
+ * Membership của manager hiện tại → 409 MANAGER_MEMBER.
+ */
+export async function removeProjectMember(
+  id: string,
+  memberId: string,
+  payload: RemoveProjectMemberPayload = {},
+): Promise<RemoveProjectMemberResult> {
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...authHeaders(),
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    await parseMemberError(res, `Xóa thành viên dự án thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyRemoved, ...member } = body;
+  return {
+    ...(member as unknown as ProjectMember),
+    alreadyRemoved: alreadyRemoved === true,
+  };
+}
+
 export async function changeProjectStatus(
   id: string,
   payload: ChangeProjectStatusPayload,

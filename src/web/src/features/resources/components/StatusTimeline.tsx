@@ -40,6 +40,8 @@ const LIFECYCLE_ACTION_LABEL: Record<string, string> = {
   ORG_CREW_MEMBER_ADDED: 'Thêm thành viên',
   ORG_CREW_MEMBER_REMOVED: 'Xóa thành viên',
   PRJ_PROJECT_STATUS_CHANGED: 'Đổi trạng thái dự án',
+  PRJ_PROJECT_MEMBER_ADDED: 'Thêm thành viên dự án',
+  PRJ_PROJECT_MEMBER_REMOVED: 'Xóa thành viên dự án',
 };
 
 const LIFECYCLE_STATUS_ACTIONS = new Set(Object.keys(LIFECYCLE_ACTION_LABEL));

@@ -1,4 +1,4 @@
-import { createProject, updateProject, listProjects, getProject, toFieldErrors, changeProjectStatus } from './projects';
+import { createProject, updateProject, listProjects, getProject, toFieldErrors, changeProjectStatus, listProjectMembers, addProjectMember, removeProjectMember } from './projects';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -151,6 +151,81 @@ describe('projects api client PRJ-SRS-002 (issue #33)', () => {
     await expect(changeProjectStatus('p-1', { action: 'PAUSE' })).rejects.toMatchObject({
       status: 400,
       fieldErrors: { reason: ['Lý do là bắt buộc khi tạm dừng/đóng/mở lại dự án'] },
+    });
+  });
+});
+
+describe('projects api client PRJ-SRS-005 (issue #36)', () => {
+  function projectMember(overrides = {}) {
+    return {
+      id: 'm-1',
+      userId: 'u-1',
+      userName: 'Nguyen Van M',
+      userCode: 'NV-002',
+      projectRole: 'WORKER',
+      joinedAt: '2026-02-01T08:00:00.000Z',
+      leftAt: null,
+      isActive: true,
+      addedBy: 'u-admin',
+      createdAt: '2026-02-01T08:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  it('listProjectMembers GET :id/members, no-store, default không includeInactive', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [projectMember()], total: 1 }));
+    const res = await listProjectMembers('p-1');
+    expect(res.total).toBe(1);
+    expect(res.data[0].projectRole).toBe('WORKER');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/projects/p-1/members')).toBe(true);
+    expect(init.cache).toBe('no-store');
+  });
+
+  it('listProjectMembers includeInactive=true gắn query', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ data: [], total: 0 }));
+    await listProjectMembers('p-1', { includeInactive: true });
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('includeInactive=true');
+  });
+
+  it('addProjectMember POST payload {userId, projectRole} → 201', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(projectMember(), 201));
+    const res = await addProjectMember('p-1', { userId: 'u-1', projectRole: 'QC' });
+    expect(res.projectRole).toBe('WORKER');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/projects/p-1/members')).toBe(true);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ userId: 'u-1', projectRole: 'QC' });
+  });
+
+  it('409 MEMBER_DUPLICATE → fieldErrors.userId, giữ code', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ statusCode: 409, message: 'Thành viên đã thuộc dự án', code: 'MEMBER_DUPLICATE' }, 409),
+    );
+    await expect(addProjectMember('p-1', { userId: 'u-1', projectRole: 'QC' })).rejects.toMatchObject({
+      status: 409,
+      code: 'MEMBER_DUPLICATE',
+      fieldErrors: { userId: ['Thành viên đã thuộc dự án'] },
+    });
+  });
+
+  it('removeProjectMember DELETE :id/members/:memberId + alreadyRemoved', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ...projectMember(), isActive: false, alreadyRemoved: true }));
+    const res = await removeProjectMember('p-1', 'm-1', { reason: null });
+    expect(res.alreadyRemoved).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/projects/p-1/members/m-1')).toBe(true);
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('409 MANAGER_MEMBER giữ code để UI hiển thị actionable', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ statusCode: 409, message: 'Không thể xóa quản lý dự án', code: 'MANAGER_MEMBER' }, 409),
+    );
+    await expect(removeProjectMember('p-1', 'm-1')).rejects.toMatchObject({
+      status: 409,
+      code: 'MANAGER_MEMBER',
     });
   });
 });

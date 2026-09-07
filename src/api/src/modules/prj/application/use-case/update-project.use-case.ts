@@ -66,7 +66,15 @@ function entityFieldFor(msg: string): string {
  * - `code`/`status` trong input → 400 fieldErrors (explicit, không silent-ignore).
  * - Update trong tx: `SELECT FOR UPDATE` row hiện tại, apply, save, audit
  *   `PRJ_PROJECT_UPDATED` với full before row vs after. Audit thất bại → 500 rollback.
- * - P9 asymmetry: đổi `managerId` KHÔNG đụng `project_members` (defer #36 PRJ-SRS-005).
+ * - P11/M4 (issue #36, PRJ-SRS-005 — asymmetry P9 đã đóng): khi `managerId`
+ *   THẬT SỰ đổi, trong CÙNG tx: nếu manager mới chưa có ACTIVE membership
+ *   trong project → insert `project_members` (`project_role='MANAGER'`,
+ *   `is_active=true`, `added_by=actor`). Membership của manager cũ giữ nguyên
+ *   (document). Đã là member → không insert (idempotent; race chỉ swallow khi
+ *   constraint name khớp `ux_project_members_active` — bare 23505 rethrow).
+ *   Khi `managerId` thật sự đổi, `PRJ_PROJECT_UPDATED` afterData kèm
+ *   `managerMembership: { userId, autoInserted }` (`autoInserted=true` khi
+ *   insert thành công, `false` khi đã là member).
  */
 @Injectable()
 export class UpdateProjectUseCase {
@@ -164,11 +172,51 @@ export class UpdateProjectUseCase {
 
       await this.projectRepo.saveWithClient(client, current.entity);
 
+      // P11/M4 (#36): managerId đổi → manager mới hiển nhiên là thành viên dự án
+      // (đối xứng P9 khi CREATE). Chạy trong CÙNG tx, sau save, trước audit.
+      // Manager cũ giữ nguyên membership (document — không deactivate).
+      const prevManagerId = String((before as { managerId: string }).managerId);
+      let managerMembership: { userId: string; autoInserted: boolean } | undefined;
+      if (input.managerId !== undefined && String(input.managerId) !== prevManagerId) {
+        const alreadyMember = await this.projectRepo.findActiveMemberWithClient(
+          client,
+          input.projectId,
+          current.entity.managerId,
+        );
+        if (!alreadyMember) {
+          try {
+            await this.projectRepo.insertManagerMembershipWithClient(client, {
+              projectId: input.projectId,
+              userId: current.entity.managerId,
+              addedBy: input.actorUserId,
+            });
+            managerMembership = { userId: current.entity.managerId, autoInserted: true };
+          } catch (e) {
+            // Race: membership đã được insert đồng thời — chỉ swallow khi
+            // constraint name khớp `ux_project_members_active` (coi như đã
+            // member). Bare 23505 (không constraint) → rethrow, map generic.
+            const err = e as Record<string, unknown>;
+            const constraint = String(err['constraint'] ?? '');
+            if (/ux_project_members_active/i.test(constraint)) {
+              managerMembership = { userId: current.entity.managerId, autoInserted: false };
+            } else {
+              throw e;
+            }
+          }
+        } else {
+          managerMembership = { userId: current.entity.managerId, autoInserted: false };
+        }
+      }
+
       const managerName =
         input.managerId !== undefined && input.managerId !== before.managerId
           ? await this.projectRepo.findManagerNameWithClient(client, current.entity.managerId)
           : current.managerName;
-      const after = { ...current.entity.toPublic(), managerName };
+      const after = {
+        ...current.entity.toPublic(),
+        managerName,
+        ...(managerMembership ? { managerMembership } : {}),
+      };
 
       try {
         const payload = {

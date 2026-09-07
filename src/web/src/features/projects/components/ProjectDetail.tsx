@@ -11,6 +11,7 @@ import {
   PROJECT_ACTION_LABEL,
   type ProjectStatusAction,
 } from './ProjectStatusDialog';
+import { ProjectMembers } from './ProjectMembers';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
@@ -335,6 +336,10 @@ export function ProjectDetail({ id }: { id: string }) {
           ) : null}
           <a href="/projects" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
         </div>
+      </Card>
+
+      <Card>
+        <ProjectMembers projectId={project.id} managerId={project.managerId} />
       </Card>
 
       <Card>

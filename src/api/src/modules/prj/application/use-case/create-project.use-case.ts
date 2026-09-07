@@ -74,8 +74,8 @@ function duplicate409(): ConflictException {
  * - Audit `PRJ_PROJECT_CREATED` tx-embedded; audit thất bại → 500 rollback.
  * - P9: manager auto-added làm ACTIVE member (`project_role='MANAGER'`) trong
  *   CÙNG tx (manager hiển nhiên là thành viên dự án; unlock iam project-scope
- *   visibility cho manager). Asymmetry: UPDATE đổi manager KHÔNG đụng
- *   memberships (defer #36 PRJ-SRS-005).
+ *   visibility cho manager). Đối xứng UPDATE: đổi `managerId` cũng auto-insert
+ *   membership MANAGER trong cùng tx (P11/M4, issue #36 PRJ-SRS-005).
  */
 @Injectable()
 export class CreateProjectUseCase {
