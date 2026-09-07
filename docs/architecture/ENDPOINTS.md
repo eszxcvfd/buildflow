@@ -205,6 +205,35 @@ Response project profile (P8): `{ id, code, name, description, address, timezone
 - **P9 — manager auto-membership khi CREATE (cùng tx):** POST insert thêm row `project_members` (`project_id` mới, `user_id=managerId`, `project_role='MANAGER'`, `is_active=true`, `added_by=actor`, `joined_at` default now) sau project insert, trước audit — manager hiển nhiên là thành viên dự án, đồng thời unlock iam project-scope visibility cho manager. Asymmetry: PATCH đổi `managerId` KHÔNG đụng memberships (defer `#36` PRJ-SRS-005 Quản lý thành viên dự án).
 - Hai shape `400` như các slice trước (ValidationPipe shape không `fieldErrors` cho body thiếu/sai format cơ bản; business-invalid có `fieldErrors`).
 
+## 11. Project lifecycle — PRJ-SRS-002 (#33) bounded decisions
+
+Lifecycle trạng thái dự án. Enum DB giữ nguyên (`projects.status CHECK IN ('DRAFT','ACTIVE','PAUSED','COMPLETED','CLOSED')` — không migration). Reuse shape org precedent (`resource-status.policy.ts` + `status-transition-*.use-case.ts` #27: transition map, reason mandatory, `alreadyInState`, `_warning` — ở đây không có warning/open-work vì chưa có module WO/JOB).
+
+| Method | Path | Auth | Body | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| PATCH | `/api/v1/projects/:id/status` | **ADMIN + PROJECT_MANAGER** | `{ action: 'ACTIVATE' \| 'PAUSE' \| 'RESUME' \| 'COMPLETE' \| 'CLOSE' \| 'REOPEN', reason? }` | `200` project profile + `alreadyInState` | `400` action sai/thiếu reason; `404`; `409 INVALID_TRANSITION`; `400` X-Correlation-Id sai |
+
+Transition table (L1 — duy nhất được phép):
+
+| Từ | Action | Tới | Reason |
+| --- | --- | --- | --- |
+| `DRAFT` | `ACTIVATE` | `ACTIVE` | optional |
+| `DRAFT` | `CLOSE` (hủy nháp) | `CLOSED` | **bắt buộc** |
+| `ACTIVE` | `PAUSE` | `PAUSED` | **bắt buộc** |
+| `ACTIVE` | `COMPLETE` | `COMPLETED` | optional |
+| `PAUSED` | `RESUME` | `ACTIVE` | optional |
+| `COMPLETED` | `CLOSE` | `CLOSED` | **bắt buộc** |
+| `CLOSED` | `REOPEN` | `ACTIVE` | **bắt buộc** |
+
+- **L1 — endpoint + map mới:** `PATCH /api/v1/projects/:id/status`, body `{action, reason? (1-500)}` như bảng trên. Action chưa biết → `400`; action biết nhưng không hợp lệ với trạng thái hiện tại → `409 { code: 'INVALID_TRANSITION', allowedTransitions: [...] }`. Thiếu reason nơi bắt buộc → `400 fieldErrors {reason}`.
+- **L2 — roles = PROJECT_WRITE_ROLES** (`ADMIN` + `PROJECT_MANAGER`, crews precedent — khác write admin-only của workers/contractors/trades). Per-project scope write check thuộc `#37` (PRJ-SRS-006, next slice) — chưa enforce ở đây.
+- **L3 — idempotent org-pattern:** action nhắm đúng trạng thái hiện tại (vd `PAUSE` khi đã `PAUSED`, `ACTIVATE`/`RESUME`/`REOPEN` khi đã `ACTIVE`) → `200 {alreadyInState: true}`, không mutation, không audit. Xung đột trạng thái khác → 409 map L1. Lặp action khi đã ở trạng thái đích → alreadyInState kể cả khi thiếu reason (no-op; reason chỉ bắt buộc cho transition hiệu lực).
+- **L4 — audit `PRJ_PROJECT_STATUS_CHANGED`**, `entityType` `PROJECT`, tx-embedded (`logWithClient`), before/after full rows chứa `{status}`, `reason` ở cột `audit_logs.reason`, actor từ request; audit thất bại → `500` rollback (catch-all). Tx re-read `SELECT ... FOR UPDATE` row mới nhất trước khi apply — race đổi trạng thái giữa pre-read và tx → đánh giá lại (alreadyInState hoặc 409 map per SRS).
+- **L5 — history = `audit_logs` append-only** (không bảng transitions riêng).
+- **L6 — 'Dự án Đóng không tạo Work Order mới':** chưa có module WO/JOB nên chưa enforce server-side; defer sang các slice JOB — assignment CREATE (tương lai) phải re-check status dự án (`CLOSED` không tạo WO mới) trước khi ghi.
+- Use-case `transition-project-status.use-case.ts` (+ pure transition map/reason policy trong `project.policy.ts`). Entity `changeStatus(target)` validate đích nằm trong map (ném Error → 409).
+- Response = ProjectProfileDto (P8) + `alreadyInState`.
+
 ## 9. Eligibility — ORG-SRS-008 (#31) bounded decisions
 
 Dữ liệu điều kiện nhận việc cho worker và crew (advisory pre-check phục vụ điều phối; KHÔNG có module JOB/assignments — assignment CREATE thuộc slice JOB-SRS tương lai).

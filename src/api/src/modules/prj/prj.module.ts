@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrjProjectsController } from './api/rest/controller/projects.controller';
 import { CreateProjectUseCase } from './application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from './application/use-case/update-project.use-case';
+import { TransitionProjectStatusUseCase } from './application/use-case/transition-project-status.use-case';
 import { PgProjectRepository } from './infrastructure/database/pg-project.repository';
 import { PRJ_PROJECT_REPOSITORY } from './domain/repository/project-repository.port';
 import { PgAuditRepository } from '../iam/infrastructure/database/pg-audit.repository';
@@ -26,6 +27,7 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
   providers: [
     CreateProjectUseCase,
     UpdateProjectUseCase,
+    TransitionProjectStatusUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: PRJ_PROJECT_REPOSITORY, useClass: PgProjectRepository },

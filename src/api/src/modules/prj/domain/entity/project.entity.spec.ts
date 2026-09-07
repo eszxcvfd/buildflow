@@ -67,3 +67,18 @@ describe('ProjectEntity PRJ-SRS-001 (issue #32)', () => {
     expect(() => new ProjectEntity({ ...BASE, description: 'x'.repeat(2001) })).toThrow(/2000/);
   });
 });
+
+describe('ProjectEntity.changeStatus PRJ-SRS-002 (issue #33, L1)', () => {
+  it('chuyển đổi hợp lệ đổi status + updatedAt', () => {
+    const e = new ProjectEntity({ ...BASE });
+    e.changeStatus('ACTIVE', new Date('2026-09-08T00:00:00.000Z'));
+    expect(e.status).toBe('ACTIVE');
+    expect(e.updatedAt.toISOString()).toBe('2026-09-08T00:00:00.000Z');
+  });
+
+  it('invalid jump (DRAFT → PAUSED) → throw, state giữ nguyên', () => {
+    const e = new ProjectEntity({ ...BASE });
+    expect(() => e.changeStatus('PAUSED')).toThrow(/DRAFT.*PAUSED/);
+    expect(e.status).toBe('DRAFT');
+  });
+});

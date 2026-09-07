@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Unauthorize
 import { PrjProjectsController } from './projects.controller';
 import { CreateProjectUseCase } from '../../../application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from '../../../application/use-case/update-project.use-case';
+import { TransitionProjectStatusUseCase } from '../../../application/use-case/transition-project-status.use-case';
 import { ProjectEntity } from '../../../domain/entity/project.entity';
 import { JwtAuthGuard } from '../../../../iam/api/rest/guard/jwt-auth.guard';
 
@@ -51,6 +52,7 @@ function createBody(): Record<string, unknown> {
 describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
   let createMock: jest.Mocked<CreateProjectUseCase>;
   let updateMock: jest.Mocked<UpdateProjectUseCase>;
+  let transitionMock: jest.Mocked<TransitionProjectStatusUseCase>;
   let controller: PrjProjectsController;
 
   beforeEach(() => {
@@ -60,7 +62,10 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
     updateMock = {
       execute: jest.fn(async () => ({ entity: makeEntity(), managerName: 'Nguyen Van A' })),
     } as unknown as jest.Mocked<UpdateProjectUseCase>;
-    controller = new PrjProjectsController(createMock, updateMock);
+    transitionMock = {
+      execute: jest.fn(async () => ({ entity: makeEntity(), managerName: 'Nguyen Van A', alreadyInState: false })),
+    } as unknown as jest.Mocked<TransitionProjectStatusUseCase>;
+    controller = new PrjProjectsController(createMock, updateMock, transitionMock);
   });
 
   describe('role matrix: ADMIN + PROJECT_MANAGER write; STAFF/WORKER 403; anon 401', () => {
@@ -182,6 +187,65 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       const idParam = Object.values(args).find((a) => (a.pipes ?? []).length > 0);
       expect(idParam).toBeDefined();
       expect(idParam?.pipes?.[0]?.options?.errorHttpStatusCode).toBe(400);
+    });
+  });
+
+  describe('PATCH :id/status PRJ-SRS-002 (issue #33, L1-L3)', () => {
+    it('ADMIN + PROJECT_MANAGER ok, response ProjectProfileDto + alreadyInState', async () => {
+      const created = await controller.transition(PID, { action: 'ACTIVATE' } as never, adminReq() as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, action: 'ACTIVATE', actorUserId: 'u-1' }),
+      );
+      expect(created).toEqual(expect.objectContaining({ id: PID, status: 'DRAFT', alreadyInState: false }));
+
+      await controller.transition(PID, { action: 'PAUSE', reason: 'Chờ vật tư' } as never, pmReq() as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'PAUSE', reason: 'Chờ vật tư' }),
+      );
+    });
+
+    it('alreadyInState từ use case → truyền nguyên ra response', async () => {
+      transitionMock.execute.mockResolvedValue({ entity: makeEntity(), managerName: 'Nguyen Van A', alreadyInState: true });
+      const out = await controller.transition(PID, { action: 'ACTIVATE' } as never, adminReq() as never);
+      expect(out).toEqual(expect.objectContaining({ alreadyInState: true }));
+    });
+
+    it('STAFF/WORKER → 403, không gọi use case', async () => {
+      await expect(controller.transition(PID, { action: 'ACTIVATE' } as never, staffReq() as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(controller.transition(PID, { action: 'ACTIVATE' } as never, workerReq() as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('X-Correlation-Id sai UUID → 400 strict, không gọi use case', async () => {
+      await expect(
+        controller.transition(
+          PID,
+          { action: 'ACTIVATE' } as never,
+          reqWithRoles(['ADMIN'], { 'x-correlation-id': 'not-a-uuid' }) as never,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(transitionMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('409 INVALID_TRANSITION từ use case → giữ code + allowedTransitions', async () => {
+      transitionMock.execute.mockRejectedValue(
+        new ConflictException({
+          statusCode: 409,
+          message: 'Không thể chuyển dự án từ DRAFT với action PAUSE',
+          code: 'INVALID_TRANSITION',
+          allowedTransitions: ['ACTIVATE', 'CLOSE'],
+        }),
+      );
+      const err = (await controller
+        .transition(PID, { action: 'PAUSE', reason: 'x' } as never, adminReq() as never)
+        .catch((e: unknown) => e)) as ConflictException;
+      expect(err.getResponse()).toEqual(
+        expect.objectContaining({ statusCode: 409, code: 'INVALID_TRANSITION', allowedTransitions: ['ACTIVATE', 'CLOSE'] }),
+      );
     });
   });
 });

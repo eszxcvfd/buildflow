@@ -16,6 +16,9 @@ import { EmptyState } from '@/components/ui/empty-state/EmptyState';
  * ORG-SRS-006 (issue #29) — mở rộng cho đội thi công (`entityType: 'CREW'`,
  * audit actions ORG_CREW_*). Audit-logs API giữ admin-only nên non-admin thấy
  * ghi chú quyền (branch 401/403 có sẵn).
+ * PRJ-SRS-002 (issue #33) — mở rộng cho dự án (`entityType: 'PROJECT'`,
+ * audit action PRJ_PROJECT_STATUS_CHANGED; history = audit_logs, không bảng
+ * transitions riêng). PM thấy ghi chú quyền như CREW (audit-logs admin-only).
  * Render tối đa 10 dòng + link 'Xem tất cả' sang /admin/audit-logs với filter sẵn.
  * Actor hiển thị short-id; không render beforeData/afterData (có thể chứa dữ liệu nhạy cảm).
  */
@@ -36,6 +39,7 @@ const LIFECYCLE_ACTION_LABEL: Record<string, string> = {
   ORG_CREW_TERMINATED: 'Chấm dứt',
   ORG_CREW_MEMBER_ADDED: 'Thêm thành viên',
   ORG_CREW_MEMBER_REMOVED: 'Xóa thành viên',
+  PRJ_PROJECT_STATUS_CHANGED: 'Đổi trạng thái dự án',
 };
 
 const LIFECYCLE_STATUS_ACTIONS = new Set(Object.keys(LIFECYCLE_ACTION_LABEL));
@@ -52,7 +56,7 @@ function shortenActor(v: string | null): string {
   return v.length > 12 ? `${v.slice(0, 8)}…` : v;
 }
 
-export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' }) {
+export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' | 'PROJECT' }) {
   const [logs, setLogs] = React.useState<AuditLog[] | null>(null);
   const [total, setTotal] = React.useState(0);
   const [error, setError] = React.useState<AuditLogError | null>(null);

@@ -9,6 +9,9 @@
  * requireRoles ADMIN + PROJECT_MANAGER; PATCH whitelist
  * {name, description, address, timezone, plannedStartDate, plannedEndDate,
  * managerId} — `code`/`status` trong body → 400 fieldErrors.
+ * PRJ-SRS-002 (issue #33) — lifecycle `PATCH /api/v1/projects/:id/status`
+ * `{action, reason?}` → profile + `alreadyInState`; 409 INVALID_TRANSITION
+ * kèm `allowedTransitions` được giữ nguyên trong ApiError.
  *
  * GET list/detail dùng `cache: 'no-store'`; lỗi 400 shape mới
  * `{ message, fieldErrors }` được giữ nguyên fieldErrors (pattern contractors.ts).
@@ -78,6 +81,8 @@ export interface ApiError {
   message: string;
   code?: string;
   fieldErrors?: Record<string, string[]>;
+  /** PRJ-SRS-002 — 409 INVALID_TRANSITION kèm actions hợp lệ từ trạng thái hiện tại. */
+  allowedTransitions?: string[];
   traceId?: string;
 }
 
@@ -147,7 +152,9 @@ function classifyMessage(m: string): { field: string } | null {
     return { field: 'plannedEndDate' };
   }
   if (lower.includes('quản lý') || lower.includes('manager')) return { field: 'managerId' };
+  if (lower.includes('lý do') || lower.includes('reason')) return { field: 'reason' };
   if (lower.includes('trạng thái') && !lower.includes('dự án')) return { field: 'status' };
+  if (lower.includes('action')) return { field: 'action' };
   return null;
 }
 
@@ -160,6 +167,11 @@ async function parseError(res: Response, fallback: string): Promise<never> {
     const msg = typeof b.message === 'string' ? b.message : typeof b.error === 'string' ? b.error : undefined;
     const code = typeof b.code === 'string' ? b.code : undefined;
     const traceId = typeof b.traceId === 'string' ? b.traceId : undefined;
+    // PRJ-SRS-002 — 409 INVALID_TRANSITION kèm allowedTransitions (actions hợp lệ
+    // từ trạng thái hiện tại); giữ nguyên để dialog/detail hiển thị gợi ý.
+    const allowedTransitions = Array.isArray(b.allowedTransitions)
+      ? (b.allowedTransitions as unknown[]).filter((a): a is string => typeof a === 'string')
+      : undefined;
     if (Array.isArray(b.message)) {
       const fieldErrors: Record<string, string[]> = {};
       for (const m of b.message as unknown[]) {
@@ -168,13 +180,17 @@ async function parseError(res: Response, fallback: string): Promise<never> {
         const key = hit?.field ?? '_global';
         fieldErrors[key] = [...(fieldErrors[key] ?? []), m];
       }
-      throw { status: res.status, message: msg ?? fallback, code, fieldErrors, traceId } satisfies ApiError;
+      throw { status: res.status, message: msg ?? fallback, code, fieldErrors, allowedTransitions, traceId } satisfies ApiError;
     }
     if (msg) {
       // 409 trùng mã dự án → map về field `code` để form hiển thị theo field.
       if (res.status === 409) {
         if (code === 'PROJECT_CODE_DUPLICATE' || /(đã tồn tại|duplicate|unique|trùng)/i.test(msg)) {
           throw { status: res.status, message: msg, code, fieldErrors: { code: [msg] }, traceId } satisfies ApiError;
+        }
+        // PRJ-SRS-002 — sai trạng thái → 409 INVALID_TRANSITION + allowedTransitions.
+        if (code === 'INVALID_TRANSITION') {
+          throw { status: res.status, message: msg, code, allowedTransitions, traceId } satisfies ApiError;
         }
       }
       // 400 single-string từ use case → map vào field tương ứng.
@@ -256,4 +272,61 @@ export async function updateProject(id: string, payload: UpdateProjectPayload): 
     await parseError(res, `Cập nhật dự án thất bại (${res.status})`);
   }
   return (await res.json()) as ProjectProfile;
+}
+
+/**
+ * PRJ-SRS-002 (issue #33) — lifecycle trạng thái dự án.
+ * `PATCH /api/v1/projects/:id/status` (ADMIN + PROJECT_MANAGER), body
+ * `{ action, reason? }`, response ProjectProfileDto + `alreadyInState`.
+ * Transition map L1 (server authoritative):
+ *   DRAFT → ACTIVE (ACTIVATE), DRAFT → CLOSED (CLOSE, reason)
+ *   ACTIVE → PAUSED (PAUSE, reason), ACTIVE → COMPLETED (COMPLETE)
+ *   PAUSED → ACTIVE (RESUME), COMPLETED → CLOSED (CLOSE, reason)
+ *   CLOSED → ACTIVE (REOPEN, reason)
+ * Lỗi: action lạ → 400; sai trạng thái → 409 INVALID_TRANSITION +
+ * `allowedTransitions`; thiếu reason → 400 fieldErrors `{reason}`;
+ * alreadyInState → 200, không mutation/audit.
+ */
+export const PROJECT_STATUS_ACTIONS = [
+  'ACTIVATE',
+  'PAUSE',
+  'RESUME',
+  'COMPLETE',
+  'CLOSE',
+  'REOPEN',
+] as const;
+
+export type ProjectStatusAction = (typeof PROJECT_STATUS_ACTIONS)[number];
+
+export interface ChangeProjectStatusPayload {
+  action: ProjectStatusAction;
+  reason?: string | null;
+}
+
+export type ChangeProjectStatusResult = ProjectProfile & {
+  alreadyInState: boolean;
+};
+
+export async function changeProjectStatus(
+  id: string,
+  payload: ChangeProjectStatusPayload,
+): Promise<ChangeProjectStatusResult> {
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    await parseError(res, `Chuyển trạng thái dự án thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyInState, ...profile } = body;
+  return {
+    ...(profile as unknown as ProjectProfile),
+    alreadyInState: alreadyInState === true,
+  };
 }

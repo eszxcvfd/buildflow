@@ -67,6 +67,23 @@ export class PgProjectRepository implements ProjectRepositoryPort {
     return mapRow(r.rows[0] as Record<string, unknown>);
   }
 
+  async findProfileById(id: string): Promise<ProjectProfile | null> {
+    const r = await this.pool().query(
+      `SELECT ${PROJECT_COLUMNS},
+        (SELECT full_name FROM public.users WHERE id = p.manager_id LIMIT 1) AS manager_name
+       FROM public.projects p WHERE p.id = $1 LIMIT 1`,
+      [id],
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0] as Record<string, unknown>;
+    return {
+      entity: mapRow(row),
+      managerName: row['manager_name'] !== null && row['manager_name'] !== undefined
+        ? String(row['manager_name'])
+        : null,
+    };
+  }
+
   async findForUpdateWithClient(client: PoolClient, id: string): Promise<ProjectProfile | null> {
     const r = await client.query(
       `SELECT ${PROJECT_COLUMNS} FROM public.projects p WHERE p.id = $1 FOR UPDATE LIMIT 1`,
@@ -117,10 +134,10 @@ export class PgProjectRepository implements ProjectRepositoryPort {
     const p = entity.getProps();
     await client.query(
       `UPDATE public.projects SET name=$1, description=$2, address=$3, timezone=$4,
-        planned_start_date=$5, planned_end_date=$6, manager_id=$7, updated_at=$8 WHERE id=$9`,
+        planned_start_date=$5, planned_end_date=$6, manager_id=$7, status=$8, updated_at=$9 WHERE id=$10`,
       [
         p.name, p.description ?? null, p.address, p.timezone,
-        p.plannedStartDate, p.plannedEndDate, p.managerId, p.updatedAt, p.id,
+        p.plannedStartDate, p.plannedEndDate, p.managerId, p.status, p.updatedAt, p.id,
       ],
     );
   }

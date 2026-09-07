@@ -1,4 +1,4 @@
-import { createProject, updateProject, listProjects, getProject, toFieldErrors } from './projects';
+import { createProject, updateProject, listProjects, getProject, toFieldErrors, changeProjectStatus } from './projects';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -105,5 +105,52 @@ describe('projects api client PRJ-SRS-001 (issue #32)', () => {
   it('toFieldErrors an toàn shape lạ', () => {
     expect(toFieldErrors(null)).toBeUndefined();
     expect(toFieldErrors({ name: ['a'], n: 'b', x: 1 })).toEqual({ name: ['a'], n: ['b'] });
+  });
+});
+
+describe('projects api client PRJ-SRS-002 (issue #33)', () => {
+  it('changeProjectStatus PATCH :id/status, no-store, trả profile + alreadyInState', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ...profile(), status: 'PAUSED', alreadyInState: false }));
+    const res = await changeProjectStatus('p-1', { action: 'PAUSE', reason: 'Bao tri' });
+    expect(res.status).toBe('PAUSED');
+    expect(res.alreadyInState).toBe(false);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url.endsWith('/api/v1/projects/p-1/status')).toBe(true);
+    expect(init.method).toBe('PATCH');
+    expect(init.cache).toBe('no-store');
+    expect(JSON.parse(init.body as string)).toEqual({ action: 'PAUSE', reason: 'Bao tri' });
+  });
+
+  it('alreadyInState:true giữ nguyên', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ...profile(), status: 'ACTIVE', alreadyInState: true }));
+    const res = await changeProjectStatus('p-1', { action: 'RESUME' });
+    expect(res.alreadyInState).toBe(true);
+  });
+
+  it('409 INVALID_TRANSITION giữ allowedTransitions', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { statusCode: 409, message: 'Không thể chuyển dự án từ PAUSED với action CLOSE', code: 'INVALID_TRANSITION', allowedTransitions: ['RESUME'] },
+        409,
+      ),
+    );
+    await expect(changeProjectStatus('p-1', { action: 'CLOSE', reason: 'x' })).rejects.toMatchObject({
+      status: 409,
+      code: 'INVALID_TRANSITION',
+      allowedTransitions: ['RESUME'],
+    });
+  });
+
+  it('400 thiếu reason → fieldErrors.reason', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { statusCode: 400, message: 'Lý do là bắt buộc khi tạm dừng/đóng/mở lại dự án', fieldErrors: { reason: ['Lý do là bắt buộc khi tạm dừng/đóng/mở lại dự án'] } },
+        400,
+      ),
+    );
+    await expect(changeProjectStatus('p-1', { action: 'PAUSE' })).rejects.toMatchObject({
+      status: 400,
+      fieldErrors: { reason: ['Lý do là bắt buộc khi tạm dừng/đóng/mở lại dự án'] },
+    });
   });
 });

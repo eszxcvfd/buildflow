@@ -16,7 +16,8 @@ import { JwtAuthGuard } from '../../../../iam/api/rest/guard/jwt-auth.guard';
 import { requireRoles } from '../../../../iam/api/rest/guard/roles.guard';
 import { CreateProjectUseCase } from '../../../application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from '../../../application/use-case/update-project.use-case';
-import { CreateProjectDto, UpdateProjectDto } from '../presentation/dto/project.dto';
+import { TransitionProjectStatusUseCase } from '../../../application/use-case/transition-project-status.use-case';
+import { CreateProjectDto, UpdateProjectDto, TransitionProjectStatusDto } from '../presentation/dto/project.dto';
 import { toProjectProfileResponse } from '../presentation/mapper/project.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
@@ -24,7 +25,8 @@ import { TokenPayload } from '../../../../iam/application/port/token.port';
  * PRJ-SRS-001 (issue #32) — write slice dự án.
  * Chỉ sở hữu `POST /api/v1/projects` và `PATCH /api/v1/projects/:id`;
  * reads (`GET`, `GET :id`) ở lại iam `ProjectsController` (scope-integrated).
- * Write roles = ADMIN + PROJECT_MANAGER (P2); project-scope write checks
+ * PRJ-SRS-002 (issue #33, L1-L6) — thêm `PATCH /api/v1/projects/:id/status`.
+ * Write roles = ADMIN + PROJECT_MANAGER (P2, L2); project-scope write checks
  * chi tiết defer sang #37 (PRJ-SRS-006).
  */
 const PROJECT_WRITE_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
@@ -65,6 +67,7 @@ export class PrjProjectsController {
   constructor(
     private readonly createProject: CreateProjectUseCase,
     private readonly updateProject: UpdateProjectUseCase,
+    private readonly transitionStatus: TransitionProjectStatusUseCase,
   ) {}
 
   @Post()
@@ -117,5 +120,27 @@ export class PrjProjectsController {
       correlationId: meta.correlationId,
     });
     return toProjectProfileResponse(entity, managerName, actor.sub);
+  }
+
+  @Patch(':id/status')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async transition(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Body() dto: TransitionProjectStatusDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertProjectWriteAccess(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { entity, managerName, alreadyInState } = await this.transitionStatus.execute({
+      projectId: id,
+      action: dto.action,
+      reason: dto.reason ?? null,
+      actorUserId: actor.sub,
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return { ...toProjectProfileResponse(entity, managerName, actor.sub), alreadyInState };
   }
 }

@@ -14,6 +14,16 @@ const PAGE_SIZE = 20;
 
 const STATUS_OPTIONS = ['ALL', 'DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CLOSED'] as const;
 
+/** Nhãn tiếng Việt cho filter trạng thái (value giữ nguyên mã API). */
+const STATUS_OPTION_LABEL: Record<(typeof STATUS_OPTIONS)[number], string> = {
+  ALL: 'Tất cả trạng thái',
+  DRAFT: 'Nháp',
+  ACTIVE: 'Đang hoạt động',
+  PAUSED: 'Tạm dừng',
+  COMPLETED: 'Hoàn thành',
+  CLOSED: 'Đóng',
+};
+
 /**
  * Danh sách dự án (PRJ-SRS-001 web slice, issue #32).
  *
@@ -133,7 +143,7 @@ export function ProjectsList() {
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s === 'ALL' ? 'Tất cả trạng thái' : s}
+                {STATUS_OPTION_LABEL[s]}
               </option>
             ))}
           </select>

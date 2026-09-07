@@ -14,6 +14,8 @@ export interface ProjectProfile {
 
 export interface ProjectRepositoryPort {
   findById(id: string): Promise<ProjectEntity | null>;
+  /** Pre-read kèm `managerName` cho lifecycle slice #33 (profile cho alreadyInState + before). */
+  findProfileById(id: string): Promise<ProjectProfile | null>;
   /** Pre-check trùng mã case-insensitive (`lower(code) = lower($1)`). */
   findByCode(code: string): Promise<ProjectEntity | null>;
   /** Đọc row trong tx (`SELECT ... FOR UPDATE`) trước khi apply PATCH. */

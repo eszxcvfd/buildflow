@@ -113,3 +113,20 @@ export class ProjectProfileDto {
   updatedBy!: string;
   updatedAt!: string;
 }
+
+/**
+ * PRJ-SRS-002 (issue #33, L1) — DTO cho `PATCH /api/v1/projects/:id/status`.
+ * `action` chỉ check `IsString` ở transport; action chưa biết → 400 ở use case,
+ * action biết nhưng không hợp lệ với trạng thái hiện tại → 409 INVALID_TRANSITION.
+ * `reason` semantic (bắt buộc cho PAUSE/CLOSE/REOPEN, 1-500) do use case trả
+ * 400 fieldErrors thống nhất (tránh shape 400 generic nuốt fieldErrors).
+ */
+export class TransitionProjectStatusDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Action không được để trống' })
+  action!: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string | null;
+}

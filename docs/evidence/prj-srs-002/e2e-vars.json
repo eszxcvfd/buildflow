@@ -1,0 +1,84 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "admin@example.com",
+  "pm": "pm@example.com",
+  "worker": "worker1@example.com",
+  "codes": {
+    "A": "E2E2-A",
+    "B": "E2E2-B",
+    "Cc": "E2E2-C",
+    "D": "E2E2-D",
+    "W": "E2E2-W",
+    "PM": "E2E2-PM",
+    "R": "E2E2-R"
+  },
+  "projectIds": {
+    "A": "504cf91f-0d97-4334-a1e7-b552494655c1",
+    "B": "28ee391f-decb-4509-8836-a459cb6ebf62",
+    "C": "b21e6345-a0dc-41db-8b99-be472d49484a",
+    "D": "92611043-09e0-4cb7-970d-86c83d6c4c39",
+    "W": "d1fa0333-aec0-427a-aec7-6b5c2b8da2b9",
+    "PM": "932905bd-60e3-463f-a2af-a6892adc15ee",
+    "R": "ac1d079e-d704-433f-a84d-bb50527bd3bc"
+  },
+  "auditBaseline": "634",
+  "auditFinal": "667",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "detail Đang hoạt động; psql ACTIVE; audit 11111111-1111-4111-8111-111111111111|PRJ_PROJECT_STATUS_CHANGED|PROJECT|DRAFT->ACTIVE"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "PAUSE→PAUSED, RESUME→ACTIVE, COMPLETE→COMPLETED, CLOSE→CLOSED; banner WO-guard có; reasons lưu audit"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "REOPEN→ACTIVE; psql ACTIVE; 6 audit STATUS_CHANGED"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "API 409 allowed=[ACTIVATE,CLOSE]; UI DRAFT 2 nút đúng; UI race 409 hiện 'Mở lại'"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "API 400 reason; UI chặn 0 request + lỗi client; psql DRAFT/ACTIVE nguyên"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "API alreadyInState audit 1→1; UI notice + audit 1→1"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "API 403; GET detail=200; UI 0 nút chuyển (psql DRAFT nguyên)"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "timeline cửa sổ 10 (thấy 4 transitions + deep-link); bypass rows=10; psql 7+ rows đúng thứ tự, history append-only"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "PM ACTIVATE 200 ACTIVE; audit actor pm DRAFT->ACTIVE"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "note": "audit corr=286703ce-87f7-4af7-8f30-16eeaf9d3778; corr xấu 400, psql ACTIVE nguyên"
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "17 rows toàn PROJECT của E2E2-A, không lẫn worker/crew"
+    }
+  ]
+}

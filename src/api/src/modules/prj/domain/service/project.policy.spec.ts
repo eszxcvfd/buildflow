@@ -6,6 +6,13 @@ import {
   normalizeProjectDescription,
   normalizeProjectName,
   normalizeProjectTimezone,
+  allowedActionsFor,
+  isAlreadyInProjectState,
+  isProjectStatusAction,
+  isReasonRequiredForProjectAction,
+  normalizeProjectStatusReason,
+  targetStatusForProjectAction,
+  PROJECT_STATUS_ACTIONS,
 } from './project.policy';
 
 describe('project.policy PRJ-SRS-001 (issue #32)', () => {
@@ -48,5 +55,96 @@ describe('project.policy PRJ-SRS-001 (issue #32)', () => {
     expect(() => assertPlannedDates('2026-09-02', '2026-09-01')).toThrow(/từ ngày bắt đầu/);
     expect(() => assertPlannedDates('not-a-date', '2026-09-01')).toThrow(/bắt đầu/);
     expect(() => assertPlannedDates('2026-09-01', '')).toThrow(/kết thúc/);
+  });
+});
+
+describe('project status policy PRJ-SRS-002 (issue #33, L1/L3)', () => {
+  it('isProjectStatusAction: đúng 6 action L1', () => {
+    expect(PROJECT_STATUS_ACTIONS).toHaveLength(6);
+    for (const a of ['ACTIVATE', 'PAUSE', 'RESUME', 'COMPLETE', 'CLOSE', 'REOPEN']) {
+      expect(isProjectStatusAction(a)).toBe(true);
+    }
+    expect(isProjectStatusAction('SUSPEND')).toBe(false);
+    expect(isProjectStatusAction('DELETE')).toBe(false);
+    expect(isProjectStatusAction('')).toBe(false);
+  });
+
+  it('transition map L1: 7 chuyển đổi hợp lệ', () => {
+    expect(targetStatusForProjectAction('DRAFT', 'ACTIVATE')).toBe('ACTIVE');
+    expect(targetStatusForProjectAction('DRAFT', 'CLOSE')).toBe('CLOSED');
+    expect(targetStatusForProjectAction('ACTIVE', 'PAUSE')).toBe('PAUSED');
+    expect(targetStatusForProjectAction('ACTIVE', 'COMPLETE')).toBe('COMPLETED');
+    expect(targetStatusForProjectAction('PAUSED', 'RESUME')).toBe('ACTIVE');
+    expect(targetStatusForProjectAction('COMPLETED', 'CLOSE')).toBe('CLOSED');
+    expect(targetStatusForProjectAction('CLOSED', 'REOPEN')).toBe('ACTIVE');
+  });
+
+  it('invalid jumps → null (full matrix còn lại)', () => {
+    const invalid: Array<[Parameters<typeof targetStatusForProjectAction>[0], Parameters<typeof targetStatusForProjectAction>[1]]> = [
+      ['DRAFT', 'PAUSE'],
+      ['DRAFT', 'RESUME'],
+      ['DRAFT', 'COMPLETE'],
+      ['DRAFT', 'REOPEN'],
+      ['ACTIVE', 'ACTIVATE'],
+      ['ACTIVE', 'RESUME'],
+      ['ACTIVE', 'REOPEN'],
+      ['ACTIVE', 'CLOSE'],
+      ['PAUSED', 'PAUSE'],
+      ['PAUSED', 'ACTIVATE'],
+      ['PAUSED', 'COMPLETE'],
+      ['PAUSED', 'CLOSE'],
+      ['PAUSED', 'REOPEN'],
+      ['COMPLETED', 'COMPLETE'],
+      ['COMPLETED', 'ACTIVATE'],
+      ['COMPLETED', 'PAUSE'],
+      ['COMPLETED', 'RESUME'],
+      ['COMPLETED', 'REOPEN'],
+      ['CLOSED', 'CLOSE'],
+      ['CLOSED', 'PAUSE'],
+      ['CLOSED', 'COMPLETE'],
+      ['CLOSED', 'ACTIVATE'],
+      ['CLOSED', 'RESUME'],
+    ];
+    for (const [from, action] of invalid) {
+      expect(targetStatusForProjectAction(from, action)).toBeNull();
+    }
+  });
+
+  it('allowedActionsFor: danh sách action cho 409 allowedTransitions', () => {
+    expect(allowedActionsFor('DRAFT')).toEqual(['ACTIVATE', 'CLOSE']);
+    expect(allowedActionsFor('ACTIVE')).toEqual(['PAUSE', 'COMPLETE']);
+    expect(allowedActionsFor('PAUSED')).toEqual(['RESUME']);
+    expect(allowedActionsFor('COMPLETED')).toEqual(['CLOSE']);
+    expect(allowedActionsFor('CLOSED')).toEqual(['REOPEN']);
+  });
+
+  it('isAlreadyInProjectState L3: action nhắm đúng trạng thái hiện tại', () => {
+    expect(isAlreadyInProjectState('ACTIVE', 'ACTIVATE')).toBe(true);
+    expect(isAlreadyInProjectState('ACTIVE', 'RESUME')).toBe(true);
+    expect(isAlreadyInProjectState('ACTIVE', 'REOPEN')).toBe(true);
+    expect(isAlreadyInProjectState('PAUSED', 'PAUSE')).toBe(true);
+    expect(isAlreadyInProjectState('COMPLETED', 'COMPLETE')).toBe(true);
+    expect(isAlreadyInProjectState('CLOSED', 'CLOSE')).toBe(true);
+    expect(isAlreadyInProjectState('DRAFT', 'ACTIVATE')).toBe(false);
+    expect(isAlreadyInProjectState('DRAFT', 'CLOSE')).toBe(false);
+    expect(isAlreadyInProjectState('ACTIVE', 'PAUSE')).toBe(false);
+  });
+
+  it('reason L1: bắt buộc cho PAUSE/CLOSE/REOPEN, optional cho còn lại', () => {
+    expect(isReasonRequiredForProjectAction('PAUSE')).toBe(true);
+    expect(isReasonRequiredForProjectAction('CLOSE')).toBe(true);
+    expect(isReasonRequiredForProjectAction('REOPEN')).toBe(true);
+    expect(isReasonRequiredForProjectAction('ACTIVATE')).toBe(false);
+    expect(isReasonRequiredForProjectAction('RESUME')).toBe(false);
+    expect(isReasonRequiredForProjectAction('COMPLETE')).toBe(false);
+  });
+
+  it('normalizeProjectStatusReason: trim, rỗng → null, >500 throw', () => {
+    expect(normalizeProjectStatusReason(undefined)).toBeNull();
+    expect(normalizeProjectStatusReason(null)).toBeNull();
+    expect(normalizeProjectStatusReason('   ')).toBeNull();
+    expect(normalizeProjectStatusReason('  Tạm dừng để chờ  ')).toBe('Tạm dừng để chờ');
+    expect(() => normalizeProjectStatusReason('x'.repeat(501))).toThrow(/500/);
+    expect(normalizeProjectStatusReason('x'.repeat(500))).toHaveLength(500);
   });
 });

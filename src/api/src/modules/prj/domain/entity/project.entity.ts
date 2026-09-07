@@ -7,6 +7,7 @@ import {
   normalizeProjectTimezone,
   PROJECT_STATUSES,
   ProjectStatus,
+  isAllowedProjectTransition,
 } from '../service/project.policy';
 
 export type { ProjectStatus };
@@ -107,6 +108,21 @@ export class ProjectEntity {
 
   getProps(): ProjectProps {
     return { ...this.props };
+  }
+
+  /**
+   * PRJ-SRS-002 (issue #33, L1) — đổi trạng thái qua lifecycle map.
+   * Chỉ cho phép đích nằm trong transition map từ trạng thái hiện tại;
+   * ngược lại ném Error (use case convert sang 409 INVALID_TRANSITION).
+   * Idempotent repeat (`alreadyInState`) do use case check TRƯỚC khi gọi
+   * (không audit, không mutation — org precedent #27).
+   */
+  changeStatus(target: ProjectStatus, now: Date = new Date()): void {
+    if (!isAllowedProjectTransition(this.props.status, target)) {
+      throw new Error(`Không thể chuyển dự án từ ${this.props.status} sang ${target}`);
+    }
+    this.props.status = target;
+    this.props.updatedAt = now;
   }
 
   toPublic(): {
