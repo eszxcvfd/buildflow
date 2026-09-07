@@ -43,6 +43,16 @@ export function canViewResourceDirectory(codes: string[]): boolean {
   return upper.some((c) => ADMIN_CODES.has(c) || PROJECT_MANAGER_CODES.has(c));
 }
 
+/**
+ * PRJ-SRS-001 (issue #32) — write dự án: ADMIN + PROJECT_MANAGER được tạo/sửa
+ * hồ sơ dự án (khớp API slice: POST + PATCH requireRoles ADMIN/PROJECT_MANAGER).
+ * Fail-closed: role lạ, mảng rỗng hoặc alias project_role đều false.
+ */
+export function canManageProjects(codes: string[]): boolean {
+  const upper = codes.map((c) => c.toUpperCase());
+  return upper.some((c) => ADMIN_CODES.has(c) || PROJECT_MANAGER_CODES.has(c));
+}
+
 /** Đọc roles hiện tại từ session; đồng bộ lại khi AUTH_CHANGED_EVENT phát. */
 export function useSessionRoleCodes(): string[] {
   const [codes, setCodes] = React.useState<string[]>(() => getAuth()?.roles.map((r) => r.code) ?? []);
@@ -65,4 +75,9 @@ export function useIsAdmin(): boolean {
 /** true khi user được xem trang tra cứu nguồn lực /resources. */
 export function useCanViewResourceDirectory(): boolean {
   return canViewResourceDirectory(useSessionRoleCodes());
+}
+
+/** true khi user được tạo/sửa hồ sơ dự án (gating CTA 'Tạo dự án', 'Sửa hồ sơ'). */
+export function useCanManageProjects(): boolean {
+  return canManageProjects(useSessionRoleCodes());
 }

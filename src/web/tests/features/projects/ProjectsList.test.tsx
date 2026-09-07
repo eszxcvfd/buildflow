@@ -30,7 +30,8 @@ describe('ProjectsList (IAM-SRS-006)', () => {
     render(<ProjectsList />);
     expect(await screen.findByText(/Du an A/)).toBeTruthy();
     expect(screen.getByRole('table')).toBeTruthy();
-    expect(screen.getByText('ACTIVE')).toBeTruthy();
+    // 'ACTIVE' xuất hiện cả ở option lọc trạng thái (slice #32) lẫn badge dòng.
+    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/PRA/)).toBeTruthy();
   });
 

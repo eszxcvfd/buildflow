@@ -1,0 +1,77 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "admin@example.com",
+  "pm": "pm@example.com",
+  "worker": "worker1@example.com",
+  "codes": {
+    "A": "E2E1-A",
+    "PM": "E2E1-PM",
+    "D": "E2E1-D",
+    "D2": "E2E1-D2",
+    "C": "E2E1-C"
+  },
+  "projectIds": {
+    "A": "0352f244-0e1b-4df5-b4b4-c6a29fe9ab08",
+    "PM": "1f8d2182-579c-4187-bd7d-4e8cb29dc37e"
+  },
+  "auditBaseline": "555",
+  "auditFinal": "589",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "detail đủ code/tên/Nháp/manager; psql đúng incl manager_id/created_by; audit PRJ_PROJECT_CREATED actor admin"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "PM tạo E2E1-PM (audit actor pm); worker pool 403→1 option→client chặn, 0 POST; API worker 403, anon 401"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "409 'đã tồn tại' tại field code; form giữ nguyên code/name/address; count lower(code)=1"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "client đủ 4 required + end<start; server 400 name (array-shape) + plannedEndDate; count E2E1-V=0"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "PM PATCH 200 updatedBy=pm; ADMIN detail tên mới; psql + audit UPDATED actor pm before/after name; PATCH code 400; UI edit PM 403 scope"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "400 fieldErrors.status; psql status=DRAFT"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count E2E1-IN=0"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "PATCH=403; name sau PATCH='Công trình E2E Một'; GET list=200 rows=0 thấy E2E1-A=false; GET detail=403; UI worker: empty-scope"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "UI disable khi bay {\"disabled\":true,\"busy\":\"true\",\"text\":\"Đang xử lý…\"}; concurrent 201+409 PROJECT_CODE_DUPLICATE; counts D=1 D2=1"
+    },
+    {
+      "id": "S10",
+      "ok": true,
+      "note": "search PG→Tổng 21 + Trang 1/2↔2/2; ACTIVE→rỗng, DRAFT→21; row link /projects/0352f244-0e1b-4df5-b4b4-c6a29fe9ab08; worker scoped (empty=true, CTA tạo ẩn=true)"
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "audit CREATED corr=7bb24438-2540-4deb-81c6-09c1be4e67fc UPDATED corr=02bac94d-6770-45c3-87d9-1b50c7edf154; echo header POST=null PATCH=null; corr xấu 400, không row"
+    }
+  ]
+}

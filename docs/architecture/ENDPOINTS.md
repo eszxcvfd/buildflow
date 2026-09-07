@@ -183,6 +183,28 @@ Quản lý thành viên đội (bảng `public.crew_members`, migration 0001 —
 - [`docs/architecture/NETCODE.md`](NETCODE.md) — transport/error contract
 - SRS/issue: workers `#24`, contractors `#25`, trades `#26`, lifecycle `#27`, resource directory `#28`, crews `#29`
 
+## 10. Projects — PRJ-SRS-001 (#32) bounded decisions
+
+Tạo và cập nhật dự án (API slice; lifecycle trạng thái thuộc `#33` PRJ-SRS-002, project-scope write checks thuộc `#37` PRJ-SRS-006).
+
+| Method | Path | Auth | Body | Response | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/projects` | **ADMIN + PROJECT_MANAGER** | `{ code, name, description?, address, timezone?, plannedStartDate, plannedEndDate, managerId }` | `201` project profile (`status` luôn `DRAFT`) | `400` validation (fieldErrors); `409` trùng code (`PROJECT_CODE_DUPLICATE`) |
+| PATCH | `/api/v1/projects/:id` | **ADMIN + PROJECT_MANAGER** | `{ name?, description?, address?, timezone?, plannedStartDate?, plannedEndDate?, managerId? }` | `200` project profile | `400` (gồm `code`/`status` trong body → fieldErrors); `404`; `409` n/a |
+
+Response project profile (P8): `{ id, code, name, description, address, timezone, plannedStartDate, plannedEndDate, managerId, managerName (join users.full_name), status, createdBy, createdAt, updatedBy, updatedAt }`.
+
+- **P1 — module mới `src/api/src/modules/prj/`** (clean architecture: domain entity + application use-cases + api-rest controller/dto/mapper + infrastructure pg repository, mirror org module). Sở hữu POST và PATCH. **Reads (`GET /api/v1/projects`, `GET /:id`) ở lại iam** (`ProjectsController`, scope-integrated qua `ProjectScopeService`) — không đụng GET routes/behavior. Ghi chú migration tương lai: gom reads sang prj khi project-scope write checks (#37) hoàn tất.
+- **P2 — write roles = ADMIN + PROJECT_MANAGER** qua `requireRoles` (crews precedent); STAFF/WORKER → `403`, anon → `401`. Fine-grained project-scope write checks defer sang #37 (PRJ-SRS-006).
+- **P3 — create luôn `status='DRAFT'`** (client không set được; DTO whitelist + `forbidNonWhitelisted`). **PATCH whitelist:** name, description, address, timezone, plannedStartDate, plannedEndDate, managerId — `code` bất biến, `status` thuộc lifecycle #33; `code`/`status` có mặt trong PATCH body → `400` fieldErrors explicit (không silent-ignore).
+- **P4 — validation server-side (400 fieldErrors TRƯỚC DB):** code bắt buộc 2-50 `^[A-Za-z0-9_-]+$`; name 1-200; address 1-500; description optional ≤2000; timezone optional ≤64 (default `Asia/Ho_Chi_Minh`); planned dates bắt buộc ISO `YYYY-MM-DD` hợp lệ lịch, end >= start; managerId bắt buộc uuid trỏ tới user `status='ACTIVE'`, ngược lại 400 fieldErrors `{managerId}`. Trùng mã: pre-check case-insensitive (`lower(code)`) → 409 `{ code: 'PROJECT_CODE_DUPLICATE' }`; race 23505/`ux_projects_code` → cùng 409 (constraint-cụ-thể-trước rule #29/#30); lỗi DB khác → 500.
+- **P5 — audit `PRJ_PROJECT_CREATED` / `PRJ_PROJECT_UPDATED`**, `entityType` `PROJECT`, tx-embedded `logWithClient`, before/afterData (update: full before row vs after; create: afterData), actor từ request; audit thất bại → 500 rollback (catch-all). Update trong tx: `SELECT ... FOR UPDATE` row hiện tại, apply, save, audit.
+- **P6 — không hard delete; không optimistic-locking ở slice này** (SRS chỉ yêu cầu cho Job Board; last-write-wins + `updated_at`; defer note). Strict `X-Correlation-Id` trên writes (sai UUID → 400). `updatedBy` = actor của PATCH (response-level: `projects` không có cột `updated_by`, P7 không migration mới; CREATE thì `updatedBy` = `createdBy`).
+- **P7 — entity `ProjectEntity`** với invariants (code format, required fields, dates) + policy `project.policy.ts` (mirror crew-member.policy style). Không migration mới.
+- **P8 — ProjectProfileDto** như response bảng trên.
+- **P9 — manager auto-membership khi CREATE (cùng tx):** POST insert thêm row `project_members` (`project_id` mới, `user_id=managerId`, `project_role='MANAGER'`, `is_active=true`, `added_by=actor`, `joined_at` default now) sau project insert, trước audit — manager hiển nhiên là thành viên dự án, đồng thời unlock iam project-scope visibility cho manager. Asymmetry: PATCH đổi `managerId` KHÔNG đụng memberships (defer `#36` PRJ-SRS-005 Quản lý thành viên dự án).
+- Hai shape `400` như các slice trước (ValidationPipe shape không `fieldErrors` cho body thiếu/sai format cơ bản; business-invalid có `fieldErrors`).
+
 ## 9. Eligibility — ORG-SRS-008 (#31) bounded decisions
 
 Dữ liệu điều kiện nhận việc cho worker và crew (advisory pre-check phục vụ điều phối; KHÔNG có module JOB/assignments — assignment CREATE thuộc slice JOB-SRS tương lai).
