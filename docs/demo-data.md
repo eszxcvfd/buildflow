@@ -1,5 +1,7 @@
 # Demo Data — BuildFlow (canonical)
 
+> Quyết định: [ADR 0003](adr/0003-e2e-realistic-data.md) — dữ liệu E2E phải giống thật nhất có thể.
+
 > Fiction: **Công ty CP Xây dựng Vinacons (VINACONS)**, email domain
 > `@vinacons.vn`. Mọi dữ liệu demo dưới đây là hư cấu phục vụ phát triển/E2E.
 >
