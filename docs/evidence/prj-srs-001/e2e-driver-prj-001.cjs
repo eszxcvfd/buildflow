@@ -1,6 +1,11 @@
 /**
- * PRJ-SRS-001 E2E driver — Tạo và cập nhật dự án (issue #32). Run 2.
+ * PRJ-SRS-001 E2E driver — Tạo và cập nhật dự án (issue #32).
  * Evidence-only script; phạm vi docs/evidence — KHÔNG sửa source.
+ *
+ * Chuẩn hóa realistic 2026-09-08 (docs/demo-data.md): creds @vinacons.vn,
+ * mã run VDA1-* (prefix Vinacons Dự Án 1), tên/địa chỉ tiếng Việt thực tế,
+ * manager UUIDs giữ nguyên (111…=hoang.anh, 333…=thang.nguyen/Nguyễn Văn Thắng,
+ * 444…=hau.le). Cleanup id-based (ids e2e-vars.json) + prefix + cửa sổ 12h.
  *
  * Chạy:   node e2e-driver-prj-001.cjs
  * Yêu cầu: stack rebuild từ working tree (api có prj POST/PATCH,
@@ -28,11 +33,11 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -40,13 +45,27 @@ const PM_ID = '22222222-2222-4222-8222-222222222222';
 const W1_ID = '33333333-3333-4333-8333-333333333333';
 const W2_ID = '44444444-4444-4444-8444-444444444444';
 
-const CODE_A = 'E2E1-A';
-const CODE_PM = 'E2E1-PM';
-const CODE_D = 'E2E1-D';
-const CODE_D2 = 'E2E1-D2';
-const CODE_C = 'E2E1-C';
+const CODE_A = 'VDA1-A';
+const CODE_PM = 'VDA1-PM';
+const CODE_D = 'VDA1-D';
+const CODE_D2 = 'VDA1-D2';
+const CODE_C = 'VDA1-C';
 const START = '2026-10-01';
 const END = '2027-03-31';
+// Pool tên realistic cho series phân trang S10 (giữ EXACT 21 items; filter theo prefix mã VDA1-PG).
+const PG_NAMES = [
+  'Khu dân cư An Bình - Giai đoạn 1', 'Khu dân cư An Bình - Giai đoạn 2',
+  'Chung cư Phúc Đạt - Block B', 'Chung cư Phúc Đạt - Block C',
+  'Nhà xưởng Tân Đông - Phân xưởng 1', 'Nhà xưởng Tân Đông - Phân xưởng 2',
+  'Trường mầm non Họa Mi - Cơ sở 2', 'Trạm y tế phường Linh Xuân',
+  'Chợ đầu mối Thủ Đức - Nhà lồng B', 'Bến xe Miền Đông mới - Giai đoạn 2',
+  'Cầu vượt An Sương - Nhánh N2', 'Đường vành đai 3 - Đoạn Tân Vạn',
+  'Kênh Tham Lương - Gói thầu 4', 'Hồ điều tiết Gò Dưa',
+  'Nhà văn hóa quận 12', 'Sân vận động mini Hiệp Thành',
+  'Trung tâm thương mại Gò Vấp', 'Siêu thị Co.op Bình Tân',
+  'Khách sạn Hương Sen - Khối phụ', 'Resort nghỉ dưỡng Hồ Tràm - Villa 3',
+  'Cao ốc văn phòng Thiên Sơn',
+];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const results = [];
@@ -125,6 +144,20 @@ function cleanupSQL() {
 }
 function runCleanup() {
   try {
+    // Id-based: xóa sót lại của run trước theo ids đã ghi trong e2e-vars.json.
+    try {
+      const prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const ids = prev && prev.projectIds ? Object.values(prev.projectIds).filter(Boolean) : [];
+      for (const pid of ids) {
+        execFileSync('docker', ['exec', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-c',
+          `DELETE FROM project_members WHERE project_id='${pid}';` +
+          `DELETE FROM attachments WHERE project_id='${pid}';` +
+          `DELETE FROM project_areas WHERE project_id='${pid}';` +
+          `DELETE FROM work_orders WHERE project_id='${pid}';` +
+          `DELETE FROM projects WHERE id='${pid}';`],
+        { encoding: 'utf8', timeout: 20000 });
+      }
+    } catch {}
     execFileSync('docker', ['exec', '-i', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-v', 'ON_ERROR_STOP=1'],
       { input: cleanupSQL(), encoding: 'utf8', timeout: 20000 });
   } catch (e) {
@@ -192,8 +225,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
     await step('S1', 'ADMIN tạo dự án qua /projects/new → detail DRAFT + psql + audit', async (id) => {
       await loginWeb(adminPage, ADMIN_EMAIL, ADMIN_PASS);
       const opts = await fillCreateForm(adminPage, {
-        code: CODE_A, name: 'Công trình E2E Một', address: 'Số 1, đường E2E, Quận 1',
-        start: START, end: END, managerId: W1_ID, description: 'Mô tả E2E1-A',
+        code: CODE_A, name: 'Trung tâm hội nghị Sông Hồng', address: 'Số 1, đường Sông Hồng, Hà Nội',
+        start: START, end: END, managerId: W1_ID, description: 'Mô tả VDA1-A',
       });
       if (opts <= 1) return fail(id, `pool manager rỗng cho ADMIN (options=${opts})`);
       await adminPage.click('button[type="submit"]');
@@ -204,14 +237,14 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       idA = await projectIdByCode(adminToken, CODE_A);
       if (!idA || !UUID_RE.test(idA)) return fail(id, `không tìm thấy ${CODE_A} qua API list`);
       await adminPage.goto(`${WEB}/projects/${idA}`, { waitUntil: 'networkidle' });
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Công trình E2E Một'), { timeout: 20000 });
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Nguyễn Văn Thợ'), { timeout: 20000 });
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trung tâm hội nghị Sông Hồng'), { timeout: 20000 });
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Nguyễn Văn Thắng'), { timeout: 20000 });
       await snap(adminPage, `${id}-detail`, 'Detail sau tạo (DRAFT/Nháp + manager)');
       const t = await bodyText(adminPage);
       const miss = [CODE_A, 'Nháp'].filter((x) => !t.includes(x));
       if (miss.length) return fail(id, `detail thiếu: ${miss.join(' | ')}`);
       const row = psqlT(`SELECT code||'|'||name||'|'||address||'|'||manager_id||'|'||created_by||'|'||status||'|'||planned_start_date||'|'||planned_end_date FROM projects WHERE code='${CODE_A}'`);
-      const want = `${CODE_A}|Công trình E2E Một|Số 1, đường E2E, Quận 1|${W1_ID}|${ADMIN_ID}|DRAFT|${START}|${END}`;
+      const want = `${CODE_A}|Trung tâm hội nghị Sông Hồng|Số 1, đường Sông Hồng, Hà Nội|${W1_ID}|${ADMIN_ID}|DRAFT|${START}|${END}`;
       if (row !== want) return fail(id, `psql row lệch:\n got: ${row}\nwant: ${want}`);
       const au = psqlT(`SELECT actor_user_id||'|'||action||'|'||entity_type FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_CREATED'`);
       if (au !== `${ADMIN_ID}|PRJ_PROJECT_CREATED|PROJECT`) return fail(id, `audit CREATED lệch: ${au}`);
@@ -222,8 +255,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
     await step('S2', 'PM tạo OK; worker UI fail-closed (pool 403) + API 403; anon 401', async (id) => {
       await loginWeb(pmPage, PM_EMAIL, PM_PASS);
       await fillCreateForm(pmPage, {
-        code: CODE_PM, name: 'Công trình E2E Hai', address: 'Số 2, đường E2E, Quận 2',
-        start: START, end: END, managerId: W2_ID, description: 'Mô tả E2E1-PM',
+        code: CODE_PM, name: 'Khu căn hộ Flora Anh Đào', address: 'Số 2, đường Anh Đào, Thủ Đức',
+        start: START, end: END, managerId: W2_ID, description: 'Mô tả VDA1-PM',
       });
       await pmPage.click('button[type="submit"]');
       await pmPage.waitForFunction(() => (document.body.textContent || '').includes('Tạo dự án thành công'), { timeout: 25000 });
@@ -243,22 +276,22 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       };
       workerPage.on('response', onResp);
       const wOpts = await fillCreateForm(workerPage, {
-        code: 'E2E1-WX', name: 'Công trình E2E Worker', address: 'Số 9, đường E2E',
+        code: 'VDA1-WX', name: 'Khu nhà ở công nhân', address: 'Số 9, đường Công Nhân, Bình Dương',
         start: START, end: END, managerId: W1_ID,
       });
       await workerPage.click('button[type="submit"]');
       await workerPage.waitForFunction(() => (document.body.textContent || '').includes('Quản lý dự án không được để trống'), { timeout: 20000 });
       await snap(workerPage, `${id}-worker-blocked`, 'Worker fail-closed ở /projects/new (pool 403, không submit)');
       workerPage.off('response', onResp);
-      const wxCount = psqlT(`SELECT count(*) FROM projects WHERE code='E2E1-WX'`);
+      const wxCount = psqlT(`SELECT count(*) FROM projects WHERE code='VDA1-WX'`);
       const wPost = await api('POST', '/api/v1/projects', workerToken,
-        { code: 'E2E1-WY', name: 'X', address: 'Y', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
+        { code: 'VDA1-WY', name: 'X', address: 'Y', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
       const anonPost = await api('POST', '/api/v1/projects', null,
-        { code: 'E2E1-WZ', name: 'X', address: 'Y', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
+        { code: 'VDA1-WZ', name: 'X', address: 'Y', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
       if (wOpts !== 1) return fail(id, `worker options=${wOpts} (mong 1 placeholder — pool phải 403)`);
       if (workersStatus !== 403) return fail(id, `GET /workers worker status=${workersStatus} (mong 403)`);
       if (postCount !== 0) return fail(id, `worker UI gửi ${postCount} POST (mong 0 — client chặn)`);
-      if (wxCount !== '0') return fail(id, `worker UI submit lọt row E2E1-WX (count=${wxCount})`);
+      if (wxCount !== '0') return fail(id, `worker UI submit lọt row VDA1-WX (count=${wxCount})`);
       if (wPost.status !== 403) return fail(id, `worker API POST status=${wPost.status} (mong 403) ${JSON.stringify(wPost.body).slice(0, 200)}`);
       if (anonPost.status !== 401) return fail(id, `anon API POST status=${anonPost.status} (mong 401) ${JSON.stringify(anonPost.body).slice(0, 200)}`);
       return ok(id, `PM tạo ${CODE_PM} (audit actor pm); worker pool 403→1 option→client chặn, 0 POST; API worker 403, anon 401`);
@@ -267,7 +300,7 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
     // ============ S3: trùng mã khác hoa/thường ============
     await step('S3', 'Tạo trùng mã khác case → 409 tại field code, giữ form, 1 row', async (id) => {
       await fillCreateForm(adminPage, {
-        code: 'e2e1-a', name: 'Tên khác', address: 'Địa chỉ khác',
+        code: 'vda1-a', name: 'Tên khác', address: 'Địa chỉ khác',
         start: START, end: END, managerId: W1_ID,
       });
       await adminPage.click('button[type="submit"]');
@@ -277,10 +310,10 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       const nameVal = await adminPage.inputValue('#project-name');
       const addrVal = await adminPage.inputValue('#project-address');
       const cnt = psqlT(`SELECT count(*) FROM projects WHERE lower(code)=lower('${CODE_A}')`);
-      if (codeVal !== 'e2e1-a') return fail(id, `form không giữ code (got '${codeVal}')`);
+      if (codeVal !== 'vda1-a') return fail(id, `form không giữ code (got '${codeVal}')`);
       if (nameVal !== 'Tên khác') return fail(id, `form không giữ name (got '${nameVal}')`);
       if (addrVal !== 'Địa chỉ khác') return fail(id, `form không giữ address (got '${addrVal}')`);
-      if (cnt !== '1') return fail(id, `số row lower(code)='e2e1-a' = ${cnt} (mong 1)`);
+      if (cnt !== '1') return fail(id, `số row lower(code)='vda1-a' = ${cnt} (mong 1)`);
       return ok(id, `409 'đã tồn tại' tại field code; form giữ nguyên code/name/address; count lower(code)=1`);
     })();
 
@@ -297,9 +330,9 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
         .filter((x) => !t0.includes(x));
       if (miss0.length) return fail(id, `thiếu field errors client: ${miss0.join(' | ')}`);
       await snap(adminPage, `${id}-required`, 'Submit rỗng → field errors');
-      await adminPage.fill('#project-code', 'E2E1-V');
-      await adminPage.fill('#project-name', 'Công trình E2E Check');
-      await adminPage.fill('#project-address', 'Số 5, đường E2E');
+      await adminPage.fill('#project-code', 'VDA1-V');
+      await adminPage.fill('#project-name', 'Công trình kiểm thử xác thực');
+      await adminPage.fill('#project-address', 'Số 5, đường Kiểm Định, Hà Nội');
       await adminPage.fill('#project-start', '2027-06-01');
       await adminPage.fill('#project-end', '2026-06-01');
       await adminPage.selectOption('#project-manager', W1_ID);
@@ -309,10 +342,10 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
         { timeout: 20000 });
       await snap(adminPage, `${id}-daterange`, 'end<start → lỗi plannedEndDate');
       const noName = await api('POST', '/api/v1/projects', adminToken,
-        { code: 'E2E1-V', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
+        { code: 'VDA1-V', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
       const badRange = await api('POST', '/api/v1/projects', adminToken,
-        { code: 'E2E1-V', name: 'N', address: 'A', plannedStartDate: '2027-06-01', plannedEndDate: '2026-06-01', managerId: W1_ID });
-      const cnt = psqlT(`SELECT count(*) FROM projects WHERE code='E2E1-V'`);
+        { code: 'VDA1-V', name: 'N', address: 'A', plannedStartDate: '2027-06-01', plannedEndDate: '2026-06-01', managerId: W1_ID });
+      const cnt = psqlT(`SELECT count(*) FROM projects WHERE code='VDA1-V'`);
       const noNameOk = noName.status === 400 && (
         (noName.body.fieldErrors && noName.body.fieldErrors.name) ||
         (Array.isArray(noName.body.message) && noName.body.message.join(' ').match(/tên dự án|name/i)));
@@ -320,18 +353,18 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       if (badRange.status !== 400 || !(badRange.body.fieldErrors && badRange.body.fieldErrors.plannedEndDate)) {
         return fail(id, `end<start: status=${badRange.status} ${JSON.stringify(badRange.body).slice(0, 300)}`);
       }
-      if (cnt !== '0') return fail(id, `lọt row E2E1-V (count=${cnt})`);
+      if (cnt !== '0') return fail(id, `lọt row VDA1-V (count=${cnt})`);
       const arrayShape = Array.isArray(noName.body.message);
-      return ok(id, `client đủ 4 required + end<start; server 400 name (${arrayShape ? 'array-shape' : 'fieldErrors'}) + plannedEndDate; count E2E1-V=0`);
+      return ok(id, `client đủ 4 required + end<start; server 400 name (${arrayShape ? 'array-shape' : 'fieldErrors'}) + plannedEndDate; count VDA1-V=0`);
     })();
 
     // ============ S5: PM PATCH qua API + UI edit 403 (iam scope) ============
     await step('S5', 'PM PATCH name/address/manager → psql + audit before/after; UI edit 403 scope', async (id) => {
       const up = await api('PATCH', `/api/v1/projects/${idPM}`, pmToken,
-        { name: 'Công trình E2E Hai Sửa', address: 'Số 2 mới, đường E2E, Quận 2', managerId: W1_ID });
+        { name: 'Khu căn hộ Flora Anh Đào (mở rộng)', address: 'Số 2 mới, đường Anh Đào, Thủ Đức', managerId: W1_ID });
       if (up.status !== 200) return fail(id, `PM PATCH status=${up.status} ${JSON.stringify(up.body).slice(0, 300)}`);
       if (up.body.updatedBy !== PM_ID) return fail(id, `updatedBy=${up.body.updatedBy} (mong ${PM_ID})`);
-      if (up.body.managerId !== W1_ID || up.body.name !== 'Công trình E2E Hai Sửa') {
+      if (up.body.managerId !== W1_ID || up.body.name !== 'Khu căn hộ Flora Anh Đào (mở rộng)') {
         return fail(id, `response PATCH lệch: ${JSON.stringify(up.body).slice(0, 300)}`);
       }
       // PM mở UI edit/detail → 403 iam scope (ghi nhận, xem §4a F4).
@@ -340,11 +373,11 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await snap(pmPage, `${id}-pm-edit-403`, 'PM mở UI edit → 403 iam scope');
       // ADMIN detail phản ánh tên mới.
       await adminPage.goto(`${WEB}/projects/${idPM}`, { waitUntil: 'networkidle' });
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Công trình E2E Hai Sửa'), { timeout: 20000 });
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Khu căn hộ Flora Anh Đào (mở rộng)'), { timeout: 20000 });
       await snap(adminPage, `${id}-updated`, 'ADMIN detail thấy tên mới sau PM PATCH');
-      const patchCode = await api('PATCH', `/api/v1/projects/${idPM}`, pmToken, { code: 'E2E1-NEW' });
+      const patchCode = await api('PATCH', `/api/v1/projects/${idPM}`, pmToken, { code: 'VDA1-NEW' });
       const row = psqlT(`SELECT name||'|'||address||'|'||manager_id||'|'||status FROM projects WHERE id='${idPM}'`);
-      const wantRow = `Công trình E2E Hai Sửa|Số 2 mới, đường E2E, Quận 2|${W1_ID}|DRAFT`;
+      const wantRow = `Khu căn hộ Flora Anh Đào (mở rộng)|Số 2 mới, đường Anh Đào, Thủ Đức|${W1_ID}|DRAFT`;
       const au = psqlT(`SELECT actor_user_id||'|'||action FROM audit_logs WHERE entity_id='${idPM}' AND action='PRJ_PROJECT_UPDATED'`);
       const auJson = psqlT(`SELECT (before_data IS NOT NULL AND after_data IS NOT NULL AND before_data ? 'name' AND after_data ? 'name') FROM audit_logs WHERE entity_id='${idPM}' AND action='PRJ_PROJECT_UPDATED'`);
       if (row !== wantRow) return fail(id, `psql row lệch:\n got: ${row}\nwant: ${wantRow}`);
@@ -373,11 +406,11 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       const chk = psqlT(`SELECT status FROM users WHERE id='${W2_ID}'`);
       if (chk !== 'INACTIVE') return fail(id, `toggle INACTIVE thất bại (got ${chk})`);
       const c = await api('POST', '/api/v1/projects', adminToken,
-        { code: 'E2E1-IN', name: 'N', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W2_ID });
+        { code: 'VDA1-IN', name: 'N', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W2_ID });
       const p = await api('PATCH', `/api/v1/projects/${idA}`, adminToken, { managerId: W2_ID });
       psqlT(`UPDATE users SET status='ACTIVE' WHERE id='${W2_ID}'`);
       const restored = psqlT(`SELECT status FROM users WHERE id='${W2_ID}'`);
-      const cnt = psqlT(`SELECT count(*) FROM projects WHERE code='E2E1-IN'`);
+      const cnt = psqlT(`SELECT count(*) FROM projects WHERE code='VDA1-IN'`);
       if (c.status !== 400 || !(c.body.fieldErrors && c.body.fieldErrors.managerId)) {
         return fail(id, `create manager INACTIVE: status=${c.status} ${JSON.stringify(c.body).slice(0, 300)}`);
       }
@@ -385,8 +418,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
         return fail(id, `PATCH manager INACTIVE: status=${p.status} ${JSON.stringify(p.body).slice(0, 300)}`);
       }
       if (restored !== 'ACTIVE') return fail(id, `restore ACTIVE thất bại (got ${restored})`);
-      if (cnt !== '0') return fail(id, `lọt row E2E1-IN (count=${cnt})`);
-      return ok(id, `create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count E2E1-IN=0`);
+      if (cnt !== '0') return fail(id, `lọt row VDA1-IN (count=${cnt})`);
+      return ok(id, `create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count VDA1-IN=0`);
     })();
 
     // ============ S8: worker PATCH 403 + GET scope ============
@@ -404,10 +437,10 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       const wRows = Array.isArray(wList.body) ? wList.body.length : -1;
       const wSeesA = Array.isArray(wList.body) && wList.body.some((p) => p.code === CODE_A);
       const note = `PATCH=${wPatch.status}; name sau PATCH='${row}'; ` +
-        `GET list=${wList.status} rows=${wRows} thấy E2E1-A=${wSeesA}; ` +
+        `GET list=${wList.status} rows=${wRows} thấy VDA1-A=${wSeesA}; ` +
         `GET detail=${wGet.status}; UI worker: ${wt.includes('Bạn chưa là thành viên dự án nào') ? 'empty-scope' : wt.includes('Không có quyền') ? '403' : 'có rows'}`;
       if (wPatch.status !== 403) return fail(id, `worker PATCH status=${wPatch.status} (mong 403); ${note}`);
-      if (row !== 'Công trình E2E Một') return fail(id, `worker PATCH đổi được name! ${note}`);
+      if (row !== 'Trung tâm hội nghị Sông Hồng') return fail(id, `worker PATCH đổi được name! ${note}`);
       if (![200, 403, 404].includes(wList.status) || ![200, 403, 404].includes(wGet.status)) {
         return fail(id, `GET scope status lạ; ${note}`);
       }
@@ -428,8 +461,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
         await route.continue();
       });
       await adminPage.fill('#project-code', CODE_D);
-      await adminPage.fill('#project-name', 'Công trình E2E Ba');
-      await adminPage.fill('#project-address', 'Số 3, đường E2E');
+      await adminPage.fill('#project-name', 'Nhà máy dệt An Phát');
+      await adminPage.fill('#project-address', 'Số 3, KCN Tân Bình, TP.HCM');
       await adminPage.fill('#project-start', START);
       await adminPage.fill('#project-end', END);
       await adminPage.selectOption('#project-manager', W1_ID);
@@ -442,8 +475,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await clickP;
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tạo dự án thành công'), { timeout: 25000 });
       await adminPage.unroute('**/api/v1/projects').catch(() => {});
-      await snap(adminPage, `${id}-created`, 'Tạo E2E1-D (nút disable khi bay)');
-      const payload = { code: CODE_D2, name: 'Công trình E2E Bốn', address: 'Số 4, đường E2E', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID };
+      await snap(adminPage, `${id}-created`, 'Tạo VDA1-D (nút disable khi bay)');
+      const payload = { code: CODE_D2, name: 'Trường liên cấp Sao Mai', address: 'Số 4, đường Sao Mai, Gò Vấp', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID };
       const [r1, r2] = await Promise.all([
         api('POST', '/api/v1/projects', adminToken, payload),
         api('POST', '/api/v1/projects', adminToken, payload),
@@ -455,29 +488,29 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       if (!btnState || (btnState.disabled !== true && btnState.busy !== 'true')) {
         return fail(id, `nút submit không disable khi bay: ${JSON.stringify(btnState)}`);
       }
-      if (cntD !== '1') return fail(id, `E2E1-D count=${cntD} (mong 1)`);
+      if (cntD !== '1') return fail(id, `VDA1-D count=${cntD} (mong 1)`);
       if (statuses !== '201,409' || !dup409) {
         return fail(id, `concurrent POST statuses=${statuses} (mong 201,409 PROJECT_CODE_DUPLICATE); count D2=${cntD2}`);
       }
-      if (cntD2 !== '1') return fail(id, `E2E1-D2 count=${cntD2} (mong 1)`);
+      if (cntD2 !== '1') return fail(id, `VDA1-D2 count=${cntD2} (mong 1)`);
       return ok(id, `UI disable khi bay ${JSON.stringify(btnState)}; concurrent 201+409 PROJECT_CODE_DUPLICATE; counts D=1 D2=1`);
     })();
 
     // ============ S10: list/search/filter/pagination/row link ============
     await step('S10', 'List: search + filter status + phân trang + row link; worker scoped', async (id) => {
       for (let i = 1; i <= 21; i += 1) {
-        const code = `E2E1-PG-${String(i).padStart(2, '0')}`;
+        const code = `VDA1-PG-${String(i).padStart(2, '0')}`;
         const r = await api('POST', '/api/v1/projects', adminToken,
-          { code, name: `Công trình PG ${i}`, address: `Số ${i}, đường PG`, plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
+          { code, name: PG_NAMES[i - 1], address: `Số ${i}, đường Vườn Lài, Quận 12`, plannedStartDate: START, plannedEndDate: END, managerId: W1_ID });
         if (r.status !== 201) return fail(id, `seed PG ${code} status=${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
       }
       await adminPage.goto(`${WEB}/projects`, { waitUntil: 'networkidle' });
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tổng'), { timeout: 20000 });
-      await adminPage.fill('#projects-search', 'E2E1-PG');
+      await adminPage.fill('#projects-search', 'VDA1-PG');
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tổng 21 dự án'), { timeout: 20000 });
       const pg1 = await bodyText(adminPage);
       if (!pg1.includes('Trang 1/2')) return fail(id, `phân trang sai với 21 rows: ${pg1.slice(-200)}`);
-      await snap(adminPage, `${id}-search-page1`, 'Search E2E1-PG trang 1/2');
+      await snap(adminPage, `${id}-search-page1`, 'Search VDA1-PG trang 1/2');
       await adminPage.locator('button', { hasText: 'Sau' }).click();
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trang 2/2'), { timeout: 20000 });
       await adminPage.locator('button', { hasText: 'Trước' }).click();
@@ -488,8 +521,8 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tổng 21 dự án'), { timeout: 20000 });
       await adminPage.selectOption('#projects-status', 'ALL');
       await adminPage.fill('#projects-search', CODE_A);
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Công trình E2E Một'), { timeout: 20000 });
-      await snap(adminPage, `${id}-filter`, 'Search E2E1-A + filter ALL');
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trung tâm hội nghị Sông Hồng'), { timeout: 20000 });
+      await snap(adminPage, `${id}-filter`, 'Search VDA1-A + filter ALL');
       const rowLink = adminPage.locator('.bf-table a[href^="/projects/"]').first();
       const href = await rowLink.getAttribute('href');
       if (!href || !href.startsWith(`/projects/${idA}`)) return fail(id, `row link sai: ${href} (mong /projects/${idA})`);
@@ -512,7 +545,7 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       const corr1 = uuid();
       const corr2 = uuid();
       const c = await api('POST', '/api/v1/projects', adminToken,
-        { code: CODE_C, name: 'Công trình E2E Năm', address: 'Số 6, đường E2E', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID },
+        { code: CODE_C, name: 'Nhà hát giao hưởng Mặt Trời', address: 'Số 6, đường Mặt Trời, Quận 7', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID },
         { 'X-Correlation-Id': corr1 });
       if (c.status !== 201) return fail(id, `POST corr status=${c.status} ${JSON.stringify(c.body).slice(0, 200)}`);
       const idC = c.body.id;
@@ -522,9 +555,9 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       const echoPatch = p.headers.get('x-correlation-id');
       const auP = psqlT(`SELECT correlation_id FROM audit_logs WHERE entity_id='${idC}' AND action='PRJ_PROJECT_UPDATED'`);
       const bad = await api('POST', '/api/v1/projects', adminToken,
-        { code: 'E2E1-CB', name: 'N', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID },
+        { code: 'VDA1-CB', name: 'N', address: 'A', plannedStartDate: START, plannedEndDate: END, managerId: W1_ID },
         { 'X-Correlation-Id': 'not-a-uuid' });
-      const cntBad = psqlT(`SELECT count(*) FROM projects WHERE code='E2E1-CB'`);
+      const cntBad = psqlT(`SELECT count(*) FROM projects WHERE code='VDA1-CB'`);
       if (auC !== corr1) return fail(id, `audit CREATED corr=${auC} (mong ${corr1})`);
       if (auP !== corr2) return fail(id, `audit UPDATED corr=${auP} (mong ${corr2})`);
       if (bad.status !== 400) return fail(id, `corr xấu status=${bad.status} (mong 400 strict)`);
@@ -533,9 +566,9 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
     })();
   } finally {
     runCleanup();
-    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'E2E1-%'`);
+    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'VDA1-%'`);
     const auditFinal = psqlT('SELECT count(*) FROM audit_logs');
-    console.log(`cleanup: E2E1-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do tạo/sửa entity là hợp lệ; audit giữ nguyên)`);
+    console.log(`cleanup: VDA1-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do tạo/sửa entity là hợp lệ; audit giữ nguyên)`);
     fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
       _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
       admin: ADMIN_EMAIL, pm: PM_EMAIL, worker: WORKER_EMAIL,

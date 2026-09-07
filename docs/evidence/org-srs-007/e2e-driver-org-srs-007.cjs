@@ -4,7 +4,14 @@
  *
  * Chạy:   node e2e-driver-org-srs-007.cjs
  * Yêu cầu: stack rebuild từ working tree (api có /api/v1/crews/:id/members, web có panel Thành viên);
- *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025).
+ *          admin (hoang.anh@vinacons.vn / E2EAdmin@2025) + pm (quoc.tran@vinacons.vn / E2EPm@2025)
+ *          + worker1 (thang.nguyen@vinacons.vn / E2EWorker@2025).
+ *
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07):
+ * crews DTA-xxx/DTB-xxx + tên 'Đội thi công…' (DIGITS duy nhất mỗi run);
+ * seed worker3/worker4 = Trần Minh Đức / Lê Văn Sơn (@vinacons.vn);
+ * member chính hau.le = 'Lê Văn Hậu'; reasons tiếng Việt không tag E2E.
+ * Passwords giữ nguyên.
  *
  * Luồng: seed worker3/worker4 (SQL) + tạo 2 crews (API) → S1 UI add → S2 dup 409
  * → S3 overlap warning → S4 UI remove → S5 alreadyRemoved → S6 at point-in-time
@@ -21,23 +28,29 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const PM_ID = '22222222-2222-4222-8222-222222222222';
 const WORKER1_ID = '33333333-3333-4333-8333-333333333333';
 const WORKER2_ID = '44444444-4444-4444-8444-444444444444';
-const WORKER3_ID = '55555555-5555-4555-8555-555555555555';
-const WORKER4_ID = '66666666-6666-4666-8666-666666666666';
-const CREW_A = 'E2E7-CREW-A';
-const CREW_B = 'E2E7-CREW-B';
-const REASON_REMOVE = 'E2E7 dieu chuyen sang doi khac';
-const REASON_SUSPEND = 'E2E7 tam ngung: bao tri thiet bi tuan 37';
+const WORKER3_ID = '55555555-5555-4555-8555-555555555555'; // Trần Minh Đức (seed)
+const WORKER4_ID = '66666666-6666-4666-8666-666666666666'; // Lê Văn Sơn (seed)
+const WORKER3_NAME = 'Trần Minh Đức';
+const WORKER4_NAME = 'Lê Văn Sơn';
+// Crews realistic duy nhất mỗi run (canonical DD-CD không khớp pattern DTA-/DTB-).
+const DIGITS = Date.now().toString(36).toUpperCase().slice(-6);
+const CREW_A = `DTA-${DIGITS}`;
+const CREW_B = `DTB-${DIGITS}`;
+const CREW_NAME_A = `Đội thi công A ${DIGITS}`;
+const CREW_NAME_B = `Đội thi công B ${DIGITS}`;
+const REASON_REMOVE = 'Điều chuyển sang đội khác (đợt T9/2026)';
+const REASON_SUSPEND = 'Tạm ngừng: bảo trì thiết bị tuần 37 (đợt T9/2026)';
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const results = [];
@@ -104,6 +117,35 @@ function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
 }
+
+/**
+ * Xóa entity run 007: id-based trước (crew ids + seed user ids trong vars),
+ * fallback mã run-pattern DTA-/DTB- trong cửa sổ 12h (canonical DD-CD và
+ * DCD-/DCT- của run 006 không khớp nên an toàn). Audit giữ nguyên.
+ */
+function cleanup007(crewIds) {
+  const idList = (crewIds || []).filter(Boolean).map((s) => `'${s}'`);
+  if (idList.length) {
+    psqlT(`DELETE FROM crew_members WHERE crew_id IN (${idList.join(',')})`);
+    psqlT(`DELETE FROM crews WHERE id IN (${idList.join(',')})`);
+  }
+  const fbMem = psqlT(`DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE (code LIKE 'DTA-%' OR code LIKE 'DTB-%') AND created_at > now() - interval '12 hours')`);
+  const fbCrew = psqlT(`DELETE FROM crews WHERE (code LIKE 'DTA-%' OR code LIKE 'DTB-%') AND created_at > now() - interval '12 hours'; SELECT count(*) FROM crews WHERE code LIKE 'DTA-%' OR code LIKE 'DTB-%'`);
+  // seed users worker3/4 (id-based; chỉ xóa khi đúng email seed để không bao giờ đụng canonical)
+  const seedIds = [`'${WORKER3_ID}'`, `'${WORKER4_ID}'`];
+  psqlT(`DELETE FROM crew_members WHERE user_id IN (${seedIds.join(',')})`);
+  psqlT(`DELETE FROM resource_trades WHERE user_id IN (${seedIds.join(',')})`);
+  const delRoles = psqlT(`DELETE FROM user_roles WHERE user_id IN (${seedIds.join(',')})`);
+  const delUsers = psqlT(`DELETE FROM users WHERE id IN (${seedIds.join(',')}) AND email IN ('duc.tran@vinacons.vn','son.le@vinacons.vn'); SELECT count(*) FROM users WHERE id IN (${seedIds.join(',')})`);
+  console.log(`cleanup: fbMembers=${fbMem.split('\n').pop()} fbCrews rest=${fbCrew.split('\n').pop()} roles del=${delRoles.split('\n').pop()} seedusers rest=${delUsers.split('\n').pop()}`);
+}
+
+/** Pre-cleanup: ids trong vars run trước + pattern fallback. */
+function preCleanup007() {
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8')); } catch {}
+  cleanup007(prev ? [prev.crewA, prev.crewB].filter(Boolean) : []);
+}
 // Đợi select thêm-thành-viên load xong options worker rồi chọn.
 async function selectWorkerToAdd(page, userId) {
   await page.waitForFunction(() => {
@@ -137,7 +179,8 @@ async function selectWorkerToAdd(page, userId) {
     process.exit(2);
   }
 
-  // ---- Seed worker3/worker4 (SQL, idempotent) + tạo 2 crews (API, leader worker1) ----
+  // ---- Pre-cleanup run trước (id-based + pattern fallback), rồi seed worker3/worker4 (SQL, idempotent) ----
+  preCleanup007();
   const seedSql = fs.readFileSync(path.join(__dirname, 'seed-007.sql'), 'utf8');
   const seedRun = spawnSync('docker', ['exec', '-i', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-v', 'ON_ERROR_STOP=1'],
     { input: seedSql, encoding: 'utf8', timeout: 20000 });
@@ -146,9 +189,9 @@ async function selectWorkerToAdd(page, userId) {
   let crewB = null;
   {
     const a = await api('POST', '/api/v1/crews', adminToken,
-      { code: CREW_A, name: 'E2E7 Doi A', leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': uuid() });
+      { code: CREW_A, name: CREW_NAME_A, leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': uuid() });
     const b = await api('POST', '/api/v1/crews', adminToken,
-      { code: CREW_B, name: 'E2E7 Doi B', leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': uuid() });
+      { code: CREW_B, name: CREW_NAME_B, leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': uuid() });
     if ((a.status !== 201 && a.status !== 200) || (b.status !== 201 && b.status !== 200)) {
       console.error(`Tạo crews thất bại A=${a.status} ${JSON.stringify(a.body)} B=${b.status} ${JSON.stringify(b.body)}`);
       await browser.close().catch(() => {});
@@ -168,7 +211,7 @@ async function selectWorkerToAdd(page, userId) {
       await page.waitForTimeout(1500);
       const lt = await bodyText(page);
       if (!lt.includes(CREW_A)) return fail(id, `/crews không thấy ${CREW_A}`);
-      await snap(page, id + '-list', 'Danh sách đội (thấy 2 crews E2E7)');
+      await snap(page, id + '-list', 'Danh sách đội (thấy 2 crews DT thực tế)');
       // /crews là table: link mở chi tiết nằm trong row chứa mã đội (text link là "Chi tiết").
       await page.locator('tr', { hasText: CREW_A }).locator('a').first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Thành viên'), { timeout: 20000 });
@@ -181,13 +224,13 @@ async function selectWorkerToAdd(page, userId) {
       await page.waitForTimeout(1500);
       const t = await bodyText(page);
       await snap(page, id + '-added', 'Thêm worker2 thành công (list hiện THÀNH VIÊN)');
-      if (!t.includes('Lê Văn Thợ')) return fail(id, 'list không hiện Lê Văn Thợ sau khi thêm');
+      if (!t.includes('Lê Văn Hậu')) return fail(id, 'list không hiện Lê Văn Hậu sau khi thêm');
       const db = psqlT(`SELECT member_role||'|'||is_active::text||'|'||effective_from::text FROM crew_members WHERE crew_id='${crewA}' AND user_id='${WORKER2_ID}' AND is_active`);
       const au = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_type='CREW' AND entity_id='${crewA}' AND action='ORG_CREW_MEMBER_ADDED' AND after_data::text LIKE '%${WORKER2_ID}%'`);
       if (!db.startsWith('MEMBER|true|')) return fail(id, `crew_members DB=${db}`);
       if (!db.includes(TODAY)) return fail(id, `effective_from DB=${db} (mong ${TODAY})`);
       if (au !== '1') return fail(id, `audit ADDED count=${au}`);
-      return ok(id, `UI 201 + list hiện Lê Văn Thợ; DB ${db}; audit ORG_CREW_MEMBER_ADDED=1`);
+      return ok(id, `UI 201 + list hiện Lê Văn Hậu; DB ${db}; audit ORG_CREW_MEMBER_ADDED=1`);
     })();
 
     // ============ S2: trùng thành viên → 409 ============
@@ -268,7 +311,7 @@ async function selectWorkerToAdd(page, userId) {
       await page.waitForTimeout(2000);
       const t = await bodyText(page);
       await snap(page, id + '-at', `Danh sách crew B tại ngày ${TODAY} (worker2 còn hiện)`);
-      if (!t.includes('Lê Văn Thợ')) return fail(id, `at=${TODAY} không thấy Lê Văn Thợ`);
+      if (!t.includes('Lê Văn Hậu')) return fail(id, `at=${TODAY} không thấy Lê Văn Hậu`);
       const rowAfter = psqlT(`SELECT effective_from::text||'|'||effective_to::text||'|'||is_active::text FROM crew_members WHERE id='${memberB}'`);
       if (rowAfter !== rowBefore) return fail(id, `row đổi ${rowBefore}→${rowAfter} (mong nguyên vẹn)`);
       // Xóa mốc thời gian để trả UI về mặc định
@@ -348,8 +391,8 @@ async function selectWorkerToAdd(page, userId) {
       await snap(page, id + '-filter', 'Directory workers lọc theo crew A (?crew=)');
       const url = page.url();
       if (!url.includes('crew=')) return fail(id, `URL thiếu ?crew=: ${url}`);
-      if (!t.includes('Lê Văn Thợ')) return fail(id, 'lọc crew A thiếu Lê Văn Thợ');
-      if (t.includes('E2E Worker Four')) return fail(id, 'lọc crew A lọt worker4 (chưa là thành viên)');
+      if (!t.includes('Lê Văn Hậu')) return fail(id, 'lọc crew A thiếu Lê Văn Hậu');
+      if (t.includes(WORKER4_NAME)) return fail(id, 'lọc crew A lọt worker4 (chưa là thành viên)');
       if (badApi.status !== 400) return fail(id, `crewId ảo → ${badApi.status} (mong 400)`);
       return ok(id, `URL ${url.split('?')[1]}; API total=${apiF.body.total}; UI chỉ members crew A; crewId ảo 400`);
     })();
@@ -386,7 +429,7 @@ async function selectWorkerToAdd(page, userId) {
       const hit = (m.body.data || []).find((x) => x.userId === WORKER4_ID && x.isActive);
       if (!hit) return fail(id, 'API members thiếu worker4 sau PM add');
       // PM xóa worker4 qua UI
-      const rows = page.locator('li', { hasText: 'E2E Worker Four' });
+      const rows = page.locator('li', { hasText: WORKER4_NAME });
       await rows.locator('button', { hasText: 'Xóa khỏi đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Xác nhận xóa'), { timeout: 10000 });
       await page.fill('#member-remove-effective-to', TODAY);
@@ -400,23 +443,20 @@ async function selectWorkerToAdd(page, userId) {
       return ok(id, `PM UI add + remove OK; audit actor đúng PM`);
     })();
   } finally {
-    // ============ Cleanup (audit giữ nguyên) ============
+    // ============ Cleanup id-based (audit giữ nguyên) ============
     try {
       await page.goto(`${WEB}/login`, { waitUntil: 'networkidle' }).catch(() => {});
     } catch {}
-    const delMem = psqlT(`DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE code IN ('${CREW_A}','${CREW_B}'))`);
-    const delCrew = psqlT(`DELETE FROM crews WHERE code IN ('${CREW_A}','${CREW_B}'); SELECT count(*) FROM crews WHERE code IN ('${CREW_A}','${CREW_B}')`);
-    const delRoles = psqlT(`DELETE FROM user_roles WHERE user_id IN ('${WORKER3_ID}','${WORKER4_ID}')`);
-    const delUsers = psqlT(`DELETE FROM users WHERE id IN ('${WORKER3_ID}','${WORKER4_ID}'); SELECT count(*) FROM users WHERE id IN ('${WORKER3_ID}','${WORKER4_ID}')`);
-    console.log(`cleanup: members del=${delMem} crews rest=${delCrew} roles del=${delRoles} seedusers rest=${delUsers}`);
+    cleanup007([crewA, crewB]);
     await browser.close().catch(() => {});
   }
 
   const pass = results.filter((r) => r.ok).length;
   console.log(`\nTong: ${pass}/${results.length} PASS`);
   fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
-    crewA, crewB, memberB, today: TODAY,
+    digits: DIGITS, crewA, crewB, crewCodeA: CREW_A, crewCodeB: CREW_B, memberB, today: TODAY,
     worker1: WORKER1_ID, worker2: WORKER2_ID, worker3: WORKER3_ID, worker4: WORKER4_ID,
+    worker3Name: WORKER3_NAME, worker4Name: WORKER4_NAME,
     results,
   }, null, 2));
   if (pass !== results.length) process.exit(1);

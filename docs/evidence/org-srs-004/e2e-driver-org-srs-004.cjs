@@ -6,7 +6,7 @@
  * Yêu cầu: docker stack buildflow chạy với api/web rebuild từ working tree
  *          (chứa PATCH /api/v1/workers|contractors/:id/status + GET .../open-work);
  *          admin+pm đã reset password; seed-lifecycle-004.sql đã chạy
- *          (worker E2E4 + contractor E2E4-CON + assignment mở PENDING_ACCEPTANCE).
+ *          (worker Đỗ Văn Cường + contractor VCC + crew DD-CD + project PRD + assignment mở PENDING_ACCEPTANCE).
  *
  * audit_logs append-only → mọi khẳng định audit dùng DELTA theo (action, entity_id).
  * Giả định state: worker/contractor bắt đầu ở ACTIVE (script chuyển về ACTIVE nếu cần).
@@ -22,9 +22,9 @@ const SHOTS = path.join(__dirname, 'shots');
 const EV = path.join(__dirname, 'e2e-vars.json');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
 const WORKER_ID = 'e2e4a000-0000-4000-8000-0000000000a1';
 const CONTRACTOR_ID = 'e2e4c000-0000-4000-8000-0000000000c1';
@@ -171,7 +171,7 @@ function contractorStatus() {
     // ============ B2 ============
     await step('B2', 'nhập reason → submit → INACTIVE + audit ORG_WORKER_SUSPENDED (reason/before/after/warning/actor)', async (id) => {
       const susp0 = await auditCount('ORG_WORKER_SUSPENDED', WORKER_ID);
-      await page.fill('#lifecycle-reason', 'Tạm ngừng do thiếu việc trong kỳ (E2E run 3)');
+      await page.fill('#lifecycle-reason', 'Tạm ngừng do thiếu việc trong kỳ (đợt T9/2026)');
       await snap(page, id + '-reason', 'Dialog với reason đã nhập');
       await page.locator('button', { hasText: 'Xác nhận tạm ngừng' }).click();
       await page.waitForSelector('text=Tạm ngừng thành công', { timeout: 20000 });
@@ -187,7 +187,7 @@ function contractorStatus() {
          FROM audit_logs WHERE action='ORG_WORKER_SUSPENDED' AND entity_id='${WORKER_ID}'
          ORDER BY created_at DESC LIMIT 1`
       );
-      if (!audit.includes('Tạm ngừng do thiếu việc trong kỳ (E2E run 3)')) return fail(id, `audit reason thiếu:\n${audit}`);
+      if (!audit.includes('Tạm ngừng do thiếu việc trong kỳ (đợt T9/2026)')) return fail(id, `audit reason thiếu:\n${audit}`);
       if (!audit.includes('ACTIVE') || !audit.includes('INACTIVE')) return fail(id, `audit before/after thiếu:\n${audit}`);
       if (!audit.includes('công việc')) return fail(id, `audit afterData thiếu _warning:\n${audit}`);
       return ok(id, `DB:\n${db}\naudit:\n${audit}`);
@@ -219,7 +219,7 @@ function contractorStatus() {
       const term0 = await auditCount('ORG_WORKER_TERMINATED', WORKER_ID);
       await page.locator('button', { hasText: 'Chấm dứt' }).first().click();
       await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
-      await page.fill('#lifecycle-reason', 'Chấm dứt hồ sơ do nghỉ việc (E2E run 3)');
+      await page.fill('#lifecycle-reason', 'Chấm dứt hồ sơ do nghỉ việc (đợt T9/2026)');
       await snap(page, id + '-reason', 'Dialog Chấm dứt — reason đã nhập');
       await page.locator('button', { hasText: 'Xác nhận chấm dứt' }).click();
       await page.waitForSelector('text=Chấm dứt thành công', { timeout: 20000 });
@@ -233,7 +233,7 @@ function contractorStatus() {
         `SELECT action, reason, before_data->>'status' AS b, after_data->>'status' AS a FROM audit_logs
          WHERE action='ORG_WORKER_TERMINATED' AND entity_id='${WORKER_ID}' ORDER BY created_at DESC LIMIT 1`
       );
-      if (!audit.includes('Chấm dứt hồ sơ do nghỉ việc (E2E run 3)')) return fail(id, `audit reason thiếu:\n${audit}`);
+      if (!audit.includes('Chấm dứt hồ sơ do nghỉ việc (đợt T9/2026)')) return fail(id, `audit reason thiếu:\n${audit}`);
       return ok(id, `DB:\n${db}\naudit:\n${audit}`);
     })();
     async function waitTextGone(page, selector, ms) {
@@ -245,8 +245,8 @@ function contractorStatus() {
       await page.waitForSelector('text=Lịch sử trạng thái', { timeout: 15000 });
       await page.waitForFunction(() => {
         const t = document.body.textContent || '';
-        return t.includes('Lý do: Tạm ngừng do thiếu việc trong kỳ (E2E run 3)')
-          && t.includes('Lý do: Chấm dứt hồ sơ do nghỉ việc (E2E run 3)');
+        return t.includes('Lý do: Tạm ngừng do thiếu việc trong kỳ (đợt T9/2026)')
+          && t.includes('Lý do: Chấm dứt hồ sơ do nghỉ việc (đợt T9/2026)');
       }, { timeout: 20000 });
       await snap(page, id, 'WorkerDetail: timeline Tạm ngừng/Chấm dứt + lý do + actor');
       const link = page.locator('a[href*="admin/audit-logs?entityType=WORKER&entityId=' + WORKER_ID + '"]').first();
@@ -263,7 +263,7 @@ function contractorStatus() {
 
     // ============ B6 ============
     await step('B6', 'eligible: worker vắng khỏi ACTIVE (API+UI), hiện ở INACTIVE + open-work vẫn đếm', async (id) => {
-      const listA = await api('GET', `/api/v1/workers?status=ACTIVE&search=${encodeURIComponent('e2e4.worker@example.com')}`, adminToken);
+      const listA = await api('GET', `/api/v1/workers?status=ACTIVE&search=${encodeURIComponent('cuong.do@vinacons.vn')}`, adminToken);
       const foundActive = listA.body && listA.body.data ? listA.body.data.some((x) => x.id === WORKER_ID) : false;
       if (foundActive) return fail(id, 'worker vẫn xuất hiện ở lọc ACTIVE sau TERMINATE');
       const detail = await api('GET', `/api/v1/workers/${WORKER_ID}`, adminToken);
@@ -292,7 +292,7 @@ function contractorStatus() {
       await page.waitForTimeout(1800);
       const bodyTxt = await page.locator('body').textContent();
       if (/công việc\/lịch mở/.test(bodyTxt)) return fail(id, 'dialog VẪN hiện warning open work dù openAssignments=0');
-      await page.fill('#lifecycle-reason', 'Tạm ngừng nhà thầu do chậm tiến độ (E2E run 3)');
+      await page.fill('#lifecycle-reason', 'Tạm ngừng nhà thầu do chậm tiến độ (đợt T9/2026)');
       await snap(page, id + '-dialog', 'Contractor dialog Tạm ngừng — không warning (open work 0)');
       await page.locator('button', { hasText: 'Xác nhận tạm ngừng' }).click();
       await page.waitForSelector('text=Tạm ngừng thành công', { timeout: 20000 });
@@ -306,7 +306,7 @@ function contractorStatus() {
         `SELECT action, reason, before_data->>'status' AS b, after_data->>'status' AS a FROM audit_logs
          WHERE action='ORG_CONTRACTOR_SUSPENDED' AND entity_id='${CONTRACTOR_ID}' ORDER BY created_at DESC LIMIT 1`
       );
-      if (!audit.includes('Tạm ngừng nhà thầu do chậm tiến độ (E2E run 3)')) return fail(id, `audit reason thiếu:\n${audit}`);
+      if (!audit.includes('Tạm ngừng nhà thầu do chậm tiến độ (đợt T9/2026)')) return fail(id, `audit reason thiếu:\n${audit}`);
       return ok(id, `DB:\n${db}\naudit:\n${audit}`);
     })();
 
@@ -315,7 +315,7 @@ function contractorStatus() {
       const react0 = await auditCount('ORG_CONTRACTOR_REACTIVATED', CONTRACTOR_ID);
       await page.locator('button', { hasText: 'Kích hoạt lại' }).first().click();
       await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
-      await page.fill('#lifecycle-reason', 'Hết lý do tạm ngừng (E2E run 3)');
+      await page.fill('#lifecycle-reason', 'Hết lý do tạm ngừng (đợt T9/2026)');
       await page.locator('button', { hasText: 'Xác nhận kích hoạt lại' }).click();
       await page.waitForSelector('text=Đã kích hoạt lại nhà thầu', { timeout: 20000 });
       await page.waitForSelector('text=Đang hoạt động', { timeout: 15000 });
@@ -332,7 +332,9 @@ function contractorStatus() {
     })();
 
     // ============ B9 ============
-    await step('B9', 'phân quyền: pm 403 (API worker+contractor+open-work), no token 401, UI pm 403', async (id) => {
+    // RBAC hiện tại: lifecycle + open-work ADMIN-only (pm 403, anon 401); danh mục workers/contractors
+    // pm được đọc (list/detail render, sidebar ẩn mục Công nhân, detail không có nút lifecycle).
+    await step('B9', 'phân quyền: lifecycle/open-work pm 403 + anon 401; UI pm chỉ đọc', async (id) => {
       const pmAct = await api('PATCH', `/api/v1/workers/${WORKER_ID}/status`, pmToken, { action: 'ACTIVATE', reason: 'x' });
       const pmContr = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_ID}/status`, pmToken, { action: 'SUSPEND', reason: 'x' });
       const pmOpen = await api('GET', `/api/v1/workers/${WORKER_ID}/open-work`, pmToken);
@@ -343,23 +345,28 @@ function contractorStatus() {
       if (anonOpen.status !== 401) return fail(id, `anon=${anonOpen.status} (mong đợi 401)`);
       await login(page, PM_EMAIL, PM_PASS);
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('text=Không có quyền', { timeout: 15000 }).catch(() => {});
+      await page.waitForSelector(`a[href="/workers/${WORKER_ID}"]`, { timeout: 20000 });
       const navText = await page.locator('.bf-nav').textContent().catch(() => '');
       const noNavWorkers = !(navText || '').includes('Công nhân');
-      const pageHas403 = (await page.locator('body').textContent()).includes('Không có quyền');
-      await snap(page, id + '-ui', 'PM mở /workers: card 403 + sidebar không có mục Công nhân');
+      const listHas403 = (await page.locator('body').textContent()).includes('Không có quyền');
+      await page.goto(`${BASE}/workers/${WORKER_ID}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(2000);
+      const detailText = await page.locator('body').textContent();
+      const noLifecycleBtns = !detailText.includes('Tạm ngừng') && !detailText.includes('Chấm dứt') && !detailText.includes('Kích hoạt lại');
+      await snap(page, id + '-ui', 'PM xem worker detail: chỉ đọc, không nút lifecycle');
       if (!noNavWorkers) return fail(id, 'sidebar pm vẫn hiện Công nhân');
-      if (!pageHas403) return fail(id, 'UI pm không hiển thị 403');
-      return ok(id, `API pm worker=${pmAct.status} contractor=${pmContr.status} open=${pmOpen.status}; anon=${anonOpen.status}; UI sidebar ẩn + card 403`);
+      if (listHas403) return fail(id, 'UI pm list báo 403 dù được đọc');
+      if (!noLifecycleBtns) return fail(id, 'UI pm detail VẪN hiện nút lifecycle');
+      return ok(id, `API pm worker=${pmAct.status} contractor=${pmContr.status} open=${pmOpen.status}; anon=${anonOpen.status}; UI list đọc + sidebar ẩn + detail không nút lifecycle`);
     })();
 
     // ============ B10 ============
     await step('B10', 'double-submit SUSPEND song song cùng correlation-id → 1 audit, trạng thái nhất quán', async (id) => {
-      const act = await api('PATCH', `/api/v1/workers/${WORKER_ID}/status`, adminToken, { action: 'ACTIVATE', reason: 'reset cho B10 (E2E run 3)' });
+      const act = await api('PATCH', `/api/v1/workers/${WORKER_ID}/status`, adminToken, { action: 'ACTIVATE', reason: 'kích hoạt lại chuẩn bị kiểm thử song song (đợt T9/2026)' });
       if (act.status !== 200 && act.status !== 201) return fail(id, `không kích hoạt lại được (${act.status})`);
       const corr = 'e2e4d000-0000-4000-8000-' + String(Math.floor(100000000000 + Math.random() * 899999999999));
       const headers = { 'X-Correlation-Id': corr };
-      const mk = () => api('PATCH', `/api/v1/workers/${WORKER_ID}/status`, adminToken, { action: 'SUSPEND', reason: 'double-submit E2E run 3' }, headers);
+      const mk = () => api('PATCH', `/api/v1/workers/${WORKER_ID}/status`, adminToken, { action: 'SUSPEND', reason: 'kiểm thử song song chống trùng lặp (đợt T9/2026)' }, headers);
       const [r1, r2] = await Promise.all([mk(), mk()]);
       const auditRows = await psqlT(`SELECT count(*) FROM audit_logs WHERE action='ORG_WORKER_SUSPENDED' AND correlation_id='${corr}'`);
       const db = workerStatus();

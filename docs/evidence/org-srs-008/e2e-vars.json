@@ -1,21 +1,26 @@
 {
-  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "zeroId": "d3811a9d-e064-436a-ab86-a3b51006c236",
-  "skill3Id": "3b010c8b-82b3-4480-8916-4a00842c12b3",
-  "crewId": "28d9959a-96dd-4d96-995e-ae1b01cdae71",
-  "today": "2026-09-06",
+  "zeroId": "f3928c92-464b-4232-ac81-25e421656c75",
+  "zeroEmail": "dat.vo@vinacons.vn",
+  "zeroName": "Võ Văn Đạt",
+  "skill3Id": "4fd41e0d-38e2-4ebc-ae35-b5d84526c92d",
+  "skill3Email": "sang.tran@vinacons.vn",
+  "skill3Name": "Trần Văn Sang",
+  "crewId": "07be7e56-a8f8-47e1-bae4-8ae4226573ca",
+  "crewCode": "DXT-01",
+  "crewName": "Đội xây tô số 1",
+  "today": "2026-09-07",
   "worker1": "33333333-3333-4333-8333-333333333333",
   "worker2": "44444444-4444-4444-8444-444444444444",
   "tradeThoCat": "11111111-1111-4111-8111-111111111111",
-  "auditBaseline": "461",
-  "auditFinal": "471",
+  "auditBaseline": "996",
+  "auditFinal": "1006",
   "crewsRest": "0",
   "usersRest": "0",
   "results": [
     {
       "id": "S1",
       "ok": true,
-      "note": "UI đủ 5 conditions + verdict + Mã đối chiếu 71877f75-243a-4f10-9fe2-4eb9bf74522a; API shape chuẩn, eligible=false"
+      "note": "UI đủ 5 conditions + verdict + Mã đối chiếu c34432b3-0a52-499b-a038-b18d8c29b8c5; API shape chuẩn, eligible=false"
     },
     {
       "id": "S2",
@@ -40,7 +45,7 @@
     {
       "id": "S6",
       "ok": true,
-      "note": "worker1 checklist + crews E2E8-CREW; admin empty 'Tài khoản không có hồ sơ worker'"
+      "note": "worker1 checklist + crews DXT-01; admin empty 'Tài khoản không có hồ sơ worker'"
     },
     {
       "id": "S7",
@@ -50,7 +55,7 @@
     {
       "id": "S8",
       "ok": true,
-      "note": "mobile verdict fail-closed + conditions + crews E2E8-CREW từ API thật"
+      "note": "mobile verdict fail-closed + conditions + crews DXT-01 từ API thật"
     },
     {
       "id": "S9",
@@ -65,7 +70,7 @@
     {
       "id": "S11",
       "ok": true,
-      "note": "reuse a66fe2ab-694f-45ec-8c10-366e5348ce9e; xấu → generate; no-store; audit 471→471 (delta 0)"
+      "note": "reuse 6a8661bf-b612-41fe-821f-d30b0dee5d7b; xấu → generate; no-store; audit 1006→1006 (delta 0)"
     }
   ]
 }

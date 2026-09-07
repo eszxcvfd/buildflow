@@ -1,25 +1,25 @@
 {
   "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "admin": "admin@example.com",
-  "pm": "pm@example.com",
-  "worker1": "worker1@example.com",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker1": "thang.nguyen@vinacons.vn",
   "codes": {
-    "A": "E2E3-A",
-    "B": "E2E3-B"
+    "A": "VDA3-A",
+    "B": "VDA3-B"
   },
   "projectIds": {
-    "A": "02a7f288-ffbc-4fee-a853-c3e7cbbd8da5",
-    "B": "01f0fc63-08ba-41c5-a83c-5dbe8a9125eb"
+    "A": "b8e95782-7e1b-4969-9ca2-749296b455df",
+    "B": "b0b1c5a2-90fd-437e-9650-c711c5eea62c"
   },
-  "areaId": "f4feb008-2a80-4640-a730-9ba273da2f85",
-  "auditBaseline": "810",
-  "auditFinal": "824",
+  "areaId": "5e64f801-f6cc-474c-9f53-20a0e54631ce",
+  "auditBaseline": "1142",
+  "auditFinal": "1156",
   "rest": "0",
   "results": [
     {
       "id": "S1",
       "ok": true,
-      "note": "UI notice Đã thêm + list Khu E2E3 Alpha; psql Khu E2E3 Alpha|true; audit ADDED admin"
+      "note": "UI notice Đã thêm + list Khu hành chính - Khối A; psql Khu hành chính - Khối A|true; audit ADDED admin"
     },
     {
       "id": "S2",

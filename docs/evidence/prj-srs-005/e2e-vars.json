@@ -1,32 +1,32 @@
 {
   "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "admin": "admin@example.com",
-  "pm": "pm@example.com",
-  "worker1": "worker1@example.com",
-  "worker2": "worker2@example.com",
-  "worker3": "e2e5.worker3@example.com",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker1": "thang.nguyen@vinacons.vn",
+  "worker2": "hau.le@vinacons.vn",
+  "worker3": "ba.nguyen@vinacons.vn",
   "codes": {
-    "A": "E2E5-A",
-    "B": "E2E5-B",
-    "Cc": "E2E5-C",
-    "D": "E2E5-D"
+    "A": "VDA5-A",
+    "B": "VDA5-B",
+    "Cc": "VDA5-C",
+    "D": "VDA5-D"
   },
   "projectIds": {
-    "A": "bff3abe8-2f82-45b1-939a-69d6c2741985",
-    "B": "d0be5fb5-92bd-40e8-af3a-07c2c35bf87b",
-    "C": "fa2c74ca-804a-4790-a399-44f0d49a1028",
-    "D": "35fc3bb6-cd08-4507-85f8-acd055c3a41b"
+    "A": "09c73a8a-9664-4cc8-90b8-bebf8e579ad2",
+    "B": "096a092d-7f57-4d2a-b1d8-4dd3db82a18a",
+    "C": "9bf9607b-227d-46d7-9081-32e5433f344f",
+    "D": "a0b9e3f9-a281-4c6c-9cdc-ce7ca7abf153"
   },
-  "memberIdA": "99de0af4-8825-48d3-8d1f-f0d9dcd8e023",
+  "memberIdA": "4ee01d07-49ff-4b0c-8c14-3288960fe8fe",
   "w2GetBefore": 200,
-  "auditBaseline": "740",
-  "auditFinal": "764",
+  "auditBaseline": "1115",
+  "auditFinal": "1139",
   "rest": "0",
   "results": [
     {
       "id": "S1",
       "ok": true,
-      "note": "UI list Lê Văn Thợ ĐIỀU PHỐI; psql COORDINATOR|true|11111111-1111-4111-8111-111111111111; audit ADDED admin; worker2 GET=200"
+      "note": "UI list Lê Văn Hậu ĐIỀU PHỐI; psql COORDINATOR|true|11111111-1111-4111-8111-111111111111; audit ADDED admin; worker2 GET=200"
     },
     {
       "id": "S2",

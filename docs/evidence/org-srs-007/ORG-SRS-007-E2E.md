@@ -1,9 +1,15 @@
 # ORG-SRS-007 — E2E Evidence: Quản lý thành viên đội (issue #30)
 
 > **Loại bằng chứng:** Browser E2E thật (UI → API → PostgreSQL → UI) + HTTP-level checks bằng token thật, screenshot trong repo.
-> **Ngày chạy:** 2026-09-06 UTC (`e2e-driver-org-srs-007.cjs`, 3 runs: run 1 = 3/11 do 1 bug sản phẩm thật + 3 lỗi driver — §4a; run 2 = 10/11 do 1 lỗi driver; run 3 sau fix = **11/11 PASS**).
-> **Trạng thái tổng:** **11/11 PASS** — phát hiện và sửa 1 bug UI thật (§4a.1); các FAIL còn lại là lỗi driver, đã sửa và tái chạy xanh.
-> **Phạm vi:** file mới dưới `docs/evidence/org-srs-007/` + **1 fix sản phẩm** `src/web/src/features/crews/components/CrewDetail.tsx` (thuộc slice #30) — **không commit**, không đụng GitHub.
+> **Ngày chạy:** 2026-09-07 UTC (`e2e-driver-org-srs-007.cjs`, run realistic sau chuẩn hóa — **11/11 PASS** ngay lần đầu).
+> **Trạng thái tổng:** **11/11 PASS** — không phát hiện bug sản phẩm mới (bug §4a.1 đã fix từ slice gốc).
+> **Phạm vi:** file dưới `docs/evidence/org-srs-007/` — **không commit**, không sửa product code, không đụng GitHub.
+>
+> **Chuẩn hóa realistic 2026-09-07 (theo [`docs/demo-data.md`](../demo-data.md)):** crews runtime
+> `DTA-xxx/DTB-xxx` (`Đội thi công A/B …`), seed worker3/worker4 = Trần Minh Đức / Lê Văn Sơn
+> (`@vinacons.vn`), member chính hau.le = `Lê Văn Hậu`, reasons tiếng Việt không tag E2E.
+> Lịch sử §4a giữ tên pre-rename làm baseline.
+> **Mapping note: audit_logs append-only — các dòng audit lịch sử vẫn giữ identifier cũ là có chủ ý.**
 
 ---
 
@@ -27,48 +33,49 @@
 
 | Email | Vai trò | Password E2E |
 | --- | --- | --- |
-| `admin@example.com` | ADMIN | `E2EAdmin@2025` (giữ từ ORG-SRS-001/002) |
-| `pm@example.com` | PROJECT_MANAGER | `E2EPm@2025` (giữ từ ORG-SRS-003) |
-| `worker1@example.com` | WORKER | `E2EWorker@2025` (giữ từ ORG-SRS-005 §2, dùng cho check 403) |
+| `hoang.anh@vinacons.vn` | ADMIN | `E2EAdmin@2025` (giữ từ ORG-SRS-001/002) |
+| `quoc.tran@vinacons.vn` | PROJECT_MANAGER | `E2EPm@2025` (giữ từ ORG-SRS-003) |
+| `thang.nguyen@vinacons.vn` | WORKER | `E2EWorker@2025` (giữ từ ORG-SRS-005 §2, dùng cho check 403) |
 
-Member pool: `worker2@example.com` (Lê Văn Thợ, ACTIVE WORKER) — add/dup/overlap/remove;
-leader 2 crews E2E7: `worker1@example.com` (Nguyễn Văn Thợ).
-Seed thêm `worker3`/`worker4` (§3) cho double-submit + PM flow. Không reset password — cả 3 login gốc đều còn hiệu lực.
+Member pool: `hau.le@vinacons.vn` (Lê Văn Hậu, ACTIVE WORKER) — add/dup/overlap/remove;
+leader 2 crews DT: `thang.nguyen@vinacons.vn` (Nguyễn Văn Thắng).
+Seed thêm `duc.tran`/`son.le` (§3) cho double-submit + PM flow. Không reset password — cả 3 login gốc đều còn hiệu lực.
 
 ## 3. Seed / cleanup
 
-- **Seed users (S10/S11):** file `seed-007.sql` — `worker3@example.com` (`5555…`, 'E2E Worker Three')
-  + `worker4@example.com` (`6666…`, 'E2E Worker Four'), `user_type='WORKER'`, `status='ACTIVE'`,
-  `password_hash` copy từ worker1 (tức password `E2EWorker@2025`), `user_roles` WORKER active.
+- **Seed users (S10/S11):** file `seed-007.sql` — `duc.tran@vinacons.vn` (`5555…`, 'Trần Minh Đức')
+  + `son.le@vinacons.vn` (`6666…`, 'Lê Văn Sơn'), `user_type='WORKER'`, `status='ACTIVE'`,
+  `password_hash` copy từ thang.nguyen (tức password `E2EWorker@2025`), `user_roles` WORKER active.
   Idempotent (`ON CONFLICT DO NOTHING`).
-- **2 crews E2E7 tạo qua API (driver, admin token, leader worker1):**
-  `E2E7-CREW-A` + `E2E7-CREW-B` (POST `/api/v1/crews` + `X-Correlation-Id` UUID).
-- **Cleanup (driver tự chạy cuối mỗi run, audit giữ nguyên — append-only):**
-  xóa crew_members của 2 crews E2E7 → crews E2E7 → user_roles + users worker3/4.
-  Đã verify sau run quyết định: crews `E2E7-%` = 0, seed users rest = 0; crew `E2E4-CREW` có sẵn không bị đụng.
-  (Crew `DBG-CREW-*` tạo trong quá trình debug §4a.1 đã xóa tay, verify rest = 0 trước run quyết định.)
+- **2 crews DT tạo qua API (driver, admin token, leader thang.nguyen, DIGITS duy nhất mỗi run):**
+  `DTA-<digits>` (`Đội thi công A <digits>`) + `DTB-<digits>` (`Đội thi công B <digits>`)
+  (POST `/api/v1/crews` + `X-Correlation-Id` UUID).
+- **Cleanup id-based (driver tự chạy đầu + cuối mỗi run, audit giữ nguyên — append-only):**
+  xóa theo crewA/crewB ids đã ghi (`e2e-vars.json`) + seed user ids → fallback mã run-pattern
+  `DTA-%`/`DTB-%` trong cửa sổ 12h (canonical `DD-CD` + `DCD-`/`DCT-` không khớp pattern).
+  Đã verify sau run realistic: crews `DTA-%`/`DTB-%` = 0, seed users rest = 0; crew `DD-CD` có sẵn không bị đụng.
 
-## 4. Kịch bản & kết quả (run 3 — run quyết định, 11/11 PASS)
+## 4. Kịch bản & kết quả (run realistic 2026-09-07, 11/11 PASS)
 
 **Ký hiệu:** 🟢 PASS · 🔴 FAIL · 📸 ảnh trong `docs/evidence/org-srs-007/shots/`
 
 | # | Bước (UI → HTTP → DB verify) | Kết quả | Bằng chứng |
 | --- | --- | --- | --- |
-| S1 | ADMIN login → `/crews` (table) → row crew A → Chi tiết → thêm worker2 (`effectiveFrom` today) → list hiện `Lê Văn Thợ · THÀNH VIÊN`; psql `MEMBER\|true\|today` + audit `ORG_CREW_MEMBER_ADDED=1` | 🟢 PASS | `S1-list/detail/form/added.png` |
-| S2 | Thêm lại worker2 vào crew A → field error `Thành viên đã trong đội` (409); active rows = 1, audit vẫn 1 | 🟢 PASS | `S2-dup.png` + HTTP/DB §5 |
-| S3 | Thêm worker2 vào crew B → success + banner `đang thuộc đội khác` (MEMBER_IN_OTHER_CREW); audit afterData chứa `_warning` | 🟢 PASS | `S3-warning.png` |
-| S4 | Xóa worker2 khỏi crew B (`effectiveTo`=today + reason) → `Đã xóa…`; bật lịch sử → badge `Đã rời`; DB `false\|today`; audit `ORG_CREW_MEMBER_REMOVED` +1 có reason | 🟢 PASS | `S4-confirm/removed/history.png` |
+| S1 | ADMIN login → `/crews` (table) → row crew A → Chi tiết → thêm hau.le (`effectiveFrom` today) → list hiện `Lê Văn Hậu · THÀNH VIÊN`; psql `MEMBER\|true\|today` + audit `ORG_CREW_MEMBER_ADDED=1` | 🟢 PASS | `S1-list/detail/form/added.png` |
+| S2 | Thêm lại hau.le vào crew A → field error `Thành viên đã trong đội` (409); active rows = 1, audit vẫn 1 | 🟢 PASS | `S2-dup.png` + HTTP/DB §5 |
+| S3 | Thêm hau.le vào crew B → success + banner `đang thuộc đội khác` (MEMBER_IN_OTHER_CREW); audit afterData chứa `_warning` | 🟢 PASS | `S3-warning.png` |
+| S4 | Xóa hau.le khỏi crew B (`effectiveTo`=today + reason `Điều chuyển sang đội khác…`) → `Đã xóa…`; bật lịch sử → badge `Đã rời`; DB `false\|today`; audit `ORG_CREW_MEMBER_REMOVED` +1 có reason | 🟢 PASS | `S4-confirm/removed/history.png` |
 | S5 | DELETE lại memberB → `{alreadyRemoved:true}`, audit REMOVED 1→1 (delta 0) | 🟢 PASS | HTTP outputs §5 |
-| S6 | `at`=today trên crew B → worker2 vẫn hiện (point-in-time); row `from\|to\|active` trước/sau bằng nhau (nguyên vẹn); xóa mốc thời gian trả UI về mặc định | 🟢 PASS | `S6-at.png` |
-| S7 | `Tạm ngừng` crew B + reason → `Tạm ngừng thành công`; form thêm báo `Đội đang không hoạt động` + select disabled; API POST worker3 → 409 CREW_INACTIVE, không lọt row | 🟢 PASS | `S7-suspended.png` |
-| S8 | worker1: panel members card 403 + API GET/POST/DELETE members đều 403 | 🟢 PASS | `S8-worker403.png` |
-| S9 | `/resources?tab=workers` → select `Đội thi công` = crew A → URL `?crew=<id>`; API `total=2` (LEAD worker1 + MEMBER worker2); UI chỉ members crew A (không lọt worker4); `crewId` ảo → 400 | 🟢 PASS | `S9-filter.png` |
+| S6 | `at`=today trên crew B → hau.le vẫn hiện (point-in-time); row `from\|to\|active` trước/sau bằng nhau (nguyên vẹn); xóa mốc thời gian trả UI về mặc định | 🟢 PASS | `S6-at.png` |
+| S7 | `Tạm ngừng` crew B + reason `Tạm ngừng: bảo trì thiết bị…` → `Tạm ngừng thành công`; form thêm báo `Đội đang không hoạt động` + select disabled; API POST worker3 (Trần Minh Đức) → 409 CREW_INACTIVE, không lọt row | 🟢 PASS | `S7-suspended.png` |
+| S8 | thang.nguyen: panel members card 403 + API GET/POST/DELETE members đều 403 | 🟢 PASS | `S8-worker403.png` |
+| S9 | `/resources?tab=workers` → select `Đội thi công` = crew A → URL `?crew=<id>`; API `total=2` (LEAD thang.nguyen + MEMBER hau.le); UI chỉ members crew A (không lọt Lê Văn Sơn); `crewId` ảo → 400 | 🟢 PASS | `S9-filter.png` |
 | S10 | Double-submit add worker3 (2 POST đồng thời, corr-id khác nhau) → 201 + 409; active rows = 1; UI 1 dòng | 🟢 PASS | `S10-single.png` |
-| S11 | PM login → crew A: thêm worker4 (UI success) + xóa worker4 (UI success); audit ADDED/REMOVED `actor_user_id` = PM | 🟢 PASS | `S11-pm-added/pm-removed.png` |
+| S11 | PM login → crew A: thêm worker4 (Lê Văn Sơn, UI success) + xóa worker4 (UI success); audit ADDED/REMOVED `actor_user_id` = PM | 🟢 PASS | `S11-pm-added/pm-removed.png` |
 
 **Tổng: 11 PASS / 0 FAIL / 11 mục.**
 
-### 4a. Fixes — FAIL run 1 (3/11) → fix → run 2 (10/11) → fix → run 3 (11/11)
+### 4a. Lịch sử runs 2026-09-06 (giữ làm baseline — tên pre-rename)
 
 **4a.1 — BUG SẢN PHẨM THẬT (đã fix trong slice): success/warning notices của panel Thành viên bị xóa ngay sau khi hiện.**
 
@@ -91,22 +98,22 @@ Seed thêm `worker3`/`worker4` (§3) cho double-submit + PM flow. Không reset p
 3. **S11:** cột actor của `audit_logs` là `actor_user_id`, driver ghi nhầm `created_by` → PSQL ERROR.
    Fix tên cột (run 2 → run 3).
 
-## 5. HTTP + DB outputs thật (run 3)
+## 5. HTTP + DB outputs thật (run realistic 2026-09-07)
 
 ```
-setup crewA=dbf1cd63-cb8e-4e27-96e5-ff89176ccc76 crewB=eba90b93-2ab9-4baf-af81-6de39eea6bc6 today=2026-09-06
-S1  DB MEMBER|true|2026-09-06 + audit ORG_CREW_MEMBER_ADDED=1 (afterData chứa worker2)
+setup crewA=13024ac6-5fe7-4234-aa3c-b6700f9345d4 (DTA-R9FORO) crewB=0e9cb644-ce9b-49ee-acdc-bb62e788caf1 (DTB-R9FORO) today=2026-09-07
+S1  DB MEMBER|true|2026-09-07 + audit ORG_CREW_MEMBER_ADDED=1 (afterData chứa hau.le)
 S2  UI 409 field 'Thành viên đã trong đội'; active rows=1; audit vẫn 1 (409 không audit)
-S3  UI success + banner overlap; audit afterData có _warning; memberB=c14e99f0…
-S4  DB false|2026-09-06; audit REMOVED reason='E2E7 dieu chuyen sang doi khac' (+1)
+S3  UI success + banner overlap; audit afterData có _warning; memberB=02684c4e…
+S4  DB false|2026-09-07; audit REMOVED reason='Điều chuyển sang đội khác (đợt T9/2026)' (+1)
 S5  DELETE lại → 200 {alreadyRemoved:true}; audit REMOVED 1→1 (delta 0)
-S6  at=2026-09-06 thấy Lê Văn Thợ; row 2026-09-06|2026-09-06|false trước=sau
+S6  at=2026-09-07 thấy Lê Văn Hậu; row 2026-09-07|2026-09-07|false trước=sau
 S7  crewB INACTIVE; API POST worker3 → 409 CREW_INACTIVE; rows worker3@crewB=0
 S8  worker GET/POST/DELETE members = 403/403/403; UI card 403
-S9  API workers?crewId=crewA total=2 (worker1 LEAD + worker2 MEMBER); URL tab=workers&crew=<id>&sort=createdAt&order=desc; crewId ảo → 400
+S9  API workers?crewId=crewA total=2 (thang.nguyen LEAD + hau.le MEMBER); URL tab=workers&crew=<id>&sort=createdAt&order=desc; crewId ảo → 400
 S10 2×POST đồng thời → 201 + 409; active rows worker3@crewA=1
-S11 PM add + remove worker4 qua UI; audit actor_user_id=22222222-… (PM) cả 2 chiều
-cleanup: members DELETE 6, crews rest=0, roles DELETE 2, seedusers rest=0 (audit giữ nguyên)
+S11 PM add + remove worker4 (Lê Văn Sơn) qua UI; audit actor_user_id=22222222-… (PM) cả 2 chiều
+cleanup: fbMembers DELETE 0, fbCrews rest=0, roles DELETE 2, seedusers rest=0 (audit giữ nguyên)
 ```
 
 ## 6. Cách tái sinh
@@ -115,9 +122,10 @@ cleanup: members DELETE 6, crews rest=0, roles DELETE 2, seedusers rest=0 (audit
 # 1. Rebuild stack từ working tree (gồm fix §4a.1)
 DOCKER_CONFIG=/tmp/bfhome/.docker DOCKER_HOST=unix:///home/trung/.docker/desktop/docker.sock \
   docker compose -f infra/docker/compose.yaml up -d --build api web
-# 2. Chạy driver (tự seed worker3/4 + tạo 2 crews E2E7, tự cleanup cuối run, audit giữ nguyên)
+# 2. Chạy driver (tự pre-cleanup run trước + seed worker3/4 + tạo 2 crews DT, tự cleanup id-based cuối run, audit giữ nguyên)
 node docs/evidence/org-srs-007/e2e-driver-org-srs-007.cjs
-# 3. Seed thủ công (nếu cần): xem seed-007.sql (password copy từ worker1 = E2EWorker@2025)
+# → Tong: 11/11 PASS (crews DTA-/DTB-<digits> duy nhất mỗi run; ids ghi vào e2e-vars.json)
+# 3. Seed thủ công (nếu cần): xem seed-007.sql (password copy từ thang.nguyen = E2EWorker@2025)
 ```
 
 ## 7. Rủi ro / ghi chú

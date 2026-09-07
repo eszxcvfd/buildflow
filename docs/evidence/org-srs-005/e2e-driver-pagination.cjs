@@ -4,8 +4,9 @@
  * KHÔNG mutate dữ liệu: chỉ đọc (UI + API GET + SQL COUNT). Seed/cleanup làm ngoài bằng SQL.
  *
  * Chạy: node e2e-driver-pagination.cjs
- * Yêu cầu: docker stack buildflow (api :3000, web :3001); pm E2EPm@2025;
- *          đã seed 21 users e2e5.pag.01..21 (ACTIVE) + role WORKER (xem ORG-SRS-005-E2E.md §10).
+ * Yêu cầu: docker stack buildflow (api :3000, web :3001); pm quoc.tran@vinacons.vn / E2EPm@2025;
+ *          đã seed 20 users realistic (§10.1 doc — ACTIVE, mã TX-8xxx) → 26 workers (25 ACTIVE).
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07).
  */
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +18,7 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
 
 const results = [];
@@ -266,6 +267,13 @@ async function navState(page) {
 
     const NP = results.filter((r) => r.ok).length, NF = results.filter((r) => !r.ok).length;
     console.log(`\n===== TỔNG PAGINATION: ${NP} PASS / ${NF} FAIL / ${results.length} bước =====`);
+    // Ghi ids seed TX-8% (id-based cleanup, xem §10.3 doc) + kết quả machine-readable.
+    try {
+      const seedIds = psqlT(`SELECT string_agg(id::text, ',') FROM users WHERE employee_code LIKE 'TX-8%'`);
+      fs.writeFileSync(path.join(__dirname, 'e2e-vars-pagination.json'),
+        JSON.stringify({ seedCodePattern: 'TX-8%', seedIds: seedIds ? seedIds.split(',') : [], results }, null, 2));
+      console.log(`  vars e2e-vars-pagination.json — seed ids: ${seedIds ? seedIds.split(',').length : 0}`);
+    } catch (e) { console.log('  vars write FAIL: ' + (e.message || e)); }
     if (NF) process.exitCode = 1;
   } catch (err) {
     console.error('DRIVER ERROR', err && err.message ? err.message : err);

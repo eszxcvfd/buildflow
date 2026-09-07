@@ -6,7 +6,12 @@
  * Yêu cầu: docker stack buildflow với api/web rebuild từ working tree
  *          (GET /workers|contractors|trades cho PROJECT_MANAGER + sort/order +
  *          fieldErrors + Cache-Control: no-store; web có route /resources);
- *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025).
+ *          admin (hoang.anh@vinacons.vn / E2EAdmin@2025) + pm (quoc.tran@vinacons.vn / E2EPm@2025)
+ *          + worker1 (thang.nguyen@vinacons.vn / E2EWorker@2025).
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07):
+ * worker tuan.pham = 'Phạm Văn Tuấn' (trade SON-NUOC Lv3), worker1 thang.nguyen =
+ * 'Nguyễn Văn Thắng', worker2 hau.le = 'Lê Văn Hậu', contractor VCC
+ * 'Công ty CP Xây dựng Vinacons'. Passwords giữ nguyên.
  *
  * Lưu ý: audit_logs append-only → khẳng định audit (nếu có) dùng DELTA.
  * S10/S12 đổi trạng thái/scope rồi HOÀN NGUYÊN ngay trong step.
@@ -22,16 +27,16 @@ const SHOTS = path.join(__dirname, 'shots');
 const EV = path.join(__dirname, 'e2e-vars.json');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
-const TRADE_TONZFUF = 'e8f974e9-3d12-4f25-97cb-32bd81b843fd'; // E2E-TONZFUF
-const WORKER2_EMAIL = 'worker2@example.com'; // Lê Văn Thợ — dùng cho S10 (suspend rồi restore)
-const CONTRACTOR_E2E4 = 'e2e4c000-0000-4000-8000-0000000000c1'; // E2E4-CON — dùng cho S12 (scope rồi revert)
+const TRADE_SONNUOC = 'e8f974e9-3d12-4f25-97cb-32bd81b843fd'; // SON-NUOC 'Thợ sơn nước' (ex E2E-TONZFUF, giữ UUID)
+const WORKER2_EMAIL = 'hau.le@vinacons.vn'; // Lê Văn Hậu — dùng cho S10 (suspend rồi restore)
+const CONTRACTOR_VCC = 'e2e4c000-0000-4000-8000-0000000000c1'; // VCC 'Công ty CP Xây dựng Vinacons' — dùng cho S12 (scope rồi revert)
 const GHOST_ID = '00000000-0000-4000-8000-000000000099';
 
 const results = [];
@@ -158,19 +163,19 @@ async function bodyText(page) {
       await page.goto(`${WEB}/resources?tab=workers`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#directory-trade', { timeout: 15000 });
       await page.selectOption('#directory-status', 'ACTIVE');
-      await page.selectOption('#directory-trade', TRADE_TONZFUF);
+      await page.selectOption('#directory-trade', TRADE_SONNUOC);
       await page.selectOption('#directory-skill', '3');
       await page.waitForFunction(() => (document.body.textContent || '').includes('Tổng:'), { timeout: 15000 });
       await page.waitForTimeout(2000);
       let t = await bodyText(page);
-      const apiRes = await api('GET', `/api/v1/workers?status=ACTIVE&tradeId=${TRADE_TONZFUF}&skillLevel=3`, pmToken);
+      const apiRes = await api('GET', `/api/v1/workers?status=ACTIVE&tradeId=${TRADE_SONNUOC}&skillLevel=3`, pmToken);
       const sqlCount = psqlT(
         `SELECT count(*) FROM users u WHERE u.user_type='WORKER' AND u.status='ACTIVE' ` +
         `AND EXISTS (SELECT 1 FROM resource_trades rt WHERE rt.resource_type='USER' AND rt.user_id=u.id ` +
-        `AND rt.is_active AND rt.trade_id='${TRADE_TONZFUF}' AND rt.skill_level=3)`
+        `AND rt.is_active AND rt.trade_id='${TRADE_SONNUOC}' AND rt.skill_level=3)`
       );
-      await snap(page, id + '-combined', 'Filter kết hợp ACTIVE + trade E2E-TONZFUF + skill 3');
-      const uiHasWorker = t.includes('E2E Worker ONZFUF');
+      await snap(page, id + '-combined', 'Filter kết hợp ACTIVE + trade SON-NUOC + skill 3');
+      const uiHasWorker = t.includes('Phạm Văn Tuấn');
       const m = t.match(/Tổng:\s*(\d+)/);
       const uiTotal = m ? m[1] : '?';
       if (apiRes.status !== 200) return fail(id, `API combined HTTP ${apiRes.status}: ${JSON.stringify(apiRes.body)}`);
@@ -178,16 +183,16 @@ async function bodyText(page) {
         return fail(id, `API total=${apiRes.body.total} khác SQL count=${sqlCount}`);
       }
       if (String(uiTotal) !== String(sqlCount)) return fail(id, `UI Tổng=${uiTotal} khác SQL count=${sqlCount} (body: ${t.slice(0, 300)})`);
-      if (!uiHasWorker) return fail(id, `UI thiếu worker mong đợi 'E2E Worker ONZFUF' (Tổng=${uiTotal})`);
+      if (!uiHasWorker) return fail(id, `UI thiếu worker mong đợi 'Phạm Văn Tuấn' (Tổng=${uiTotal})`);
       // đổi search text → kết quả cập nhật
-      await page.fill('#directory-q', 'Nguyễn Văn Thợ');
+      await page.fill('#directory-q', 'Nguyễn Văn Thắng');
       await page.locator('button', { hasText: 'Tìm' }).first().click();
       await page.waitForTimeout(2000);
       t = await bodyText(page);
-      await snap(page, id + '-search', 'Search "Nguyễn Văn Thợ" (trade filter vẫn giữ → 0, chứng minh search có tác dụng)');
+      await snap(page, id + '-search', 'Search "Nguyễn Văn Thắng" (trade filter vẫn giữ → 0, chứng minh search có tác dụng)');
       const m2 = t.match(/Tổng:\s*(\d+)/);
       if (!m2 || m2[1] === uiTotal) return fail(id, `search không làm đổi kết quả (Tổng trước=${uiTotal} sau=${m2 && m2[1]})`);
-      return ok(id, `combined: API total=${apiRes.body.total} = SQL count=${sqlCount} = UI Tổng=${uiTotal} (E2E Worker ONZFUF); search đổi Tổng → ${m2[1]}`);
+      return ok(id, `combined: API total=${apiRes.body.total} = SQL count=${sqlCount} = UI Tổng=${uiTotal} (Phạm Văn Tuấn); search đổi Tổng → ${m2[1]}`);
     })();
 
     // ============ S3 ============
@@ -300,17 +305,28 @@ async function bodyText(page) {
     })();
 
     // ============ S7 ============
-    await step('S7', 'Tab Đội disabled + note ORG-SRS-006', async (id) => {
+    // NOTE 2026-09-07: tab Đội từng disabled với note 'Sắp có — ORG-SRS-006';
+    // sau khi ORG-SRS-006 landed, tab đã enabled và hiện directory crews thật.
+    // Step này khẳng định hành vi mới có chủ ý (không phải regression).
+    await step('S7', 'Tab Đội enabled (ORG-SRS-006 đã landed) → ?tab=crews hiện DD-CD, Tổng khớp API', async (id) => {
       await page.goto(`${WEB}/resources?tab=workers`, { waitUntil: 'networkidle' });
       await page.waitForSelector('[role="tablist"]', { timeout: 15000 });
       const teamTab = page.locator('button[role="tab"]', { hasText: 'Đội' });
       const disabled = await teamTab.isDisabled();
+      if (disabled) return fail(id, 'tab Đội vẫn disabled (ORG-SRS-006 đã landed, mong đợi enabled)');
+      await page.goto(`${WEB}/resources?tab=crews`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(2000);
       const t = await bodyText(page);
-      const hasNote = t.includes('ORG-SRS-006');
-      await snap(page, id, 'Tab Đội disabled + note Sắp có ORG-SRS-006');
-      if (!disabled) return fail(id, 'tab Đội KHÔNG disabled');
-      if (!hasNote) return fail(id, 'thiếu note ORG-SRS-006');
-      return ok(id, 'tab Đội disabled + note "Sắp có — ORG-SRS-006" hiển thị');
+      const m = t.match(/Tổng:\s*(\d+)/);
+      const apiC = await api('GET', '/api/v1/crews?limit=20', pmToken);
+      await snap(page, id, 'Tab Đội enabled — directory crews (DD-CD)');
+      if (apiC.status !== 200) return fail(id, `crews API HTTP ${apiC.status}`);
+      if (!m || String(m[1]) !== String(apiC.body.total)) {
+        return fail(id, `UI Tổng=${m && m[1]} khác API total=${apiC.body.total} (body: ${t.slice(0, 300)})`);
+      }
+      if (!t.includes('DD-CD')) return fail(id, 'tab Đội không thấy crew DD-CD');
+      if (t.includes('Sắp có')) return fail(id, 'tab Đội vẫn còn note Sắp có cũ');
+      return ok(id, `tab Đội enabled; ?tab=crews Tổng=${m[1]} = API total (thấy DD-CD 'Đội cơ điện Vinacons')`);
     })();
 
     // ============ S8 ============
@@ -344,12 +360,12 @@ async function bodyText(page) {
     await step('S9', 'Tampering: PM PATCH 403 ×2, WORKER GET 403, anon 401, PM detail ghost 404', async (id) => {
       const list = await api('GET', '/api/v1/workers?limit=1', pmToken);
       const wid = list.body.data[0].id;
-      const pmW = await api('PATCH', `/api/v1/workers/${wid}/status`, pmToken, { action: 'SUSPEND', reason: 'tamper E2E28' });
-      const pmC = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_E2E4}`, pmToken, { scope: 'tamper E2E28' });
+      const pmW = await api('PATCH', `/api/v1/workers/${wid}/status`, pmToken, { action: 'SUSPEND', reason: 'kiểm tra phân quyền (đợt T9/2026)' });
+      const pmC = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_VCC}`, pmToken, { scope: 'kiểm tra phân quyền (đợt T9/2026)' });
       const wGet = await api('GET', '/api/v1/workers?limit=5', workerToken);
       const wGetC = await api('GET', '/api/v1/contractors?limit=5', workerToken);
       const anonW = await api('GET', '/api/v1/workers?limit=5', null);
-      const anonC = await api('GET', `/api/v1/contractors/${CONTRACTOR_E2E4}`, null);
+      const anonC = await api('GET', `/api/v1/contractors/${CONTRACTOR_VCC}`, null);
       const pmGhost = await api('GET', `/api/v1/workers/${GHOST_ID}`, pmToken);
       const pmGhostC = await api('GET', `/api/v1/contractors/${GHOST_ID}`, pmToken);
       const dbCheck = psqlT(`SELECT status FROM users WHERE id='${wid}'`);
@@ -368,7 +384,7 @@ async function bodyText(page) {
       const rawDetail = await apiRaw('GET', '/api/v1/contractors?limit=5', pmToken);
       // worker2 đang ACTIVE → admin SUSPEND
       const w2id = psqlT(`SELECT id FROM users WHERE email='${WORKER2_EMAIL}'`);
-      const susp = await api('PATCH', `/api/v1/workers/${w2id}/status`, adminToken, { action: 'SUSPEND', reason: 'E2E28 no-store check' });
+      const susp = await api('PATCH', `/api/v1/workers/${w2id}/status`, adminToken, { action: 'SUSPEND', reason: 'kiểm tra no-store (đợt T9/2026)' });
       if (susp.status !== 200) return fail(id, `admin SUSPEND worker2 HTTP ${susp.status}: ${JSON.stringify(susp.body)}`);
       const pmAfter = await api('GET', `/api/v1/workers?search=${encodeURIComponent(WORKER2_EMAIL)}`, pmToken);
       const seen = pmAfter.body.data.length ? pmAfter.body.data[0].status : 'MISSING';
@@ -377,7 +393,7 @@ async function bodyText(page) {
       const t = await bodyText(page);
       await snap(page, id + '-fresh', 'PM search ngay sau SUSPEND — thấy INACTIVE (không stale)');
       // restore ACTIVE
-      const react = await api('PATCH', `/api/v1/workers/${w2id}/status`, adminToken, { action: 'ACTIVATE', reason: 'E2E28 restore' });
+      const react = await api('PATCH', `/api/v1/workers/${w2id}/status`, adminToken, { action: 'ACTIVATE', reason: 'hoàn nguyên trạng thái (đợt T9/2026)' });
       const finalStatus = psqlT(`SELECT status FROM users WHERE email='${WORKER2_EMAIL}'`);
       const uiShowsInactive = /Ngừng hoạt động|INACTIVE/.test(t);
       const notes = `CC search='${ccSearch}' detail='${rawDetail.cacheControl}'; PM API sau SUSPEND=${seen}; UI thấy INACTIVE=${uiShowsInactive}; restore HTTP=${react.status} final=${finalStatus.trim()}`;
@@ -411,20 +427,20 @@ async function bodyText(page) {
       const s = await api('GET', '/api/v1/workers?search=Th%E1%BB%A3', adminToken);
       const d = await api('GET', `/api/v1/workers/${l.body.data[0].id}`, adminToken);
       const lc = await api('GET', '/api/v1/contractors?limit=5', adminToken);
-      const dc = await api('GET', `/api/v1/contractors/${CONTRACTOR_E2E4}`, adminToken);
+      const dc = await api('GET', `/api/v1/contractors/${CONTRACTOR_VCC}`, adminToken);
       const tr = await api('GET', '/api/v1/trades?limit=5', adminToken);
-      // write: PATCH scope E2E4-CON rồi revert
+      // write: PATCH scope VCC rồi revert
       const origScope = dc.body.scope;
-      const w1 = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_E2E4}`, adminToken, { scope: `${origScope} (E2E28)` });
-      const verify = await api('GET', `/api/v1/contractors/${CONTRACTOR_E2E4}`, adminToken);
-      const w2 = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_E2E4}`, adminToken, { scope: origScope });
-      const final = await api('GET', `/api/v1/contractors/${CONTRACTOR_E2E4}`, adminToken);
+      const w1 = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_VCC}`, adminToken, { scope: `${origScope} (đợt T9/2026)` });
+      const verify = await api('GET', `/api/v1/contractors/${CONTRACTOR_VCC}`, adminToken);
+      const w2 = await api('PATCH', `/api/v1/contractors/${CONTRACTOR_VCC}`, adminToken, { scope: origScope });
+      const final = await api('GET', `/api/v1/contractors/${CONTRACTOR_VCC}`, adminToken);
       const notes = `list=${l.status} search=${s.status}(total=${s.body.total}) detail=${d.status} contractors=${lc.status}/${dc.status} trades=${tr.status}; ` +
         `PATCH scope ${w1.status}→verify='${verify.body.scope}' revert ${w2.status}→final='${final.body.scope}'`;
       const allOk = [l, s, d, lc, dc, tr].every((r) => r.status === 200);
       if (!allOk) return fail(id, notes);
       if (w1.status !== 200 || w2.status !== 200) return fail(id, notes);
-      if (verify.body.scope !== `${origScope} (E2E28)` || final.body.scope !== origScope) return fail(id, notes + ' (SCOPE REVERT HỎNG)');
+      if (verify.body.scope !== `${origScope} (đợt T9/2026)` || final.body.scope !== origScope) return fail(id, notes + ' (SCOPE REVERT HỎNG)');
       // UI admin vẫn vào được /resources
       await login(page, ADMIN_EMAIL, ADMIN_PASS);
       await page.goto(`${WEB}/resources`, { waitUntil: 'networkidle' });

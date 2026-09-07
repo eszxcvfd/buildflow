@@ -1,18 +1,22 @@
 {
-  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "crewA": "dbf1cd63-cb8e-4e27-96e5-ff89176ccc76",
-  "crewB": "eba90b93-2ab9-4baf-af81-6de39eea6bc6",
-  "memberB": "c14e99f0-15dc-4c7f-b357-798f94cbf549",
-  "today": "2026-09-06",
+  "digits": "R9FORO",
+  "crewA": "13024ac6-5fe7-4234-aa3c-b6700f9345d4",
+  "crewB": "0e9cb644-ce9b-49ee-acdc-bb62e788caf1",
+  "crewCodeA": "DTA-R9FORO",
+  "crewCodeB": "DTB-R9FORO",
+  "memberB": "02684c4e-a5f0-40b9-8e1c-e68546356993",
+  "today": "2026-09-07",
   "worker1": "33333333-3333-4333-8333-333333333333",
   "worker2": "44444444-4444-4444-8444-444444444444",
   "worker3": "55555555-5555-4555-8555-555555555555",
   "worker4": "66666666-6666-4666-8666-666666666666",
+  "worker3Name": "Trần Minh Đức",
+  "worker4Name": "Lê Văn Sơn",
   "results": [
     {
       "id": "S1",
       "ok": true,
-      "note": "UI 201 + list hiện Lê Văn Thợ; DB MEMBER|true|2026-09-06; audit ORG_CREW_MEMBER_ADDED=1"
+      "note": "UI 201 + list hiện Lê Văn Hậu; DB MEMBER|true|2026-09-07; audit ORG_CREW_MEMBER_ADDED=1"
     },
     {
       "id": "S2",
@@ -22,12 +26,12 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "UI success + banner overlap; audit có _warning; memberB=c14e99f0…"
+      "note": "UI success + banner overlap; audit có _warning; memberB=02684c4e…"
     },
     {
       "id": "S4",
       "ok": true,
-      "note": "UI Đã rời; DB false|2026-09-06; audit REMOVED +1 có reason"
+      "note": "UI Đã rời; DB false|2026-09-07; audit REMOVED +1 có reason"
     },
     {
       "id": "S5",
@@ -37,7 +41,7 @@
     {
       "id": "S6",
       "ok": true,
-      "note": "at=2026-09-06 thấy worker2; row 2026-09-06|2026-09-06|false nguyên vẹn"
+      "note": "at=2026-09-07 thấy worker2; row 2026-09-07|2026-09-07|false nguyên vẹn"
     },
     {
       "id": "S7",
@@ -52,7 +56,7 @@
     {
       "id": "S9",
       "ok": true,
-      "note": "URL tab=workers&crew=dbf1cd63-cb8e-4e27-96e5-ff89176ccc76&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
+      "note": "URL tab=workers&crew=13024ac6-5fe7-4234-aa3c-b6700f9345d4&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
     },
     {
       "id": "S10",

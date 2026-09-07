@@ -5,10 +5,17 @@
  * Chạy:   node e2e-driver-org-srs-008.cjs
  * Yêu cầu: stack rebuild từ working tree (api có /api/v1/eligibility/*,
  *          web có checklist + /my-eligibility, mobile có /eligibility);
- *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025).
+ *          admin (hoang.anh@vinacons.vn / E2EAdmin@2025) + pm (quoc.tran@vinacons.vn / E2EPm@2025)
+ *          + worker1 (thang.nguyen@vinacons.vn / E2EWorker@2025).
  *
- * Luồng: seed 2 workers E2E8 (zero-trade + skill-3) + crew E2E8-CREW (leader
- * worker2, member worker1, trade THO-CAT) → S1 ADMIN checklist + shape →
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07):
+ * seed 2 workers Võ Văn Đạt (zero-trade, fail-closed) + Trần Văn Sang (THO-CAT Lv3)
+ * (@vinacons.vn) + crew DXT-01 'Đội xây tô số 1' (leader hau.le, member thang.nguyen,
+ * trade THO-CAT Lv3 qua seed-008.sql); reasons tiếng Việt không tag E2E.
+ * Passwords giữ nguyên.
+ *
+ * Luồng: seed 2 workers realistic (zero-trade + skill-3) + crew DXT-01 (leader
+ * hau.le, member thang.nguyen, trade THO-CAT) → S1 ADMIN checklist + shape →
  * S2 fail-closed → S3 skill match/low → S4 suspend/reactivate worker →
  * S5 PM ok + worker 403 → S6 /my-eligibility worker + admin 404 →
  * S7 crew eligibility + suspend/reactivate → S8/S9/S10 mobile →
@@ -25,21 +32,25 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
 const WORKER1_ID = '33333333-3333-4333-8333-333333333333';
 const WORKER2_ID = '44444444-4444-4444-8444-444444444444';
 const THO_CAT = '11111111-1111-4111-8111-111111111111';
-const CREW_CODE = 'E2E8-CREW';
-const ZERO_EMAIL = 'e2e8-zero@example.com';
-const SKILL3_EMAIL = 'e2e8-skill3@example.com';
+const CREW_CODE = 'DXT-01';
+const CREW_NAME = 'Đội xây tô số 1';
+const ZERO_EMAIL = 'dat.vo@vinacons.vn';
+const ZERO_NAME = 'Võ Văn Đạt';
+const SKILL3_EMAIL = 'sang.tran@vinacons.vn';
+const SKILL3_NAME = 'Trần Văn Sang';
 const E2E_PASS = 'E2EWorker@2025';
-const REASON_SUSPEND = 'E2E8 tam ngung: kiem dinh eligibility';
+const REASON_SUSPEND = 'Tạm ngừng: kiểm định điều kiện nhận việc (đợt T9/2026)';
+const MOCK_ERROR = 'Lỗi mô phỏng kiểm thử';
 const TODAY = new Date().toISOString().slice(0, 10);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -113,7 +124,22 @@ function cond(list, code) {
   return (list || []).find((c) => c.code === code) || null;
 }
 
-async function cleanupE2E8() {
+/**
+ * Cleanup entity run 008: id-based trước (ids đã ghi trong e2e-vars.json),
+ * rồi sweep theo identities cố định (emails seed + mã crew DXT-01) + fallback
+ * created_at 12h. Identities này là throwaway của run (không đụng canonical:
+ * DD-CD/DTA-/DTB-/DCD-/DCT- và users TX-00xx đều không khớp). Audit giữ nguyên.
+ */
+async function cleanupRun(ids) {
+  const list = (ids || []).filter(Boolean);
+  if (list.length) {
+    const q = list.map((s) => `'${s}'`).join(',');
+    psqlT(`DELETE FROM crew_members WHERE crew_id IN (${q}) OR user_id IN (${q})`);
+    psqlT(`DELETE FROM resource_trades WHERE crew_id IN (${q}) OR user_id IN (${q})`);
+    psqlT(`DELETE FROM crews WHERE id IN (${q})`);
+    psqlT(`DELETE FROM user_roles WHERE user_id IN (${q})`);
+    psqlT(`DELETE FROM users WHERE id IN (${q}) AND email IN ('${ZERO_EMAIL}','${SKILL3_EMAIL}')`);
+  }
   const crewId = psqlT(`SELECT id FROM crews WHERE code='${CREW_CODE}'`);
   if (crewId && UUID_RE.test(crewId)) {
     psqlT(`DELETE FROM crew_members WHERE crew_id='${crewId}'`);
@@ -129,6 +155,17 @@ async function cleanupE2E8() {
       psqlT(`DELETE FROM users WHERE id='${uid}'`);
     }
   }
+  // fallback: identities run trong cửa sổ 12h (không khớp canonical)
+  psqlT(`DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE lower(email) IN (lower('${ZERO_EMAIL}'), lower('${SKILL3_EMAIL}')) AND created_at > now() - interval '12 hours')`);
+  psqlT(`DELETE FROM users WHERE lower(email) IN (lower('${ZERO_EMAIL}'), lower('${SKILL3_EMAIL}')) AND created_at > now() - interval '12 hours'`);
+  psqlT(`DELETE FROM crews WHERE code='${CREW_CODE}' AND created_at > now() - interval '12 hours'`);
+}
+
+/** Pre-cleanup: ids trong vars run trước + sweep identities. */
+function preCleanupRun() {
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8')); } catch {}
+  return cleanupRun(prev ? [prev.zeroId, prev.skill3Id, prev.crewId].filter(Boolean) : []);
 }
 
 (async () => {
@@ -153,17 +190,17 @@ async function cleanupE2E8() {
     process.exit(2);
   }
 
-  // ---- Setup: pre-cleanup + tạo 2 workers + 1 crew + member + crew trade ----
-  await cleanupE2E8();
+  // ---- Setup: pre-cleanup (ids run trước + sweep) + tạo 2 workers + 1 crew + member + crew trade ----
+  await preCleanupRun();
   let zeroId = null;
   let skill3Id = null;
   let crewId = null;
   {
     const z = await api('POST', '/api/v1/workers', adminToken,
-      { email: ZERO_EMAIL, password: E2E_PASS, fullName: 'E2E8 Zero Trade' },
+      { email: ZERO_EMAIL, password: E2E_PASS, fullName: ZERO_NAME },
       { 'X-Correlation-Id': uuid() });
     const s = await api('POST', '/api/v1/workers', adminToken,
-      { email: SKILL3_EMAIL, password: E2E_PASS, fullName: 'E2E8 Skill Three', trades: [{ tradeId: THO_CAT, skillLevel: 3 }] },
+      { email: SKILL3_EMAIL, password: E2E_PASS, fullName: SKILL3_NAME, trades: [{ tradeId: THO_CAT, skillLevel: 3 }] },
       { 'X-Correlation-Id': uuid() });
     if (z.status !== 201 || s.status !== 201) {
       console.error(`Tạo workers thất bại zero=${z.status} ${JSON.stringify(z.body)} skill3=${s.status} ${JSON.stringify(s.body)}`);
@@ -173,7 +210,7 @@ async function cleanupE2E8() {
     zeroId = z.body.id;
     skill3Id = s.body.id;
     const c = await api('POST', '/api/v1/crews', adminToken,
-      { code: CREW_CODE, name: 'E2E8 Doi Kiem Dinh', leaderUserId: WORKER2_ID },
+      { code: CREW_CODE, name: CREW_NAME, leaderUserId: WORKER2_ID },
       { 'X-Correlation-Id': uuid() });
     if (c.status !== 201 && c.status !== 200) {
       console.error(`Tạo crew thất bại ${c.status} ${JSON.stringify(c.body)}`);
@@ -328,7 +365,7 @@ async function cleanupE2E8() {
       await workerPage.waitForFunction(
         () => (document.body.textContent || '').includes('Mã đối chiếu:') || (document.body.textContent || '').includes('Tài khoản không có hồ sơ worker'),
         { timeout: 20000 });
-      await snap(workerPage, `${id}-myeligibility`, 'worker1 tự kiểm tra (+ crews E2E8-CREW)');
+      await snap(workerPage, `${id}-myeligibility`, `worker1 tự kiểm tra (+ crews ${CREW_CODE})`);
       const t = await bodyText(workerPage);
       if (!t.includes('Mã đối chiếu:')) return fail(id, 'worker1 /my-eligibility không hiện checklist');
       if (!t.includes(CREW_CODE)) return fail(id, `thiếu crews membership ${CREW_CODE}`);
@@ -429,13 +466,13 @@ async function cleanupE2E8() {
         await page.route('**/api/v1/eligibility/me', async (route) => {
           n += 1;
           if (n === 1) {
-            await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'E2E8 loi gia lap' }) });
+            await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: MOCK_ERROR }) });
           } else {
             await route.continue();
           }
         });
         await page.getByLabel('view eligibility').click();
-        await page.waitForFunction(() => (document.body.textContent || '').includes('E2E8 loi gia lap'), { timeout: 60000 });
+        await page.waitForFunction((msg) => (document.body.textContent || '').includes(msg), MOCK_ERROR, { timeout: 60000 });
         await snap(page, `${id}-retry-error`, 'Mobile lỗi + nút Thử lại');
         const t0 = await bodyText(page);
         if (!t0.includes('Thử lại')) return fail(id, 'mobile lỗi thiếu nút Thử lại');
@@ -468,13 +505,15 @@ async function cleanupE2E8() {
       return ok(id, `reuse ${fixed}; xấu → generate; no-store; audit ${a0}→${a1} (delta 0)`);
     })();
   } finally {
-    await cleanupE2E8();
+    await cleanupRun([zeroId, skill3Id, crewId]);
     const crewsRest = psqlT(`SELECT count(*) FROM crews WHERE code='${CREW_CODE}'`);
     const usersRest = psqlT(`SELECT count(*) FROM users WHERE lower(email) IN (lower('${ZERO_EMAIL}'), lower('${SKILL3_EMAIL}'))`);
     const auditFinal = psqlT('SELECT count(*) FROM audit_logs');
     console.log(`cleanup: crews rest=${crewsRest}, seedusers rest=${usersRest}, audit ${auditBaseline}→${auditFinal} (tăng do suspend/activate + tạo/xóa entity là hợp lệ; eligibility GET delta 0 ở S11)`);
     fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
-      zeroId, skill3Id, crewId, today: TODAY,
+      zeroId, zeroEmail: ZERO_EMAIL, zeroName: ZERO_NAME,
+      skill3Id, skill3Email: SKILL3_EMAIL, skill3Name: SKILL3_NAME,
+      crewId, crewCode: CREW_CODE, crewName: CREW_NAME, today: TODAY,
       worker1: WORKER1_ID, worker2: WORKER2_ID, tradeThoCat: THO_CAT,
       auditBaseline, auditFinal, crewsRest, usersRest, results,
     }, null, 2));

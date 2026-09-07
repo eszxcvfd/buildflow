@@ -4,10 +4,16 @@
  *
  * Chạy:   node e2e-driver-org-srs-006.cjs
  * Yêu cầu: stack buildflow rebuild từ working tree (api có /api/v1/crews, web có /crews);
- *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025);
- *          seed ORG-SRS-004 còn trong DB (chuỗi E2E4 project/area/work_type).
+ *          admin (hoang.anh@vinacons.vn / E2EAdmin@2025) + pm (quoc.tran@vinacons.vn / E2EPm@2025)
+ *          + worker1 (thang.nguyen@vinacons.vn / E2EWorker@2025);
+ *          seed ORG-SRS-004 còn trong DB (chuỗi PRD/B1-01/BT-CT — giữ UUID).
  *
- * Luồng: S1 tạo crew E2E-CREW-01 qua UI (PM) → S2 validation → S3 swap lead qua UI
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07):
+ * crew tạo mới dùng mã DCD-xxx/DCT-xxx + tên 'Đội cơ điện…' với DIGITS duy nhất mỗi run;
+ * WO/PRD-B1-006 'Bảo trì thiết bị tầng hầm B1'; reasons tiếng Việt không tag E2E.
+ * Passwords giữ nguyên.
+ *
+ * Luồng: S1 tạo crew DCD-xxx qua UI (PM) → S2 validation → S3 swap lead qua UI
  * → S4 seed assignment mở + suspend có warning → S5 alreadyInState → S6 reactivate
  * → S7 terminate + eligibleOnly → S8 directory tab Đội → S9 quyền → S10 double-submit
  * → S11 assignment còn nguyên. Cleanup entity cuối run (audit giữ nguyên).
@@ -22,25 +28,32 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
-const WORKER1_ID = '33333333-3333-4333-8333-333333333333';
-const WORKER2_ID = '44444444-4444-4444-8444-444444444444';
-const PM_ID = '22222222-2222-4222-8222-222222222222';
-const CREW_CODE = 'E2E-CREW-01';
-const CREW_NAME = 'E2E Đội Thi Công 01';
-const CREW_NAME2 = 'E2E Đội Thi Công 01 Đổi Tên';
-const DS_CODE = 'E2E-CREW-DS';
-const WO_E2E6 = 'e2e6b300-0000-4000-8000-0000000000b4';
-const ASN_E2E6 = 'e2e6c100-0000-4000-8000-0000000000c2';
+// Run identities realistic (docs/demo-data.md): mã đội DCD-*/DCT-* duy nhất mỗi run
+// (canonical DD-CD không khớp pattern này nên không bao giờ bị đụng).
+const DIGITS = Date.now().toString(36).toUpperCase().slice(-6);
+const CREW_CODE = `DCD-${DIGITS}`;
+const CREW_NAME = `Đội cơ điện Vinacons ${DIGITS}`;
+const CREW_NAME2 = `Đội cơ điện Vinacons ${DIGITS} (mở rộng)`;
+const DS_CODE = `DCT-${DIGITS}`;
+const DS_NAME = `Đội cơ điện tăng cường ${DIGITS}`;
+const WO_CODE = 'PRD-B1-006';
+const WO_TITLE = 'Bảo trì thiết bị tầng hầm B1';
+
+const WORKER1_ID = '33333333-3333-4333-8333-333333333333'; // thang.nguyen (Nguyễn Văn Thắng)
+const WORKER2_ID = '44444444-4444-4444-8444-444444444444'; // hau.le (Lê Văn Hậu)
+const PM_ID = '22222222-2222-4222-8222-222222222222'; // quoc.tran
+const WO_ID = 'e2e6b300-0000-4000-8000-0000000000b4';
+const ASN_ID = 'e2e6c100-0000-4000-8000-0000000000c2';
 const GHOST_ID = '00000000-0000-4000-8000-000000000099';
-const REASON_SUSPEND = 'E2E6 tạm ngừng: bảo trì thiết bị tuần 37';
-const REASON_TERMINATE = 'E2E6 chấm dứt: kết thúc gói thầu phụ';
+const REASON_SUSPEND = 'Tạm ngừng: bảo trì thiết bị tuần 37 (đợt T9/2026)';
+const REASON_TERMINATE = 'Chấm dứt: kết thúc gói thầu phụ (đợt T9/2026)';
 
 const results = [];
 function step(id, name, fn) {
@@ -107,6 +120,33 @@ function uuid() {
     Math.floor(Math.random() * 16).toString(16));
 }
 
+/**
+ * Xóa entity run 006: id-based trước (crew ids + WO/ASN ids), fallback pattern
+ * mã run DCD-xxx/DCT-xxx (canonical DD-CD không khớp nên an toàn). Audit giữ nguyên.
+ */
+function cleanup006(crewIds) {
+  const idList = (crewIds || []).filter(Boolean).map((s) => `'${s}'`);
+  if (idList.length) {
+    psqlT(`DELETE FROM assignments WHERE crew_id IN (${idList.join(',')})`);
+    psqlT(`DELETE FROM crew_members WHERE crew_id IN (${idList.join(',')})`);
+    psqlT(`DELETE FROM crews WHERE id IN (${idList.join(',')})`);
+  }
+  const delAsn = psqlT(`DELETE FROM assignments WHERE id='${ASN_ID}'; SELECT count(*) FROM assignments WHERE id='${ASN_ID}'`);
+  const delWo = psqlT(`DELETE FROM work_orders WHERE id='${WO_ID}'; SELECT count(*) FROM work_orders WHERE id='${WO_ID}'`);
+  // fallback: mã run-pattern (không đụng DD-CD canonical)
+  const fbMem = psqlT(`DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE (code LIKE 'DCD-%' OR code LIKE 'DCT-%') AND created_at > now() - interval '12 hours')`);
+  const fbCrew = psqlT(`DELETE FROM crews WHERE (code LIKE 'DCD-%' OR code LIKE 'DCT-%') AND created_at > now() - interval '12 hours'; SELECT count(*) FROM crews WHERE code LIKE 'DCD-%' OR code LIKE 'DCT-%'`);
+  console.log(`cleanup: assignment rest=${delAsn} workorder rest=${delWo} idMembers/idCrews done fbMembers=${fbMem.split('\n').pop()} fbCrews rest=${fbCrew.split('\n').pop()}`);
+}
+
+/** Pre-cleanup run trước (ids trong vars cũ + WO/ASN ids + pattern fallback). */
+function preCleanup006() {
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8')); } catch {}
+  const ids = prev ? [prev.crewId, prev.dsCrewId].filter(Boolean) : [];
+  cleanup006(ids);
+}
+
 (async () => {
   let browser;
   try {
@@ -131,10 +171,12 @@ function uuid() {
     process.exit(2);
   }
   let crewId = null;
+  let dsCrewId = null;
+  preCleanup006();
 
   try {
     // ============ S1: tạo crew qua UI ============
-    await step('S1', 'PM login → nav Đội thi công → /crews/new tạo E2E-CREW-01 (leader worker1) → list thấy', async (id) => {
+    await step('S1', 'PM login → nav Đội thi công → /crews/new tạo DCD-* (leader thang.nguyen) → list thấy', async (id) => {
       await login(page, PM_EMAIL, PM_PASS);
       await page.waitForSelector('.bf-nav', { timeout: 15000 });
       const navText = (await page.locator('.bf-nav').textContent()) || '';
@@ -163,7 +205,7 @@ function uuid() {
       await page.waitForTimeout(1500);
       const t = await bodyText(page);
       await snap(page, id + '-list', 'Danh sách đội sau khi tạo');
-      if (!t.includes(CREW_CODE)) return fail(id, 'list /crews không thấy E2E-CREW-01');
+      if (!t.includes(CREW_CODE)) return fail(id, `list /crews không thấy ${CREW_CODE}`);
       const dbCrew = psqlT(`SELECT status||'|'||COALESCE(contractor_id::text,'-') FROM crews WHERE id='${crewId}'`);
       const dbLead = psqlT(`SELECT member_role||'|'||is_active::text||'|'||count(*) OVER () FROM crew_members WHERE crew_id='${crewId}' AND is_active`);
       const dbAudit = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_type='CREW' AND entity_id='${crewId}' AND action='ORG_CREW_CREATED'`);
@@ -179,16 +221,16 @@ function uuid() {
         { code: CREW_CODE, name: 'Trùng mã', leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': uuid() });
       // leader UUID hợp lệ nhưng không tồn tại → use-case fieldError (đúng spec fieldErrors {leaderUserId})
       const badLead = await api('POST', '/api/v1/crews', pmToken,
-        { code: 'E2E-CREW-BADLEAD', name: 'Leader ảo', leaderUserId: GHOST_ID }, { 'X-Correlation-Id': uuid() });
+        { code: `DCD-${DIGITS}-KL`, name: 'Leader ảo', leaderUserId: GHOST_ID }, { 'X-Correlation-Id': uuid() });
       // thiếu hẳn field leader → DTO ValidationPipe 400 shape mặc định (ghi nhận trung thực, xem §4a doc)
       const noLead = await api('POST', '/api/v1/crews', pmToken,
-        { code: 'E2E-CREW-NOLEAD', name: 'Thiếu leader' }, { 'X-Correlation-Id': uuid() });
+        { code: `DCD-${DIGITS}-KT`, name: 'Thiếu leader' }, { 'X-Correlation-Id': uuid() });
       const badCorr = await api('POST', '/api/v1/crews', pmToken,
-        { code: 'E2E-CREW-BADC', name: 'Sai corr', leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': 'not-a-uuid' });
+        { code: `DCD-${DIGITS}-XC`, name: 'Sai corr', leaderUserId: WORKER1_ID }, { 'X-Correlation-Id': 'not-a-uuid' });
       // UI: submit thiếu leader → lỗi field-level
       await page.goto(`${WEB}/crews/new`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#crew-code', { timeout: 15000 });
-      await page.fill('#crew-code', 'E2E-CREW-UINOLEAD');
+      await page.fill('#crew-code', `DCD-${DIGITS}-UI`);
       await page.fill('#crew-name', 'UI thiếu leader');
       await page.locator('button', { hasText: 'Tạo đội' }).first().click();
       await page.waitForTimeout(1200);
@@ -241,12 +283,12 @@ function uuid() {
     await step('S4', 'Seed assignment mở → detail Tạm ngừng: warning 1 việc + reason trống lỗi field + reason đủ → 200 INACTIVE + audit SUSPENDED(reason+_warning)', async (id) => {
       if (!crewId) return fail(id, 'thiếu crewId từ S1');
       psqlT(`INSERT INTO work_orders (id, code, project_id, area_id, work_type_id, required_trade_id, title, description, instructions, priority, status, planned_start_at, planned_end_at, due_at, progress_percent, job_board_open, created_by, version, created_at, updated_at)
-        VALUES ('${WO_E2E6}', 'E2E6-WO-1', 'e2e4b000-0000-4000-8000-0000000000b1', 'e2e4b100-0000-4000-8000-0000000000b2',
-        'e2e4b200-0000-4000-8000-0000000000b3', '11111111-1111-4111-8111-111111111111', 'E2E6 Cong viec mo cho doi',
-        'seed ORG-SRS-006', 'seed', 'NORMAL', 'ASSIGNED', now(), now()+interval '14 days', now()+interval '20 days', 0, false,
+        VALUES ('${WO_ID}', '${WO_CODE}', 'e2e4b000-0000-4000-8000-0000000000b1', 'e2e4b100-0000-4000-8000-0000000000b2',
+        'e2e4b200-0000-4000-8000-0000000000b3', '11111111-1111-4111-8111-111111111111', '${WO_TITLE}',
+        'Công việc mở gán cho đội cơ điện (seed ORG-SRS-006)', 'Kiểm tra tủ điện và hệ thống chiếu sáng tầng hầm B1 trước khi nghiệm thu', 'NORMAL', 'ASSIGNED', now(), now()+interval '14 days', now()+interval '20 days', 0, false,
         '${PM_ID}', 1, now(), now()) ON CONFLICT (id) DO NOTHING`);
       psqlT(`INSERT INTO assignments (id, work_order_id, assignee_type, worker_id, crew_id, responsible_user_id, source, status, requires_acceptance, assigned_by, assigned_at, created_at)
-        VALUES ('${ASN_E2E6}', '${WO_E2E6}', 'CREW', NULL, '${crewId}', '${WORKER1_ID}', 'DIRECT_ASSIGNMENT', 'ACTIVE', false, '${PM_ID}', now(), now())
+        VALUES ('${ASN_ID}', '${WO_ID}', 'CREW', NULL, '${crewId}', '${WORKER1_ID}', 'DIRECT_ASSIGNMENT', 'ACTIVE', false, '${PM_ID}', now(), now())
         ON CONFLICT (id) DO NOTHING`);
       const ow = await api('GET', `/api/v1/crews/${crewId}/open-work`, pmToken);
       if (ow.status !== 200 || ow.body.openAssignments !== 1) {
@@ -343,8 +385,8 @@ function uuid() {
       const t = await bodyText(page);
       await snap(page, id + '-sort', 'Directory tab Đội sort tên giảm dần');
       if (!reversed) return fail(id, `API asc/desc không đảo nhau`);
-      if (!inact.body.data.some((c) => c.id === crewId)) return fail(id, 'filter INACTIVE thiếu crew E2E');
-      if (!t.includes(CREW_CODE)) return fail(id, 'UI tab Đội sort desc thiếu crew E2E');
+      if (!inact.body.data.some((c) => c.id === crewId)) return fail(id, 'filter INACTIVE thiếu crew DCD');
+      if (!t.includes(CREW_CODE)) return fail(id, 'UI tab Đội sort desc thiếu crew DCD');
       return ok(id, `API asc/desc đảo đúng (${asc.body.total} crews); INACTIVE chứa crew; UI khớp`);
     })();
 
@@ -352,11 +394,11 @@ function uuid() {
     await step('S9', 'PM write crews OK (đúng actor); worker /crews 403 + API 403; anon 401; PM PATCH workers/:id/status 403', async (id) => {
       // PM viết crews: đổi description (không đụng lead/status)
       const w = await api('PATCH', `/api/v1/crews/${crewId}`, pmToken,
-        { description: 'E2E6 mô tả bởi PM' }, { 'X-Correlation-Id': uuid() });
+        { description: 'Mô tả cập nhật bởi PM (đợt T9/2026)' }, { 'X-Correlation-Id': uuid() });
       const wRole = await api('GET', '/api/v1/crews?limit=2', workerToken);
       const wAnon = await api('GET', '/api/v1/crews?limit=2', null);
       const pmOnWorker = await api('PATCH', `/api/v1/workers/${WORKER2_ID}/status`, pmToken,
-        { action: 'SUSPEND', reason: 'E2E6 kiểm tra không widen quyền' }, { 'X-Correlation-Id': uuid() });
+        { action: 'SUSPEND', reason: 'Kiểm tra không widen quyền (đợt T9/2026)' }, { 'X-Correlation-Id': uuid() });
       const ghost = await api('GET', `/api/v1/crews/${GHOST_ID}`, pmToken);
       await page.goto(`${WEB}/login`, { waitUntil: 'networkidle' });
       await login(page, WORKER_EMAIL, WORKER_PASS);
@@ -382,7 +424,7 @@ function uuid() {
     // ============ S10: double-submit ============
     await step('S10', 'Double-submit cùng correlation-id → 1 row + 1 audit (request 2 → 409)', async (id) => {
       const corr = uuid();
-      const payload = { code: DS_CODE, name: 'E2E Double Submit', leaderUserId: WORKER1_ID };
+      const payload = { code: DS_CODE, name: DS_NAME, leaderUserId: WORKER1_ID };
       const r1 = await api('POST', '/api/v1/crews', pmToken, payload, { 'X-Correlation-Id': corr });
       const r2 = await api('POST', '/api/v1/crews', pmToken, payload, { 'X-Correlation-Id': corr });
       const rows = psqlT(`SELECT count(*) FROM crews WHERE code='${DS_CODE}'`);
@@ -393,34 +435,32 @@ function uuid() {
       if (r1.status !== 201 && r1.status !== 200) return fail(id, `request1 HTTP ${r1.status}: ${JSON.stringify(r1.body)}`);
       if (r2.status !== 409) return fail(id, `request2 HTTP ${r2.status} (mong 409): ${JSON.stringify(r2.body)}`);
       if (rows !== '1' || audits !== '1') return fail(id, `rows=${rows} audits=${audits} (mong 1+1)`);
+      dsCrewId = dsId && !dsId.startsWith('PSQL') ? dsId : null;
       return ok(id, `req1 ${r1.status} → req2 409; rows=1 audits=1 (corr=${corr.slice(0, 8)}…)`);
     })();
 
     // ============ S11: assignment còn nguyên ============
     await step('S11', 'Assignment mở còn nguyên liên kết sau khi crew INACTIVE', async (id) => {
-      const row = psqlT(`SELECT status||'|'||crew_id::text FROM assignments WHERE id='${ASN_E2E6}'`);
+      const row = psqlT(`SELECT status||'|'||crew_id::text FROM assignments WHERE id='${ASN_ID}'`);
       if (!row.startsWith('ACTIVE|') || !row.includes(crewId)) {
         return fail(id, `assignment DB=${row} (mong ACTIVE|<crewId>)`);
       }
-      return ok(id, `assignment ${ASN_E2E6} status=ACTIVE, crew_id giữ nguyên sau INACTIVE`);
+      return ok(id, `assignment ${ASN_ID} status=ACTIVE, crew_id giữ nguyên sau INACTIVE`);
     })();
   } finally {
-    // ============ Cleanup (audit giữ nguyên) ============
+    // ============ Cleanup id-based (audit giữ nguyên) ============
     try {
       await page.goto(`${WEB}/login`, { waitUntil: 'networkidle' }).catch(() => {});
     } catch {}
-    const delAsn = psqlT(`DELETE FROM assignments WHERE id='${ASN_E2E6}'; SELECT count(*) FROM assignments WHERE id='${ASN_E2E6}'`);
-    const delWo = psqlT(`DELETE FROM work_orders WHERE id='${WO_E2E6}'; SELECT count(*) FROM work_orders WHERE id='${WO_E2E6}'`);
-    const delMem = psqlT(`DELETE FROM crew_members WHERE crew_id IN (SELECT id FROM crews WHERE code IN ('${CREW_CODE}','${DS_CODE}'))`);
-    const delCrew = psqlT(`DELETE FROM crews WHERE code IN ('${CREW_CODE}','${DS_CODE}'); SELECT count(*) FROM crews WHERE code IN ('${CREW_CODE}','${DS_CODE}')`);
-    console.log(`cleanup: assignment rest=${delAsn} workorder rest=${delWo} members del=${delMem} crews rest=${delCrew}`);
+    cleanup006([crewId, dsCrewId]);
     await browser.close().catch(() => {});
   }
 
   const pass = results.filter((r) => r.ok).length;
   console.log(`\nTong: ${pass}/${results.length} PASS`);
   fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
-    crewCode: CREW_CODE, dsCode: DS_CODE, woE2e6: WO_E2E6, asnE2e6: ASN_E2E6,
+    digits: DIGITS, crewId, crewCode: CREW_CODE, dsCrewId, dsCode: DS_CODE,
+    woCode: WO_CODE, woId: WO_ID, asnId: ASN_ID,
     worker1: WORKER1_ID, worker2: WORKER2_ID, results,
   }, null, 2));
   if (pass !== results.length) process.exit(1);

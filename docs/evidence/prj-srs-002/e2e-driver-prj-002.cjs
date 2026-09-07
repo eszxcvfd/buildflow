@@ -2,12 +2,18 @@
  * PRJ-SRS-002 E2E driver — Vòng đời trạng thái dự án (issue #33).
  * Evidence-only script; phạm vi docs/evidence — KHÔNG sửa source.
  *
+ * Chuẩn hóa realistic 2026-09-08 (docs/demo-data.md): creds @vinacons.vn,
+ * mã run VDA2-* (Vinacons Dự Án 2), tên/lý do tiếng Việt thực tế, manager UUIDs
+ * giữ nguyên (111…=hoang.anh, 333…=thang.nguyen, 444…=hau.le). Cleanup id-based
+ * (ids e2e-vars.json) + prefix + cửa sổ 12h. Count semantics giữ nguyên
+ * (S3: đúng 6 STATUS_CHANGED).
+ *
  * Chạy:   node e2e-driver-prj-002.cjs
  * Yêu cầu: stack rebuild từ working tree (api có PATCH /projects/:id/status,
  *          web có ProjectStatusDialog + StatusTimeline entityType PROJECT);
  *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025).
  *
- * Quy ước: mã E2E2-% (cleanup đầu/cuối run, audit giữ nguyên — append-only).
+ * Quy ước: mã VDA2-% (cleanup đầu/cuối run, audit giữ nguyên — append-only).
  * Lưu ý DB: audit_logs có guard cấm DELETE/UPDATE + unique từng phần
  * (correlation_id, action) → mỗi request kèm correlation dùng UUID mới.
  */
@@ -21,11 +27,11 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const WORKER_EMAIL = 'worker1@example.com';
+const WORKER_EMAIL = 'thang.nguyen@vinacons.vn';
 const WORKER_PASS = 'E2EWorker@2025';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -34,11 +40,21 @@ const W1_ID = '33333333-3333-4333-8333-333333333333';
 const W2_ID = '44444444-4444-4444-8444-444444444444';
 
 const C = {
-  A: 'E2E2-A', B: 'E2E2-B', Cc: 'E2E2-C', D: 'E2E2-D',
-  W: 'E2E2-W', PM: 'E2E2-PM', R: 'E2E2-R',
+  A: 'VDA2-A', B: 'VDA2-B', Cc: 'VDA2-C', D: 'VDA2-D',
+  W: 'VDA2-W', PM: 'VDA2-PM', R: 'VDA2-R',
 };
 const START = '2026-10-01';
 const END = '2027-03-31';
+// Tên/địa chỉ realistic cho project run (docs/demo-data.md); key theo mã VDA2-*.
+const PROJ = {
+  'VDA2-A': { name: 'Bến cảng logistics Cái Mép', address: 'Số 1, đường Cái Mép, Bà Rịa' },
+  'VDA2-B': { name: 'Cầu vượt An Sương', address: 'Số 2, đường An Sương, Quận 12' },
+  'VDA2-C': { name: 'Kho lạnh Tân Cảng', address: 'Số 3, đường Tân Cảng, Bình Thạnh' },
+  'VDA2-D': { name: 'Trạm biến áp Long Thành', address: 'Số 4, đường Long Thành, Đồng Nai' },
+  'VDA2-W': { name: 'Xưởng cơ khí Đông Anh', address: 'Số 5, đường Đông Anh, Hà Nội' },
+  'VDA2-PM': { name: 'Khu nghỉ dưỡng Suối Mơ', address: 'Số 6, đường Suối Mơ, Đồng Nai' },
+  'VDA2-R': { name: 'Đập thủy lợi Đa Nhim', address: 'Số 7, đường Đa Nhim, Lâm Đồng' },
+};
 const LABEL = { ACTIVATE: 'Kích hoạt', PAUSE: 'Tạm dừng', RESUME: 'Tiếp tục hoạt động', COMPLETE: 'Hoàn thành', CLOSE: 'Đóng', REOPEN: 'Mở lại' };
 const STATUS_VN = { DRAFT: 'Nháp', ACTIVE: 'Đang hoạt động', PAUSED: 'Tạm dừng', COMPLETED: 'Hoàn thành', CLOSED: 'Đóng' };
 
@@ -110,6 +126,20 @@ function uuid() {
 }
 function runCleanup() {
   try {
+    // Id-based: xóa sót lại của run trước theo ids đã ghi trong e2e-vars.json.
+    try {
+      const prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const ids = prev && prev.projectIds ? Object.values(prev.projectIds).filter(Boolean) : [];
+      for (const pid of ids) {
+        execFileSync('docker', ['exec', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-c',
+          `DELETE FROM project_members WHERE project_id='${pid}';` +
+          `DELETE FROM attachments WHERE project_id='${pid}';` +
+          `DELETE FROM project_areas WHERE project_id='${pid}';` +
+          `DELETE FROM work_orders WHERE project_id='${pid}';` +
+          `DELETE FROM projects WHERE id='${pid}';`],
+        { encoding: 'utf8', timeout: 20000 });
+      }
+    } catch {}
     const sql = fs.readFileSync(path.join(__dirname, 'seed-002.sql'), 'utf8');
     execFileSync('docker', ['exec', '-i', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-v', 'ON_ERROR_STOP=1'],
       { input: sql, encoding: 'utf8', timeout: 20000 });
@@ -118,8 +148,9 @@ function runCleanup() {
   }
 }
 async function createProject(token, code, managerId) {
+  const meta = PROJ[code] || { name: `Dự án Vinacons ${code}`, address: `Số 1, đường ${code}` };
   const r = await api('POST', '/api/v1/projects', token, {
-    code, name: `Công trình ${code}`, address: `Số 1, đường ${code}`,
+    code, name: meta.name, address: meta.address,
     plannedStartDate: START, plannedEndDate: END, managerId: managerId || W1_ID,
   });
   return r;
@@ -178,13 +209,13 @@ async function uiTransition(page, action, reason) {
 
   try {
     // ============ S1: ADMIN tạo (UI) + ACTIVATE (UI dialog) ============
-    await step('S1', 'ADMIN tạo E2E2-A qua UI → ACTIVATE qua dialog → Đang hoạt động + audit', async (id) => {
+    await step('S1', 'ADMIN tạo VDA2-A qua UI → ACTIVATE qua dialog → Đang hoạt động + audit', async (id) => {
       await loginWeb(adminPage, ADMIN_EMAIL, ADMIN_PASS);
       await adminPage.goto(`${WEB}/projects/new`, { waitUntil: 'networkidle' });
       await adminPage.waitForSelector('#project-manager', { timeout: 20000 });
       await adminPage.fill('#project-code', C.A);
-      await adminPage.fill('#project-name', `Công trình ${C.A}`);
-      await adminPage.fill('#project-address', `Số 1, đường ${C.A}`);
+      await adminPage.fill('#project-name', PROJ[C.A].name);
+      await adminPage.fill('#project-address', PROJ[C.A].address);
       await adminPage.fill('#project-start', START);
       await adminPage.fill('#project-end', END);
       await adminPage.selectOption('#project-manager', W1_ID);
@@ -192,14 +223,14 @@ async function uiTransition(page, action, reason) {
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tạo dự án thành công'), { timeout: 25000 });
       const lr = await api('GET', '/api/v1/projects?limit=100&offset=0', adminToken);
       const hit = (Array.isArray(lr.body) ? lr.body : []).find((p) => p.code === C.A);
-      if (!hit) return fail(id, 'tạo UI xong nhưng list không thấy E2E2-A');
+      if (!hit) return fail(id, 'tạo UI xong nhưng list không thấy VDA2-A');
       idA = hit.id;
       await gotoDetail(adminPage, idA, 'Nháp');
       // ACTIVATE không cần reason — dialog confirm trực tiếp.
       await uiTransition(adminPage, 'ACTIVATE');
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Kích hoạt dự án thành công'), { timeout: 25000 });
       await gotoDetail(adminPage, idA, 'Đang hoạt động');
-      await snap(adminPage, `${id}-active`, 'E2E2-A sau ACTIVATE (Đang hoạt động)');
+      await snap(adminPage, `${id}-active`, 'VDA2-A sau ACTIVATE (Đang hoạt động)');
       const db = psqlT(`SELECT status FROM projects WHERE id='${idA}'`);
       const au = psqlT(`SELECT actor_user_id||'|'||action||'|'||entity_type||'|'||coalesce(before_data->>'status','?')||'->'||coalesce(after_data->>'status','?') FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_STATUS_CHANGED' ORDER BY created_at`);
       if (db !== 'ACTIVE') return fail(id, `psql status=${db} (mong ACTIVE)`);
@@ -212,10 +243,10 @@ async function uiTransition(page, action, reason) {
     // ============ S2: PAUSE → RESUME → COMPLETE → CLOSE ============
     await step('S2', 'Chuỗi PAUSE/RESUME/COMPLETE/CLOSE (API) + detail từng trạng thái', async (id) => {
       const chain = [
-        { action: 'PAUSE', reason: 'Tạm dừng E2E: chờ vật tư', want: 'PAUSED', vn: 'Tạm dừng' },
+        { action: 'PAUSE', reason: 'Tạm dừng: chờ vật tư về công trường (đợt T9/2026)', want: 'PAUSED', vn: 'Tạm dừng' },
         { action: 'RESUME', reason: null, want: 'ACTIVE', vn: 'Đang hoạt động' },
         { action: 'COMPLETE', reason: null, want: 'COMPLETED', vn: 'Hoàn thành' },
-        { action: 'CLOSE', reason: 'Đóng E2E: nghiệm thu xong', want: 'CLOSED', vn: 'Đóng' },
+        { action: 'CLOSE', reason: 'Đóng: đã nghiệm thu và bàn giao (đợt T9/2026)', want: 'CLOSED', vn: 'Đóng' },
       ];
       const notes = [];
       for (const s of chain) {
@@ -229,11 +260,11 @@ async function uiTransition(page, action, reason) {
         await gotoDetail(adminPage, idA, s.vn);
         notes.push(`${s.action}→${s.want}`);
       }
-      await snap(adminPage, `${id}-closed`, 'E2E2-A sau CLOSE (Đóng + banner WO-guard)');
+      await snap(adminPage, `${id}-closed`, 'VDA2-A sau CLOSE (Đóng + banner WO-guard)');
       const t = await bodyText(adminPage);
       if (!t.includes('không nhận Work Order mới')) return fail(id, 'thiếu banner WO-guard khi CLOSED');
       const reasons = psqlT(`SELECT reason FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_STATUS_CHANGED' AND reason IS NOT NULL ORDER BY created_at`);
-      if (!reasons.includes('Tạm dừng E2E') || !reasons.includes('Đóng E2E')) {
+      if (!reasons.includes('Tạm dừng: chờ vật tư') || !reasons.includes('Đóng: đã nghiệm thu')) {
         return fail(id, `reason audit thiếu: ${reasons.slice(0, 200)}`);
       }
       return ok(id, `${notes.join(', ')}; banner WO-guard có; reasons lưu audit`);
@@ -242,12 +273,12 @@ async function uiTransition(page, action, reason) {
     // ============ S3: REOPEN ============
     await step('S3', 'REOPEN từ CLOSED (reason) → Đang hoạt động', async (id) => {
       const r = await api('PATCH', `/api/v1/projects/${idA}/status`, adminToken,
-        { action: 'REOPEN', reason: 'Mở lại E2E: phát sinh hạng mục' });
+        { action: 'REOPEN', reason: 'Mở lại: phát sinh hạng mục bổ sung (đợt T9/2026)' });
       if (r.status !== 200 || r.body.status !== 'ACTIVE') {
         return fail(id, `REOPEN status=${r.status} ${JSON.stringify(r.body).slice(0, 300)}`);
       }
       await gotoDetail(adminPage, idA, 'Đang hoạt động');
-      await snap(adminPage, `${id}-reopened`, 'E2E2-A sau REOPEN (Đang hoạt động)');
+      await snap(adminPage, `${id}-reopened`, 'VDA2-A sau REOPEN (Đang hoạt động)');
       const db = psqlT(`SELECT status FROM projects WHERE id='${idA}'`);
       const au = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_STATUS_CHANGED'`);
       if (db !== 'ACTIVE' || au !== '6') return fail(id, `psql=${db} audits=${au} (mong ACTIVE/6)`);
@@ -257,7 +288,7 @@ async function uiTransition(page, action, reason) {
     // ============ S4: invalid jump DRAFT→COMPLETE ============
     await step('S4', 'Nhảy cóc DRAFT→COMPLETE → 409 INVALID_TRANSITION + allowed list (API + UI)', async (id) => {
       const cb = await createProject(adminToken, C.B);
-      if (cb.status !== 201) return fail(id, `tạo E2E2-B status=${cb.status}`);
+      if (cb.status !== 201) return fail(id, `tạo VDA2-B status=${cb.status}`);
       idB = cb.body.id;
       const bad = await api('PATCH', `/api/v1/projects/${idB}/status`, adminToken, { action: 'COMPLETE' });
       if (bad.status !== 409 || bad.body.code !== 'INVALID_TRANSITION' || !Array.isArray(bad.body.allowedTransitions)) {
@@ -284,7 +315,7 @@ async function uiTransition(page, action, reason) {
       await gotoDetail(adminPage, idC, 'Nháp');
       await adminPage.getByRole('button', { name: 'Kích hoạt', exact: true }).click();
       await adminPage.waitForSelector('#project-status-reason', { timeout: 15000 });
-      const race = await api('PATCH', `/api/v1/projects/${idC}/status`, adminToken, { action: 'CLOSE', reason: 'Đóng trước E2E race' });
+      const race = await api('PATCH', `/api/v1/projects/${idC}/status`, adminToken, { action: 'CLOSE', reason: 'Đóng trước để kiểm thử song song (đợt T9/2026)' });
       if (race.status !== 200) return fail(id, `race CLOSE status=${race.status}`);
       await adminPage.getByRole('button', { name: 'Xác nhận kích hoạt', exact: true }).click();
       await adminPage.waitForFunction(
@@ -294,7 +325,7 @@ async function uiTransition(page, action, reason) {
       const ut = await bodyText(adminPage);
       if (!ut.includes('Mở lại')) return fail(id, `UI 409 thiếu allowed list tiếng Việt: ${ut.slice(-300)}`);
       const dbC = psqlT(`SELECT status FROM projects WHERE id='${idC}'`);
-      if (dbC !== 'CLOSED') return fail(id, `E2E2-C psql=${dbC} (mong CLOSED)`);
+      if (dbC !== 'CLOSED') return fail(id, `VDA2-C psql=${dbC} (mong CLOSED)`);
       return ok(id, `API 409 allowed=[${allowed}]; UI DRAFT 2 nút đúng; UI race 409 hiện 'Mở lại'`);
     })();
 
@@ -305,8 +336,8 @@ async function uiTransition(page, action, reason) {
         return fail(id, `mong 400 fieldErrors.reason, được ${r.status} ${JSON.stringify(r.body).slice(0, 300)}`);
       }
       const dbB = psqlT(`SELECT status FROM projects WHERE id='${idB}'`);
-      if (dbB !== 'DRAFT') return fail(id, `E2E2-B đổi sau 400! psql=${dbB}`);
-      // UI: E2E2-A đang ACTIVE → mở dialog Tạm dừng, xác nhận rỗng → lỗi client, 0 request.
+      if (dbB !== 'DRAFT') return fail(id, `VDA2-B đổi sau 400! psql=${dbB}`);
+      // UI: VDA2-A đang ACTIVE → mở dialog Tạm dừng, xác nhận rỗng → lỗi client, 0 request.
       await gotoDetail(adminPage, idA, 'Đang hoạt động');
       await adminPage.getByRole('button', { name: 'Tạm dừng', exact: true }).click();
       await adminPage.waitForSelector('#project-status-reason', { timeout: 15000 });
@@ -325,7 +356,7 @@ async function uiTransition(page, action, reason) {
       if (postCount !== 0) return fail(id, `client vẫn gửi ${postCount} request khi thiếu reason`);
       await adminPage.getByRole('button', { name: 'Hủy', exact: true }).click();
       const dbA = psqlT(`SELECT status FROM projects WHERE id='${idA}'`);
-      if (dbA !== 'ACTIVE') return fail(id, `E2E2-A đổi sau UI chặn! psql=${dbA}`);
+      if (dbA !== 'ACTIVE') return fail(id, `VDA2-A đổi sau UI chặn! psql=${dbA}`);
       return ok(id, `API 400 reason; UI chặn 0 request + lỗi client; psql DRAFT/ACTIVE nguyên`);
     })();
 
@@ -342,7 +373,7 @@ async function uiTransition(page, action, reason) {
         return fail(id, `lần 2 mong alreadyInState:true, được ${second.status} ${JSON.stringify(second.body).slice(0, 200)}`);
       }
       if (before !== after) return fail(id, `audit tăng sau idempotent (${before}→${after})`);
-      // UI race: E2E2-D DRAFT → mở dialog Kích hoạt, API ACTIVATE trước, xác nhận → notice.
+      // UI race: VDA2-D DRAFT → mở dialog Kích hoạt, API ACTIVATE trước, xác nhận → notice.
       const cd = await createProject(adminToken, C.D);
       idD = cd.body.id;
       await gotoDetail(adminPage, idD, 'Nháp');
@@ -364,7 +395,7 @@ async function uiTransition(page, action, reason) {
     // ============ S7: worker 403 ============
     await step('S7', 'Worker1: UI không nút chuyển + API PATCH 403', async (id) => {
       const cw = await createProject(adminToken, C.W, W1_ID);
-      if (cw.status !== 201) return fail(id, `tạo E2E2-W status=${cw.status}`);
+      if (cw.status !== 201) return fail(id, `tạo VDA2-W status=${cw.status}`);
       idW = cw.body.id;
       const wPatch = await api('PATCH', `/api/v1/projects/${idW}/status`, workerToken, { action: 'ACTIVATE' });
       if (wPatch.status !== 403) return fail(id, `worker PATCH status=${wPatch.status} (mong 403)`);
@@ -384,13 +415,13 @@ async function uiTransition(page, action, reason) {
     })();
 
     // ============ S8: history ============
-    await step('S8', 'Timeline E2E2-A đủ 6 transitions đúng thứ tự + psql dump', async (id) => {
+    await step('S8', 'Timeline VDA2-A đủ 6 transitions đúng thứ tự + psql dump', async (id) => {
       await gotoDetail(adminPage, idA, 'Đang hoạt động');
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Lịch sử trạng thái'),
         { timeout: 25000 });
       await new Promise((res) => setTimeout(res, 1500));
-      await snap(adminPage, `${id}-timeline`, 'Lịch sử trạng thái E2E2-A');
+      await snap(adminPage, `${id}-timeline`, 'Lịch sử trạng thái VDA2-A');
       const t = await bodyText(adminPage);
       // Ghi nhận F1 (§4a): timeline là cửa sổ 10 bản ghi mới nhất — mỗi lần admin
       // đọc detail, iam reads ghi thêm audit PROJECT_SCOPE_ADMIN_BYPASS cùng
@@ -407,11 +438,11 @@ async function uiTransition(page, action, reason) {
       const seq = rows.filter((r) => r.startsWith('PRJ_PROJECT_STATUS_CHANGED'));
       const wantSeq = [
         'PRJ_PROJECT_STATUS_CHANGED|DRAFT->ACTIVE|',
-        'PRJ_PROJECT_STATUS_CHANGED|ACTIVE->PAUSED|Tạm dừng E2E',
+        'PRJ_PROJECT_STATUS_CHANGED|ACTIVE->PAUSED|Tạm dừng: chờ vật tư',
         'PRJ_PROJECT_STATUS_CHANGED|PAUSED->ACTIVE|',
         'PRJ_PROJECT_STATUS_CHANGED|ACTIVE->COMPLETED|',
-        'PRJ_PROJECT_STATUS_CHANGED|COMPLETED->CLOSED|Đóng E2E',
-        'PRJ_PROJECT_STATUS_CHANGED|CLOSED->ACTIVE|Mở lại E2E',
+        'PRJ_PROJECT_STATUS_CHANGED|COMPLETED->CLOSED|Đóng: đã nghiệm thu',
+        'PRJ_PROJECT_STATUS_CHANGED|CLOSED->ACTIVE|Mở lại: phát sinh',
       ];
       if (seq.length !== 6) return fail(id, `psql transitions=${seq.length} (mong 6): ${dump.slice(0, 400)}`);
       for (let i = 0; i < 6; i += 1) {
@@ -422,9 +453,9 @@ async function uiTransition(page, action, reason) {
     })();
 
     // ============ S9: PM transition ============
-    await step('S9', 'PM ACTIVATE E2E2-PM qua API (audit actor pm)', async (id) => {
+    await step('S9', 'PM ACTIVATE VDA2-PM qua API (audit actor pm)', async (id) => {
       const cp = await createProject(adminToken, C.PM, W2_ID);
-      if (cp.status !== 201) return fail(id, `tạo E2E2-PM status=${cp.status}`);
+      if (cp.status !== 201) return fail(id, `tạo VDA2-PM status=${cp.status}`);
       idPM = cp.body.id;
       const r = await api('PATCH', `/api/v1/projects/${idPM}/status`, pmToken, { action: 'ACTIVATE' });
       if (r.status !== 200 || r.body.status !== 'ACTIVE') {
@@ -438,7 +469,7 @@ async function uiTransition(page, action, reason) {
     // ============ S10: correlation ============
     await step('S10', 'X-Correlation-Id strict trên PATCH status + audit carry', async (id) => {
       const cr = await createProject(adminToken, C.R);
-      if (cr.status !== 201) return fail(id, `tạo E2E2-R status=${cr.status}`);
+      if (cr.status !== 201) return fail(id, `tạo VDA2-R status=${cr.status}`);
       idR = cr.body.id;
       const corr = uuid();
       const r = await api('PATCH', `/api/v1/projects/${idR}/status`, adminToken,
@@ -469,13 +500,13 @@ async function uiTransition(page, action, reason) {
       if (rows.some((a) => /WORKER|CREW|CONTRACTOR/.test(a.action))) {
         return fail(id, 'timeline dự án lẫn events worker/crew');
       }
-      return ok(id, `${rows.length} rows toàn PROJECT của E2E2-A, không lẫn worker/crew`);
+      return ok(id, `${rows.length} rows toàn PROJECT của VDA2-A, không lẫn worker/crew`);
     })();
   } finally {
     runCleanup();
-    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'E2E2-%'`);
+    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'VDA2-%'`);
     const auditFinal = psqlT('SELECT count(*) FROM audit_logs');
-    console.log(`cleanup: E2E2-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do transitions hợp lệ; audit giữ nguyên)`);
+    console.log(`cleanup: VDA2-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do transitions hợp lệ; audit giữ nguyên)`);
     fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
       _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
       admin: ADMIN_EMAIL, pm: PM_EMAIL, worker: WORKER_EMAIL,

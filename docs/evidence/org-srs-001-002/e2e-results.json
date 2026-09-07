@@ -22,7 +22,7 @@
   {
     "id": "A4",
     "ok": true,
-    "note": "báo \"Trade không tồn tại...\""
+    "note": "API 400 \"Trade không tồn tại...\""
   },
   {
     "id": "A5",
@@ -31,15 +31,8 @@
   },
   {
     "id": "A6",
-    "name": "edit đổi tên worker",
-    "ok": false,
-    "note": "page.fill: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('#fullName')\n",
-    "err": {
-      "log": [
-        "  - waiting for locator('#fullName')"
-      ],
-      "name": "TimeoutError"
-    }
+    "ok": true,
+    "note": "đã lưu, về list"
   },
   {
     "id": "A6-DB",
@@ -48,15 +41,8 @@
   },
   {
     "id": "A7",
-    "name": "deactivate worker (confirm dialog)",
-    "ok": false,
-    "note": "locator.click: Timeout 20000ms exceeded.\nCall log:\n  - waiting for locator('div:has-text(\"E2E Worker Renamed ol9ob9\")').first().locator('button:has-text(\"Ngừng hoạt động\")')\n",
-    "err": {
-      "log": [
-        "  - waiting for locator('div:has-text(\"E2E Worker Renamed ol9ob9\")').first().locator('button:has-text(\"Ngừng hoạt động\")')"
-      ],
-      "name": "TimeoutError"
-    }
+    "ok": true,
+    "note": "status chuyển INACTIVE, có dialog + lý do"
   },
   {
     "id": "A7-DB",
@@ -70,20 +56,13 @@
   },
   {
     "id": "A8",
-    "name": "reactivate worker",
-    "ok": false,
-    "note": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator('button:has-text(\"Kích hoạt lại\")') to be visible\n",
-    "err": {
-      "log": [
-        "  - waiting for locator('button:has-text(\"Kích hoạt lại\")') to be visible"
-      ],
-      "name": "TimeoutError"
-    }
+    "ok": true,
+    "note": "status ACTIVE"
   },
   {
     "id": "A9",
     "ok": true,
-    "note": "thấy IAM_USER_DEACTIVATED / ORG_WORKER_CREATED"
+    "note": "thấy ORG_WORKER_SUSPENDED / ORG_WORKER_CREATED"
   },
   {
     "id": "B1",
@@ -92,15 +71,8 @@
   },
   {
     "id": "B2",
-    "name": "edit contact/scope contractor",
-    "ok": false,
-    "note": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator('a[href*=\"/contractors/\"]:has-text(\"E2E Nhà thầu ol9ob9\")') to be visible\n",
-    "err": {
-      "log": [
-        "  - waiting for locator('a[href*=\"/contractors/\"]:has-text(\"E2E Nhà thầu ol9ob9\")') to be visible"
-      ],
-      "name": "TimeoutError"
-    }
+    "ok": true,
+    "note": "detail hiển thị contact/scope mới"
   },
   {
     "id": "B3",

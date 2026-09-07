@@ -1,28 +1,28 @@
 {
   "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "admin": "admin@example.com",
-  "pm": "pm@example.com",
-  "worker": "worker1@example.com",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker": "thang.nguyen@vinacons.vn",
   "codes": {
-    "A": "E2E2-A",
-    "B": "E2E2-B",
-    "Cc": "E2E2-C",
-    "D": "E2E2-D",
-    "W": "E2E2-W",
-    "PM": "E2E2-PM",
-    "R": "E2E2-R"
+    "A": "VDA2-A",
+    "B": "VDA2-B",
+    "Cc": "VDA2-C",
+    "D": "VDA2-D",
+    "W": "VDA2-W",
+    "PM": "VDA2-PM",
+    "R": "VDA2-R"
   },
   "projectIds": {
-    "A": "504cf91f-0d97-4334-a1e7-b552494655c1",
-    "B": "28ee391f-decb-4509-8836-a459cb6ebf62",
-    "C": "b21e6345-a0dc-41db-8b99-be472d49484a",
-    "D": "92611043-09e0-4cb7-970d-86c83d6c4c39",
-    "W": "d1fa0333-aec0-427a-aec7-6b5c2b8da2b9",
-    "PM": "932905bd-60e3-463f-a2af-a6892adc15ee",
-    "R": "ac1d079e-d704-433f-a84d-bb50527bd3bc"
+    "A": "03657fb7-f86b-4fc1-a2cb-09d88974c34a",
+    "B": "b7f7c2b9-f9a2-48b9-ba9c-f85099bf6b3a",
+    "C": "fe528a97-e91c-4eb9-ab93-f0f2760a31e3",
+    "D": "19756781-e2dd-4c86-85a3-69dfe44717bc",
+    "W": "d4ab810a-87c8-4488-af3f-3bebb2b6b5fd",
+    "PM": "bfef9258-52b4-449d-8557-92a736dcaab0",
+    "R": "feca6b1c-4f0f-480f-846a-9670eaaa8f5f"
   },
-  "auditBaseline": "634",
-  "auditFinal": "667",
+  "auditBaseline": "1048",
+  "auditFinal": "1080",
   "rest": "0",
   "results": [
     {
@@ -63,7 +63,7 @@
     {
       "id": "S8",
       "ok": true,
-      "note": "timeline cửa sổ 10 (thấy 4 transitions + deep-link); bypass rows=10; psql 7+ rows đúng thứ tự, history append-only"
+      "note": "timeline cửa sổ 10 (thấy 4 transitions + deep-link); bypass rows=9; psql 7+ rows đúng thứ tự, history append-only"
     },
     {
       "id": "S9",
@@ -73,12 +73,12 @@
     {
       "id": "S10",
       "ok": true,
-      "note": "audit corr=286703ce-87f7-4af7-8f30-16eeaf9d3778; corr xấu 400, psql ACTIVE nguyên"
+      "note": "audit corr=6f09d70c-b812-4157-8b4a-8188d2376b6f; corr xấu 400, psql ACTIVE nguyên"
     },
     {
       "id": "S11",
       "ok": true,
-      "note": "17 rows toàn PROJECT của E2E2-A, không lẫn worker/crew"
+      "note": "16 rows toàn PROJECT của VDA2-A, không lẫn worker/crew"
     }
   ]
 }

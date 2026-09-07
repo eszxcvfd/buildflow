@@ -1,0 +1,69 @@
+{
+  "seedCodePattern": "TX-8%",
+  "seedIds": [
+    "70af4392-e891-4fb1-a41d-7be8374563ff",
+    "de096445-7f9e-4303-8b1b-3e47bb6012ce",
+    "3d13516f-2fbe-4419-b13c-bed0fb91824a",
+    "a8646122-4e33-4dba-ab06-1b65d7012ceb",
+    "9cd84efa-f002-4113-8948-18ec06e5e902",
+    "d50088a9-615a-4ae5-a152-e0824ee3c35c",
+    "5632dc8d-cea6-43bd-a5b7-316afca8f936",
+    "73902e8d-bf98-4062-961a-5864cd8b694c",
+    "95562dc7-73ee-4d0f-be0a-1c7894cd5c4f",
+    "e33d6ac0-f58d-49a0-8384-92cf79e8eec3",
+    "b02bd70a-a138-43d9-832a-325ae63b3146",
+    "e02f610e-9b67-4dc5-91d3-dc624e91965d",
+    "f4b2e4c5-c66a-45fb-9561-b414375d098d",
+    "89dd7c8a-f2fe-4582-9efb-c9cfb401c4fa",
+    "e62fa0c2-0935-4efd-a419-2f03eeed7d31",
+    "6c8a2e26-0aa9-40af-ab7e-117626ae08f1",
+    "4e58f783-24f6-4114-b83e-accfb4a5cee8",
+    "e2951bb5-e45a-40e0-88c4-64a098e43518",
+    "e892907d-4485-4f4e-99a7-87b26975c568",
+    "f7285949-b1d5-4ac4-bb18-b78024fbb2e6"
+  ],
+  "results": [
+    {
+      "id": "P1",
+      "name": "total ≥25 khớp SQL + 20 rows + nav Trang 1/2",
+      "ok": true,
+      "note": "SQL all=26 active=25; API total=26; UI Tổng=26 rows=20 caption Trang 1/2; nav={\"visible\":true,\"prevDisabled\":true,\"nextDisabled\":false,\"label\":\"Trang trướcTrang 1/2Trang sau\"}"
+    },
+    {
+      "id": "P2",
+      "name": "Trang sau → ?page=2, rows khác + khớp OFFSET 20",
+      "ok": true,
+      "note": "URL=http://localhost:3001/resources?tab=workers&sort=createdAt&order=desc&page=2; UI Tổng=26 Trang 2/2 rows=6; API p1=[Hoàng Văn An|Vũ Văn Bình|Đặng Văn Chiến…] p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; UI p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; overlap p1∩p2=0; nav={\"visible\":true,\"prevDisabled\":false,\"nextDisabled\":true,\"label\":\"Trang trướcTrang 2/2Trang sau\"}"
+    },
+    {
+      "id": "P3",
+      "name": "sort=name asc → pagination đúng offset sort mới",
+      "ok": true,
+      "note": "sort=name asc: UI p1[0]=Bùi Văn Bảo p1[19]=Vũ Văn Bình (API p1[0]=Bùi Văn Bảo p1[19]=Vũ Văn Bình); UI p2=[Vũ Văn Hải|Đinh Văn Công|Đinh Văn Hùng|Đặng Văn Chiến|Đỗ Văn Cường|Đỗ Văn Phong] API p2=[Vũ Văn Hải|Đinh Văn Công|Đinh Văn Hùng|Đặng Văn Chiến|Đỗ Văn Cường|Đỗ Văn Phong]; overlap=0; URL=http://localhost:3001/resources?tab=workers&sort=name&order=asc&page=2"
+    },
+    {
+      "id": "P4",
+      "name": "filter status → total giảm + reset trang 1",
+      "ok": true,
+      "note": "INACTIVE: UI Tổng=1(SQL=1) Trang 1/1 navVisible=false URL=http://localhost:3001/resources?tab=workers&status=ACTIVE&sort=name&order=asc; ACTIVE: UI Tổng=25(SQL=25) rows=20 Trang 1/2 nav={\"visible\":true,\"prevDisabled\":true,\"nextDisabled\":false,\"label\":\"Trang trướcTrang 1/2Trang sau\"}"
+    },
+    {
+      "id": "P5",
+      "name": "filter + detail → back giữ page",
+      "ok": true,
+      "note": "trước: Tổng=25 Trang 2/2; detail=/workers/98230b1d-f254-4e99-9515-f9e2b1fd63a4 (BuildflowĐiều hànhTổng quanDự ánĐiều kiện nhận việc của tôiĐối tác thi côngNhà t…); sau back URL=http://localhost:3001/resources?tab=workers&status=ACTIVE&sort=createdAt&order=desc&page=2 Tổng=25 Trang 2/2"
+    },
+    {
+      "id": "P6",
+      "name": "Contractors ≤20 → không hiện pagination",
+      "ok": true,
+      "note": "UI Tổng=3 API total=3 rows=3 names=[Công ty CP Xây dựng Vinacons|Công ty TNHH Xây dựng Nam Tiến|Công ty CP Hạ tầng Bình Minh] navVisible=false"
+    },
+    {
+      "id": "P7",
+      "name": "Next/Prev disable đúng ở biên",
+      "ok": true,
+      "note": "trang 1: {\"visible\":true,\"prevDisabled\":true,\"nextDisabled\":false,\"label\":\"Trang trướcTrang 1/2Trang sau\"}; trang cuối (2/2): {\"visible\":true,\"prevDisabled\":false,\"nextDisabled\":true,\"label\":\"Trang trướcTrang 2/2Trang sau\"}"
+    }
+  ]
+}

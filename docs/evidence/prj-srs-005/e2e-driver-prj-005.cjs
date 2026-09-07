@@ -6,10 +6,11 @@
  * Yêu cầu: stack rebuild từ working tree (api có GET|POST /members + DELETE
  *          /members/:memberId, web có ProjectMembers + StatusTimeline labels);
  *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025) +
- *          worker2@example.com (E2EWorker2@2025, reset SQL cho E2E) +
- *          e2e5.worker3@example.com (E2E5W3@2025, tạo qua POST /workers).
+ *          hau.le@vinacons.vn (E2EWorker2@2025) +
+ *          ba.nguyen@vinacons.vn (E2E5W3@2025, tài khoản canonical tái sử dụng cho S9 P11).
  *
- * Quy ước: mã E2E5-% (cleanup đầu/cuối run, audit giữ nguyên — append-only).
+ * Quy ước: mã VDA5-% (cleanup id-based + prefix + 12h fallback đầu/cuối run,
+ *          audit giữ nguyên — append-only).
  * Lưu ý DB: audit_logs có guard cấm DELETE/UPDATE + unique từng phần
  * (correlation_id, action) → mỗi request kèm correlation dùng UUID mới.
  */
@@ -23,15 +24,15 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
-const W1_EMAIL = 'worker1@example.com';
+const W1_EMAIL = 'thang.nguyen@vinacons.vn';
 const W1_PASS = 'E2EWorker@2025';
-const W2_EMAIL = 'worker2@example.com';
+const W2_EMAIL = 'hau.le@vinacons.vn';
 const W2_PASS = 'E2EWorker2@2025';
-const W3_EMAIL = 'e2e5.worker3@example.com';
+const W3_EMAIL = 'ba.nguyen@vinacons.vn';
 const W3_PASS = 'E2E5W3@2025';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
@@ -39,7 +40,13 @@ const W1_ID = '33333333-3333-4333-8333-333333333333';
 const W2_ID = '44444444-4444-4444-8444-444444444444';
 const W3_ID = '98230b1d-f254-4e99-9515-f9e2b1fd63a4';
 
-const C = { A: 'E2E5-A', B: 'E2E5-B', Cc: 'E2E5-C', D: 'E2E5-D' };
+const C = { A: 'VDA5-A', B: 'VDA5-B', Cc: 'VDA5-C', D: 'VDA5-D' };
+const NAMES = {
+  'VDA5-A': { name: 'Trung tâm thương mại Vincom Thủ Đức', address: '216 Võ Văn Ngân, Thủ Đức, TP.HCM' },
+  'VDA5-B': { name: 'Khu đô thị Sala Quận 2', address: '10 Mai Chí Thọ, Quận 2, TP.HCM' },
+  'VDA5-C': { name: 'Trường liên cấp Green Hill', address: '88 Đồi Xanh, Đà Lạt, Lâm Đồng' },
+  'VDA5-D': { name: 'Trung tâm chăm sóc khách hàng Vinacons', address: '45 Lê Lợi, Q.1, TP.HCM' },
+};
 const START = '2026-10-01';
 const END = '2027-03-31';
 
@@ -110,6 +117,20 @@ function uuid() {
 }
 function runCleanup() {
   try {
+    // Id-based: xóa sót lại của run trước theo ids đã ghi trong e2e-vars.json.
+    try {
+      const prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const ids = prev && prev.projectIds ? Object.values(prev.projectIds).filter(Boolean) : [];
+      for (const pid of ids) {
+        execFileSync('docker', ['exec', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-c',
+          `DELETE FROM project_members WHERE project_id='${pid}';` +
+          `DELETE FROM attachments WHERE project_id='${pid}';` +
+          `DELETE FROM project_areas WHERE project_id='${pid}';` +
+          `DELETE FROM work_orders WHERE project_id='${pid}';` +
+          `DELETE FROM projects WHERE id='${pid}';`],
+        { encoding: 'utf8', timeout: 20000 });
+      }
+    } catch {}
     const sql = fs.readFileSync(path.join(__dirname, 'seed-005.sql'), 'utf8');
     execFileSync('docker', ['exec', '-i', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-v', 'ON_ERROR_STOP=1'],
       { input: sql, encoding: 'utf8', timeout: 20000 });
@@ -118,8 +139,9 @@ function runCleanup() {
   }
 }
 async function createProject(token, code) {
+  const meta = NAMES[code] || { name: `Công trình ${code}`, address: `Số 1, đường ${code}` };
   const r = await api('POST', '/api/v1/projects', token, {
-    code, name: `Công trình ${code}`, address: `Số 1, đường ${code}`,
+    code, name: meta.name, address: meta.address,
     plannedStartDate: START, plannedEndDate: END, managerId: W1_ID,
   });
   return r;
@@ -181,7 +203,7 @@ async function uiAddMember(page, userId, role) {
     // ============ S1: ADMIN thêm worker2 (ĐIỀU PHỐI) qua UI ============
     await step('S1', 'ADMIN thêm worker2 ĐIỀU PHỐI qua UI → list + psql + audit ADDED', async (id) => {
       const ca = await createProject(adminToken, C.A);
-      if (ca.status !== 201) return fail(id, `tạo E2E5-A status=${ca.status} ${JSON.stringify(ca.body).slice(0, 200)}`);
+      if (ca.status !== 201) return fail(id, `tạo VDA5-A status=${ca.status} ${JSON.stringify(ca.body).slice(0, 200)}`);
       idA = ca.body.id;
       await loginWeb(adminPage, ADMIN_EMAIL, ADMIN_PASS);
       await gotoDetail(adminPage, idA);
@@ -192,9 +214,9 @@ async function uiAddMember(page, userId, role) {
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('ĐIỀU PHỐI'),
         { timeout: 25000 });
-      await snap(adminPage, `${id}-added`, 'E2E5-A sau khi thêm worker2 ĐIỀU PHỐI');
+      await snap(adminPage, `${id}-added`, 'VDA5-A sau khi thêm worker2 ĐIỀU PHỐI');
       const t = await bodyText(adminPage);
-      if (!t.includes('Lê Văn Thợ')) return fail(id, 'list UI thiếu tên Lê Văn Thợ');
+      if (!t.includes('Lê Văn Hậu')) return fail(id, 'list UI thiếu tên Lê Văn Hậu');
       const lr = await api('GET', `/api/v1/projects/${idA}/members`, adminToken);
       const hit = (lr.body && Array.isArray(lr.body.data) ? lr.body.data : []).find((m) => m.userId === W2_ID);
       if (!hit || hit.projectRole !== 'COORDINATOR' || hit.isActive !== true) {
@@ -210,7 +232,7 @@ async function uiAddMember(page, userId, role) {
       const w2get = await api('GET', `/api/v1/projects/${idA}`, w2Token);
       w2GetBefore = w2get.status;
       if (w2get.status !== 200) return fail(id, `worker2 GET detail trước remove=${w2get.status} (mong 200)`);
-      return ok(id, `UI list Lê Văn Thợ ĐIỀU PHỐI; psql ${db}; audit ADDED admin; worker2 GET=200`);
+      return ok(id, `UI list Lê Văn Hậu ĐIỀU PHỐI; psql ${db}; audit ADDED admin; worker2 GET=200`);
     })();
 
     // ============ S2: thêm trùng → 409 ============
@@ -233,22 +255,22 @@ async function uiAddMember(page, userId, role) {
     // ============ S3: badges QC + WORKER ============
     await step('S3', 'Thêm QC (B) + WORKER (C) → badge đúng', async (id) => {
       const cb = await createProject(adminToken, C.B);
-      if (cb.status !== 201) return fail(id, `tạo E2E5-B status=${cb.status}`);
+      if (cb.status !== 201) return fail(id, `tạo VDA5-B status=${cb.status}`);
       idB = cb.body.id;
       const cc = await createProject(adminToken, C.Cc);
-      if (cc.status !== 201) return fail(id, `tạo E2E5-C status=${cc.status}`);
+      if (cc.status !== 201) return fail(id, `tạo VDA5-C status=${cc.status}`);
       idC = cc.body.id;
       const q = await api('POST', `/api/v1/projects/${idB}/members`, adminToken, { userId: W2_ID, projectRole: 'QC' });
       if (q.status !== 201) return fail(id, `add QC status=${q.status}`);
       const w = await api('POST', `/api/v1/projects/${idC}/members`, adminToken, { userId: W2_ID, projectRole: 'WORKER' });
       if (w.status !== 201) return fail(id, `add WORKER status=${w.status}`);
       await gotoDetail(adminPage, idB);
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Lê Văn Thợ'), { timeout: 25000 });
-      await snap(adminPage, `${id}-badges`, 'E2E5-B badge QC của worker2');
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Lê Văn Hậu'), { timeout: 25000 });
+      await snap(adminPage, `${id}-badges`, 'VDA5-B badge QC của worker2');
       const tb = await bodyText(adminPage);
       if (!/\bQC\b/.test(tb)) return fail(id, 'detail B thiếu badge QC');
       await gotoDetail(adminPage, idC);
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Lê Văn Thợ'), { timeout: 25000 });
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Lê Văn Hậu'), { timeout: 25000 });
       const tc = await bodyText(adminPage);
       if (!tc.includes('THÀNH VIÊN')) return fail(id, 'detail C thiếu badge THÀNH VIÊN');
       const db = psqlT(`SELECT project_role FROM project_members WHERE user_id='${W2_ID}' AND is_active AND project_id IN ('${idB}','${idC}') ORDER BY project_role`);
@@ -265,12 +287,12 @@ async function uiAddMember(page, userId, role) {
       await adminPage.waitForSelector('#member-remove-reason', { timeout: 15000 });
       const counter = await bodyText(adminPage);
       if (!counter.includes('/500')) return fail(id, 'thiếu counter /500 ký tự');
-      await adminPage.fill('#member-remove-reason', 'Kết thúc giai đoạn 1 E2E5');
+      await adminPage.fill('#member-remove-reason', 'Kết thúc giai đoạn 1 (đợt T9/2026)');
       await adminPage.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Đã xóa'),
         { timeout: 25000 });
-      await snap(adminPage, `${id}-removed`, 'E2E5-A sau khi xóa worker2');
+      await snap(adminPage, `${id}-removed`, 'VDA5-A sau khi xóa worker2');
       // Lịch sử: bật checkbox → badge Đã rời + giai đoạn joined→left.
       await adminPage.getByLabel('Xem lịch sử (kể cả thành viên đã rời)').check();
       await adminPage.waitForFunction(
@@ -282,7 +304,7 @@ async function uiAddMember(page, userId, role) {
       const db = psqlT(`SELECT is_active::text||'|'||(CASE WHEN left_at IS NULL THEN 'null' ELSE 'set' END) FROM project_members WHERE id='${memberIdA}'`);
       if (db !== 'false|set') return fail(id, `psql row=${db} (mong false|set)`);
       const au = psqlT(`SELECT reason FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_MEMBER_REMOVED' ORDER BY created_at DESC LIMIT 1`);
-      if (!au.includes('Kết thúc giai đoạn 1 E2E5')) return fail(id, `audit reason thiếu: ${au.slice(0, 200)}`);
+      if (!au.includes('Kết thúc giai đoạn 1 (đợt T9/2026)')) return fail(id, `audit reason thiếu: ${au.slice(0, 200)}`);
       const addedAfter = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_MEMBER_REMOVED'`);
       if (String(Number(addedAfter) - Number(addedBefore)) !== '1') {
         return fail(id, `audit REMOVED tăng ${addedBefore}→${addedAfter} (mong +1)`);
@@ -320,7 +342,7 @@ async function uiAddMember(page, userId, role) {
       await gotoDetail(adminPage, idB);
       await adminPage.getByRole('button', { name: 'Xóa khỏi dự án', exact: true }).click();
       await adminPage.waitForSelector('#member-remove-reason', { timeout: 15000 });
-      const del = await api('DELETE', `/api/v1/projects/${idB}/members/${w2b.id}`, adminToken, { reason: 'race E2E5' });
+      const del = await api('DELETE', `/api/v1/projects/${idB}/members/${w2b.id}`, adminToken, { reason: 'kiểm thử song song (đợt T9/2026)' });
       if (del.status !== 200 || del.body.alreadyRemoved !== false) return fail(id, `race API del=${del.status}`);
       await adminPage.getByRole('button', { name: 'Xác nhận xóa', exact: true }).click();
       await adminPage.waitForFunction(
@@ -409,7 +431,7 @@ async function uiAddMember(page, userId, role) {
     // ============ S11: double-submit một dòng ============
     await step('S11', 'Double-submit add → một dòng (unique index + UI disable)', async (id) => {
       const cd = await createProject(adminToken, C.D);
-      if (cd.status !== 201) return fail(id, `tạo E2E5-D status=${cd.status}`);
+      if (cd.status !== 201) return fail(id, `tạo VDA5-D status=${cd.status}`);
       idD = cd.body.id;
       const [r1, r2] = await Promise.all([
         api('POST', `/api/v1/projects/${idD}/members`, adminToken, { userId: W2_ID, projectRole: 'COORDINATOR' }),
@@ -427,9 +449,9 @@ async function uiAddMember(page, userId, role) {
     })();
   } finally {
     runCleanup();
-    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'E2E5-%'`);
+    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'VDA5-%'`);
     const auditFinal = psqlT('SELECT count(*) FROM audit_logs');
-    console.log(`cleanup: E2E5-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do ADDED/REMOVED/UPDATED hợp lệ; audit giữ nguyên)`);
+    console.log(`cleanup: VDA5-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do ADDED/REMOVED/UPDATED hợp lệ; audit giữ nguyên)`);
     fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
       _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
       admin: ADMIN_EMAIL, pm: PM_EMAIL, worker1: W1_EMAIL, worker2: W2_EMAIL, worker3: W3_EMAIL,

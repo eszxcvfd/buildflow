@@ -7,7 +7,7 @@
   {
     "id": "A7",
     "ok": true,
-    "note": "deactivate có confirm, list hiển thị INACTIVE"
+    "note": "tạm ngừng lifecycle có dialog + lý do, list hiển thị INACTIVE"
   },
   {
     "id": "A8",

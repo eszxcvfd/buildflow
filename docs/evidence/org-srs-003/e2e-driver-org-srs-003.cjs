@@ -7,6 +7,9 @@
  *          (đã chứa /api/v1/trades); admin + pm password đã reset (xem doc E2E).
  *
  * Mỗi bước: thao tác UI/API -> chờ -> psql verify -> screenshot (riêng bước API thuần).
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07): trade runtime tạo mới
+ * dùng mã NK/XT/TM + tên tiếng Việt; worker dùng tên Việt + email @vinacons.vn + mã TXW.
+ * UNIQ giữ cơ chế duy nhất cho rename/duplicate-409/double-submit flows. Passwords giữ nguyên.
  */
 const fs = require('fs');
 const path = require('path');
@@ -20,16 +23,19 @@ const EV = path.join(__dirname, 'e2e-vars.json');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
 const UNIQ = Date.now().toString(36).slice(-6).toUpperCase();
-const TRADE_CODE = `E2E-T${UNIQ}`;
-const TRADE_NAME = `E2E Ngành nghề ${UNIQ}`;
-const TRADE_DESC = `E2E mô tả: ${UNIQ}`;
-const TRADE_CODE2 = `E2E-T2${UNIQ}`;
-const TRADE_NAME2 = `E2E Trade 2 ${UNIQ}`;
-const WORKER_EMAIL = `e2e.t.${UNIQ.toLowerCase()}@example.com`;
+const TRADE_CODE = `NK-${UNIQ}`;
+const TRADE_NAME = `Thợ nhôm kính ${UNIQ}`;
+const TRADE_DESC = `Thi công nhôm kính hệ Đông Anh (${UNIQ})`;
+const TRADE_CODE2 = `NK2-${UNIQ}`;
+const TRADE_NAME2 = `Thợ nhôm kính phụ ${UNIQ}`;
+const WORKER_NAME = `Bùi Văn Lực ${UNIQ}`;
+const WORKER_RENAMED = `Bùi Văn Lực ${UNIQ} Mới`;
+const WORKER_CODE = `TXW-${UNIQ}`;
+const WORKER_EMAIL = `luc.tran.${UNIQ.toLowerCase()}@vinacons.vn`;
 const WORKER_PASS = 'WorkerPass@123';
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = 'E2EPm@2025';
 const CORR = 'b1f00000-0000-4000-8000-' + String(Math.floor(Math.random() * 1e12)).padStart(12, '0');
 console.log(`UNIQ=${UNIQ} trade=${TRADE_CODE} worker=${WORKER_EMAIL} corr=${CORR}`);
@@ -65,6 +71,34 @@ function psql(sql) {
   } catch (e) {
     return `PSQL ERROR: ${e.stderr || e.message}`;
   }
+}
+
+/**
+ * Dọn dư liệu run trước theo id trong e2e-vars.json (chỉ khi mã hiện tại vẫn là mã run
+ * họ NK/XT/TM/TXW — KHÔNG đụng mã canonical THO-CAT/OP-LAT/SON-NUOC/DIEN, TX-00xx),
+ * fallback: hàng run-pattern tạo trong 12h gần nhất.
+ */
+function cleanupPreviousRun() {
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(EV, 'utf8')); } catch {}
+  if (prev) {
+    // xóa worker (kèm resource_trades) TRƯỚC rồi mới xóa trades (tránh FK resource_trades_trade_id_fkey)
+    const wIds = [prev.workerId].filter(Boolean).map((s) => `'${s}'`);
+    if (wIds.length) {
+      psql(`DELETE FROM resource_trades WHERE user_id IN (${wIds.join(',')}) AND user_id IN (SELECT id FROM users WHERE employee_code LIKE 'TXW-%')`);
+      const out = psql(`DELETE FROM users WHERE id IN (${wIds.join(',')}) AND employee_code LIKE 'TXW-%'`);
+      console.log('cleanup prev worker:', out.split('\n').pop());
+    }
+    const tIds = [prev.tradeId, prev.dupTradeId].filter(Boolean).map((s) => `'${s}'`);
+    if (tIds.length) {
+      const out = psql(`DELETE FROM trades WHERE id IN (${tIds.join(',')}) AND (code LIKE 'NK-%' OR code LIKE 'XT-%' OR code LIKE 'TM-%')`);
+      console.log('cleanup prev trades:', out.split('\n').pop());
+    }
+  }
+  const f1 = psql(`DELETE FROM resource_trades WHERE user_id IN (SELECT id FROM users WHERE employee_code LIKE 'TXW-%' AND created_at > now() - interval '12 hours')`);
+  const f2 = psql(`DELETE FROM users WHERE employee_code LIKE 'TXW-%' AND created_at > now() - interval '12 hours'`);
+  const f3 = psql(`DELETE FROM trades WHERE (code LIKE 'NK-%' OR code LIKE 'XT-%' OR code LIKE 'TM-%') AND created_at > now() - interval '12 hours' AND NOT EXISTS (SELECT 1 FROM resource_trades rt WHERE rt.trade_id = trades.id) AND NOT EXISTS (SELECT 1 FROM work_types wt WHERE wt.required_trade_id = trades.id) AND NOT EXISTS (SELECT 1 FROM work_orders wo WHERE wo.required_trade_id = trades.id)`);
+  console.log('cleanup fallback:', f1.split('\n').pop(), '|', f2.split('\n').pop(), '|', f3.split('\n').pop());
 }
 
 async function api(method, urlPath, token, body) {
@@ -131,6 +165,11 @@ async function waitText(page, text, ms = 15000) {
 
   let tradeId = null;
   let workerId = null;
+  let dupTradeId = null;
+  const DUP_CODE = `XT-${UNIQ}`;
+  const DUP_NAME = `Thợ xây tô ${UNIQ}`;
+
+  cleanupPreviousRun();
 
   try {
     // ============ B1: login admin ============
@@ -187,13 +226,13 @@ async function waitText(page, text, ms = 15000) {
     // ============ B5: missing name field-level validation ============
     await step('B5', 'tạo thiếu name -> lỗi field name', async (id) => {
       await page.goto(`${BASE}/trades/new`, { waitUntil: 'networkidle' });
-      await page.fill('#code', `E2E-NO-NAME-${UNIQ}`);
+      await page.fill('#code', `TM-${UNIQ}`);
       await page.fill('#name', '');
       await page.click('button[type="submit"]');
       await page.waitForSelector('#name[aria-invalid="true"]', { timeout: 10000 }).catch(() => {});
       const errText = await page.locator('text=Tên ngành nghề').allTextContents().catch(() => []);
       await page.waitForSelector('text=Tên ngành nghề không được để trống', { timeout: 10000 }).catch(() => {});
-      const empty = await psql(`SELECT count(*) FROM trades WHERE code='E2E-NO-NAME-${UNIQ}'`);
+      const empty = await psql(`SELECT count(*) FROM trades WHERE code='TM-${UNIQ}'`);
       await snap(page, id, 'Lỗi field name khi bỏ trống tên');
       return ok(id, `validation hiển thị; DB không tạo row: ${empty.trim().split('\n')[2] || empty}`);
     })();
@@ -203,7 +242,7 @@ async function waitText(page, text, ms = 15000) {
       const r = await api('GET', `/api/v1/trades?search=${TRADE_CODE}&limit=5`, adminToken);
       tradeId = r.body && r.body.data && r.body.data[0] ? r.body.data[0].id : null;
       if (!tradeId) return fail(id, 'không tìm thấy tradeId của trade vừa tạo');
-      const newName = TRADE_NAME + ' RENAMED';
+      const newName = TRADE_NAME + ' cao cấp';
       await page.goto(`${BASE}/trades/${tradeId}/edit`, { waitUntil: 'networkidle' });
       await page.fill('#name', newName);
       await snap(page, id + '-form', 'Form sửa trade (đổi tên)');
@@ -241,9 +280,9 @@ async function waitText(page, text, ms = 15000) {
       await page.selectOption('#skillLevel', '3');
       await page.fill('#email', WORKER_EMAIL);
       await page.fill('#password', WORKER_PASS);
-      await page.fill('#fullName', `E2E Worker ${UNIQ}`);
+      await page.fill('#fullName', WORKER_NAME);
       await page.fill('#phone', '0909' + String(Math.floor(100000 + Math.random() * 899999)));
-      await page.fill('#employeeCode', `E2ETW${UNIQ}`);
+      await page.fill('#employeeCode', WORKER_CODE);
       await snap(page, id + '-form', 'WorkerForm với select ngành nghề ACTIVE');
       await page.click('button[type="submit"]');
       await page.waitForURL('**/workers', { timeout: 20000 });
@@ -288,8 +327,8 @@ async function waitText(page, text, ms = 15000) {
       return ok(id, `DB:\n${db}\naudit:\n${audit}`);
     })();
 
-    // ============ B9: sau deactivate, select WorkerForm không còn trade đó ============
-    await step('B9', 'WorkerForm edit: select không chứa trade INACTIVE', async (id) => {
+    // ============ B9: sau deactivate, select WorkerForm chỉ giữ trade đó ở option '(hiện tại)' ============
+    await step('B9', 'WorkerForm edit: trade INACTIVE chỉ còn option (hiện tại) + banner', async (id) => {
       await page.goto(`${BASE}/workers/${workerId}/edit`, { waitUntil: 'networkidle' });
       await page.waitForFunction(() => {
         const s = document.querySelector('#tradeId');
@@ -302,18 +341,21 @@ async function waitText(page, text, ms = 15000) {
         const t = ((await opts.nth(i).textContent()) || '').trim();
         if (t) texts.push(t);
       }
-      const containsInactive = texts.some((t) => t.includes(TRADE_CODE));
+      // trade INACTIVE chỉ được giữ làm giá trị hiện tại (đánh dấu '(hiện tại)'), không còn là lựa chọn mới
+      const withCode = texts.filter((t) => t.includes(TRADE_CODE));
       const banner = await page.locator('body').textContent();
-      await snap(page, id, 'WorkerForm edit: trade inactive không trong select + banner');
-      if (containsInactive) return fail(id, `select VẪN chứa trade INACTIVE: ${texts.join(' | ')}`);
+      await snap(page, id, 'WorkerForm edit: trade inactive chỉ còn option (hiện tại) + banner');
+      if (withCode.length !== 1 || !withCode[0].includes('(hiện tại)')) {
+        return fail(id, `trade INACTIVE còn là lựa chọn mới hoặc mất hẳn: ${texts.join(' | ')}`);
+      }
       if (!banner.includes('ngừng hoạt động')) return fail(id, 'thiếu banner giải thích trade cũ inactive');
-      return ok(id, `option hiện có: ${texts.join(' | ') || '(chỉ option giữ nguyên)'}`);
+      return ok(id, `inactive chỉ còn option '(hiện tại)'; các lựa chọn mới: ${texts.filter((t) => !t.includes(TRADE_CODE)).join(' | ')}`);
     })();
 
     // ============ B10: PATCH worker gán trade inactive qua API -> 400 ============
     await step('B10', 'API gán trade INACTIVE cho worker -> 400', async (id) => {
       const r = await api('PATCH', `/api/v1/workers/${workerId}`, adminToken, {
-        fullName: 'E2E Worker Renamed',
+        fullName: WORKER_RENAMED,
         trades: [{ tradeId, skillLevel: 2 }],
       });
       if (r.status !== 400) return fail(id, `HTTP ${r.status} thay vì 400: ${JSON.stringify(r.body).slice(0, 200)}`);
@@ -327,7 +369,7 @@ async function waitText(page, text, ms = 15000) {
     // ============ B11: edit worker vẫn cho phép (giữ nguyên trade inactive, omit) ============
     await step('B11', 'worker edit giữ nguyên trade inactive (omit) -> 200', async (id) => {
       const r = await api('PATCH', `/api/v1/workers/${workerId}`, adminToken, {
-        fullName: 'E2E Worker Renamed',
+        fullName: WORKER_RENAMED,
       });
       if (r.status !== 200) return fail(id, `HTTP ${r.status}: ${JSON.stringify(r.body).slice(0, 200)}`);
       const db = await psql(
@@ -379,31 +421,32 @@ async function waitText(page, text, ms = 15000) {
       return ok(id, `audit DB:\n${db}`);
     })();
 
-    // ============ B14: phân quyền pm -> 403 / no token -> 401 ============
-    await step('B14', 'phân quyền: pm 403, no-token 401', async (id) => {
-      // API-level
+    // ============ B14: phân quyền — pm đọc danh mục (200), ghi 403 / no token 401 ============
+    await step('B14', 'phân quyền: pm đọc 200 + ghi 403, no-token 401', async (id) => {
+      // API-level (trades là danh mục đọc chung ADMIN + PROJECT_MANAGER, ghi ADMIN-only)
       const pmGet = await api('GET', '/api/v1/trades', pmToken);
-      const pmPost = await api('POST', '/api/v1/trades', pmToken, { code: 'E2E-PM', name: 'x' });
+      const pmPost = await api('POST', '/api/v1/trades', pmToken, { code: 'NK-PM', name: 'x' });
       const anonGet = await api('GET', '/api/v1/trades', noToken);
-      const uiCheck = pmGet.status === 403 && anonGet.status === 401;
-      if (!uiCheck) return fail(id, `pm=${pmGet.status} anon=${anonGet.status} pmPost=${pmPost.status}`);
-      // UI-level: đăng nhập pm rồi mở /trades — sidebar không có mục Ngành nghề
+      if (!(pmGet.status === 200 && pmPost.status === 403 && anonGet.status === 401)) {
+        return fail(id, `pm GET=${pmGet.status} (mong đợi 200) pm POST=${pmPost.status} (mong đợi 403) anon=${anonGet.status} (mong đợi 401)`);
+      }
+      // UI-level: đăng nhập pm rồi mở /trades — sidebar không có mục Ngành nghề, trang render danh sách đọc
       await login(page, PM_EMAIL, PM_PASS);
       await page.goto(`${BASE}/trades`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('text=Không có quyền', { timeout: 15000 }).catch(() => {});
-      await snap(page, id + '-ui', 'PM mở /trades: card 403 không quyền');
+      await page.waitForSelector('table.bf-table', { timeout: 15000 });
+      await snap(page, id + '-ui', 'PM mở /trades: danh sách đọc (sidebar ẩn mục Ngành nghề)');
       const navText = await page.locator('.bf-nav').textContent();
       const noNavTrades = !(navText || '').includes('Ngành nghề');
       const pageHas403 = (await page.locator('body').textContent()).includes('Không có quyền');
       if (!noNavTrades) return fail(id, 'sidebar pm VẪN hiện mục Ngành nghề');
-      if (!pageHas403) return fail(id, 'UI pm không hiển thị 403');
-      return ok(id, `API pm GET=${pmGet.status} POST=${pmPost.status}; anon=${anonGet.status}; UI sidebar ẩn + card 403`);
+      if (pageHas403) return fail(id, 'UI pm hiển thị 403 dù API cho đọc');
+      return ok(id, `API pm GET=${pmGet.status} (đọc) POST=${pmPost.status} (ghi); anon=${anonGet.status}; UI sidebar ẩn + list đọc`);
     })();
 
     // ============ B15: double-submit cùng correlation-id -> 1 row + 1 audit ============
     await step('B15', 'double-submit cùng correlation-id -> 1 row + 1 audit', async (id) => {
-      const code = `E2E-DUP-${UNIQ}`;
-      const payload = { code, name: 'E2E dup ' + UNIQ };
+      const code = DUP_CODE;
+      const payload = { code, name: DUP_NAME };
       const h = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`,
@@ -434,9 +477,14 @@ async function waitText(page, text, ms = 15000) {
     // ============ lưu kết quả ============
     const PASS = results.filter((r) => r.ok).length;
     const FAILN = results.filter((r) => !r.ok).length;
+    try {
+      const dr = await api('GET', `/api/v1/trades?search=${DUP_CODE}&limit=5`, adminToken);
+      dupTradeId = dr.body && dr.body.data && dr.body.data[0] ? dr.body.data[0].id : null;
+    } catch {}
     fs.writeFileSync(EV, JSON.stringify({
       uniq: UNIQ, tradeCode: TRADE_CODE, tradeCode2: TRADE_CODE2, workerEmail: WORKER_EMAIL,
-      tradeId, workerId, correlationId: CORR, results,
+      workerName: WORKER_NAME, workerCode: WORKER_CODE,
+      tradeId, workerId, dupCode: DUP_CODE, dupTradeId, correlationId: CORR, results,
     }, null, 2));
     console.log(`\n===== TỔNG: ${PASS} PASS / ${FAILN} FAIL / ${results.length} bước =====`);
     for (const r of results) if (!r.ok) console.log(`  FAIL ${r.id}: ${r.note}`);

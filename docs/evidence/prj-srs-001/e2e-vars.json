@@ -1,21 +1,21 @@
 {
   "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "admin": "admin@example.com",
-  "pm": "pm@example.com",
-  "worker": "worker1@example.com",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker": "thang.nguyen@vinacons.vn",
   "codes": {
-    "A": "E2E1-A",
-    "PM": "E2E1-PM",
-    "D": "E2E1-D",
-    "D2": "E2E1-D2",
-    "C": "E2E1-C"
+    "A": "VDA1-A",
+    "PM": "VDA1-PM",
+    "D": "VDA1-D",
+    "D2": "VDA1-D2",
+    "C": "VDA1-C"
   },
   "projectIds": {
-    "A": "0352f244-0e1b-4df5-b4b4-c6a29fe9ab08",
-    "PM": "1f8d2182-579c-4187-bd7d-4e8cb29dc37e"
+    "A": "39b14642-491f-412a-b61c-8aa5abc22a4b",
+    "PM": "66ea9be9-85d0-448e-967f-3f3e08c873ee"
   },
-  "auditBaseline": "555",
-  "auditFinal": "589",
+  "auditBaseline": "1011",
+  "auditFinal": "1045",
   "rest": "0",
   "results": [
     {
@@ -26,7 +26,7 @@
     {
       "id": "S2",
       "ok": true,
-      "note": "PM tạo E2E1-PM (audit actor pm); worker pool 403→1 option→client chặn, 0 POST; API worker 403, anon 401"
+      "note": "PM tạo VDA1-PM (audit actor pm); worker pool 403→1 option→client chặn, 0 POST; API worker 403, anon 401"
     },
     {
       "id": "S3",
@@ -36,7 +36,7 @@
     {
       "id": "S4",
       "ok": true,
-      "note": "client đủ 4 required + end<start; server 400 name (array-shape) + plannedEndDate; count E2E1-V=0"
+      "note": "client đủ 4 required + end<start; server 400 name (array-shape) + plannedEndDate; count VDA1-V=0"
     },
     {
       "id": "S5",
@@ -51,12 +51,12 @@
     {
       "id": "S7",
       "ok": true,
-      "note": "create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count E2E1-IN=0"
+      "note": "create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count VDA1-IN=0"
     },
     {
       "id": "S8",
       "ok": true,
-      "note": "PATCH=403; name sau PATCH='Công trình E2E Một'; GET list=200 rows=0 thấy E2E1-A=false; GET detail=403; UI worker: empty-scope"
+      "note": "PATCH=403; name sau PATCH='Trung tâm hội nghị Sông Hồng'; GET list=200 rows=3 thấy VDA1-A=true; GET detail=200; UI worker: có rows"
     },
     {
       "id": "S9",
@@ -66,12 +66,12 @@
     {
       "id": "S10",
       "ok": true,
-      "note": "search PG→Tổng 21 + Trang 1/2↔2/2; ACTIVE→rỗng, DRAFT→21; row link /projects/0352f244-0e1b-4df5-b4b4-c6a29fe9ab08; worker scoped (empty=true, CTA tạo ẩn=true)"
+      "note": "search PG→Tổng 21 + Trang 1/2↔2/2; ACTIVE→rỗng, DRAFT→21; row link /projects/39b14642-491f-412a-b61c-8aa5abc22a4b; worker scoped (empty=false, CTA tạo ẩn=true)"
     },
     {
       "id": "S11",
       "ok": true,
-      "note": "audit CREATED corr=7bb24438-2540-4deb-81c6-09c1be4e67fc UPDATED corr=02bac94d-6770-45c3-87d9-1b50c7edf154; echo header POST=null PATCH=null; corr xấu 400, không row"
+      "note": "audit CREATED corr=2e600dd7-9a3f-4079-883a-ec16c30a4d34 UPDATED corr=30dfecb0-b413-4441-895c-b129808b7c49; echo header POST=null PATCH=null; corr xấu 400, không row"
     }
   ]
 }

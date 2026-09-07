@@ -1,4 +1,4 @@
-/** E2E phase 2: tiếp nối phase 1 (state trong DB đã có worker + contractor), sửa selector lỏng. KHÔNG commit. */
+/** E2E phase 2: tiếp nối phase 1 (ids đọc từ e2e-vars.json, KHÔNG hardcode UUID). KHÔNG commit. */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('/home/trung/.npm-global/lib/node_modules/@playwright/mcp/node_modules/playwright');
@@ -6,11 +6,15 @@ const { chromium } = require('/home/trung/.npm-global/lib/node_modules/@playwrig
 const BASE = 'http://localhost:3001';
 const SHOTS = path.join(__dirname, 'shots');
 const vars = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
-const { uniq: UNIQ, workerEmail: W_EMAIL, workerCode: W_CODE, contractorCode: C_CODE } = vars;
-const W_ID = '0e825034-8c97-4359-b01f-45ffbce8fff7'; // worker E2E tạo ở phase 1 (đã xác minh trong DB)
-const C_NAME = `E2E Nhà thầu ${UNIQ}`;
-const C_NAME_NEW = `E2E Nhà thầu Renamed ${UNIQ}`;
-const NEW_NAME = `E2E Worker Renamed ${UNIQ}`;
+const { uniq: UNIQ, workerEmail: W_EMAIL, workerCode: W_CODE, workerName: W_NAME0 } = vars;
+const W_ID = vars.workerId; // resolve ở phase 1 (không hardcode)
+const C_NAME = vars.contractorName;
+const C_CODE = vars.contractorCode;
+const NEW_NAME = vars.renamedName;
+if (!W_ID) { console.error('FATAL: e2e-vars.json thiếu workerId — chạy phase 1 trước'); process.exit(2); }
+
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
+const ADMIN_PASS = 'E2EAdmin@2025';
 
 const log = []; const results = [];
 async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); await page.screenshot({ path: p }); log.push({ id, desc, file: p }); }
@@ -22,8 +26,8 @@ async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); a
 
   async function loginAdmin() {
     await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-    await page.fill('#email', 'admin@example.com');
-    await page.fill('#password', 'E2EAdmin@2025');
+    await page.fill('#email', ADMIN_EMAIL);
+    await page.fill('#password', ADMIN_PASS);
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard', { timeout: 15000 });
   }
@@ -58,48 +62,46 @@ async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); a
       console.log('PASS A6');
     } catch (e) { results.push({ id: 'A6', ok: false, note: e.message }); console.log('FAIL A6', e.message); }
 
-    /* A7: deactivate via list with confirm */
+    /* A7: suspend lifecycle via list (dialog + reason) */
     try {
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
       await page.fill('#worker-search', W_CODE);
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`a[href="/workers/${W_ID}"]`, { timeout: 15000 });
+      await page.waitForTimeout(800);
       const card = await workerCardByName(NEW_NAME);
-      const btn = card.locator('button:has-text("Ngừng hoạt động")');
-      await btn.click();
-      await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-      await snap(page, 'A7', 'Confirm dialog deactivate worker');
-      await page.locator('button:has-text("Xác nhận")').last().click();
-      // chờ list phản ánh INACTIVE: nút Ngừng hoạt động biến thành Kích hoạt lại
-      await page.waitForSelector(`a[href="/workers/${W_ID}"]`, { timeout: 15000 });
+      await card.locator('button:has-text("Tạm ngừng")').click();
+      await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+      await page.fill('#lifecycle-reason', 'Tạm ngừng để luân chuyển sang công trình khác');
+      await snap(page, 'A7', 'Dialog tạm ngừng worker (lý do đã nhập)');
+      await page.locator('button:has-text("Xác nhận tạm ngừng")').click();
       await page.waitForTimeout(2500);
       await snap(page, 'A7-2', 'Worker INACTIVE - list');
       const card2 = await workerCardByName(NEW_NAME);
       const t2 = await card2.innerText();
-      const hasReactivate = t2.includes('Kích hoạt lại');
-      if (!hasReactivate) throw new Error('sau deactivate không thấy nút Kích hoạt lại');
-      results.push({ id: 'A7', ok: true, note: 'deactivate có confirm, list hiển thị INACTIVE' });
+      if (!/Kích hoạt lại|Ngừng hoạt động|INACTIVE/.test(t2)) throw new Error('sau tạm ngừng list chưa phản ánh INACTIVE: ' + t2.slice(0, 120));
+      results.push({ id: 'A7', ok: true, note: 'tạm ngừng lifecycle có dialog + lý do, list hiển thị INACTIVE' });
       console.log('PASS A7');
     } catch (e) { results.push({ id: 'A7', ok: false, note: e.message }); console.log('FAIL A7', e.message); }
 
-    /* A8: reactivate */
+    /* A8: reactivate lifecycle */
     try {
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
       await page.fill('#worker-search', W_CODE);
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`a[href="/workers/${W_ID}"]`, { timeout: 15000 });
+      await page.waitForTimeout(800);
       const card = await workerCardByName(NEW_NAME);
-      const btn = card.locator('button:has-text("Kích hoạt lại")');
-      await btn.click();
-      await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-      await snap(page, 'A8', 'Confirm dialog reactivate worker');
-      await page.locator('button:has-text("Xác nhận")').last().click();
-      await page.waitForSelector(`a[href="/workers/${W_ID}"]`, { timeout: 15000 });
+      await card.locator('button:has-text("Kích hoạt lại")').click();
+      await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+      await page.fill('#lifecycle-reason', 'Tiếp nhận lại vào đội thi công');
+      await snap(page, 'A8', 'Dialog kích hoạt lại worker');
+      await page.locator('button:has-text("Xác nhận kích hoạt lại")').click();
       await page.waitForTimeout(2500);
       await snap(page, 'A8-2', 'Worker ACTIVE trở lại');
       const card2 = await workerCardByName(NEW_NAME);
       const t2 = await card2.innerText();
-      if (!t2.includes('Ngừng hoạt động')) throw new Error('sau reactivate list không có nút Ngừng hoạt động (chưa ACTIVE)');
+      if (!/Tạm ngừng/.test(t2)) throw new Error('sau reactivate list không có nút Tạm ngừng (chưa ACTIVE)');
       results.push({ id: 'A8', ok: true, note: 'reactivate thành công, list ACTIVE' });
       console.log('PASS A8');
     } catch (e) { results.push({ id: 'A8', ok: false, note: e.message }); console.log('FAIL A8', e.message); }
@@ -113,8 +115,8 @@ async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); a
       const detailHref = await row.locator('a:has-text("Xem chi tiết")').getAttribute('href');
       await page.goto(`${BASE}${detailHref}/edit`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#contactName', { timeout: 15000 });
-      await page.fill('#contactName', 'Trần E2E Mới');
-      await page.fill('#scope', 'E2E thi công phần thô + hoàn thiện');
+      await page.fill('#contactName', 'Trần Văn Bình');
+      await page.fill('#scope', 'Thi công phần thô và hoàn thiện khu B1');
       await snap(page, 'B2', 'Form edit contractor contact/scope');
       await page.click('button[type="submit"]');
       await page.waitForURL(`**/contractors/${detailHref.split('/').pop()}`, { timeout: 15000 }).catch(() => {});
@@ -125,8 +127,8 @@ async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); a
       console.log('PASS B2');
     } catch (e) { results.push({ id: 'B2', ok: false, note: e.message }); console.log('FAIL B2', e.message); }
 
-    /* B3b: contractor E2E code C_CODE đã INACTIVE ở phase 1 (chưa edit xong). Xem lại:
-       phase 1 B3 đã deactivate contractor C_NAME thành công. Bây giờ kích hoạt lại để có flow edit-status đầy đủ? 
+    /* B3b: contractor code C_CODE đã INACTIVE ở phase 1 (chưa edit xong). Xem lại:
+       phase 1 B3 đã deactivate contractor C_NAME thành công. Bây giờ kích hoạt lại để có flow edit-status đầy đủ?
        KHÔNG — kịch bản yêu cầu: B3 deactivate có confirm → DB INACTIVE + audit; B4 eligible; B5 detail INACTIVE.
        Phase 1 đã làm INACTIVE trước khi B2 edit; DB hiện note cũ. Ta cần: contractor cuối cùng INACTIVE với note mới (edit B2 lưu sẽ giữ INACTIVE).
        → Để giữ kịch bản sạch, contractor này giờ INACTIVE; B2 edit vừa chạy. Chụp DB ở sau. */

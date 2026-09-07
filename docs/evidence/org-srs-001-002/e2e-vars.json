@@ -1,8 +1,20 @@
 {
   "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "uniq": "ol9ob9",
-  "workerEmail": "e2e.w.ol9ob9@example.com",
-  "workerCode": "E2EWOL9OB9",
-  "contractorCode": "E2ECOL9OB9",
-  "contractorCode2": "E2EC2OL9OB9"
+  "uniq": "r4pcgq",
+  "digits": "785626",
+  "workerEmail": "khoi.pham.785626@vinacons.vn",
+  "workerCode": "TX-95626",
+  "workerName": "Phạm Văn Khôi 785626",
+  "renamedName": "Phạm Văn Khôi 785626 Mới",
+  "workerId": "006b1e11-7b7a-41e0-8358-dcc1efada418",
+  "contractorCode": "XD-785626",
+  "contractorName": "Công ty TNHH Xây dựng An Khang 5626",
+  "contractorEmail": "lienhe.ankhang.785626@vinacons.vn",
+  "contractorId": "72a76b14-b7a0-4d64-8dae-66d91ac36d64",
+  "contractorCode2": "XD2-785626",
+  "contractorName2": "Công ty CP Cơ khí Đông Anh 5626",
+  "contractorEmail2": "lienhe.donganh.785626@vinacons.vn",
+  "contractorId2": "2653f22f-d828-46f7-b8bc-114168d3f3c6",
+  "contractorCode3": "XD3-785626",
+  "contractorId3": "4835281b-3094-4704-846b-ee851d11501a"
 }

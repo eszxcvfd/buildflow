@@ -2,13 +2,18 @@
  * PRJ-SRS-003 E2E driver — Khu vực/hạng mục dự án (issue #34).
  * Evidence-only script; phạm vi docs/evidence — KHÔNG sửa source.
  *
+ * Chuẩn hóa realistic 2026-09-08 (docs/demo-data.md): creds @vinacons.vn,
+ * mã run VDA3-*, khu vực realistic (Khối A/Khối B), lý do tiếng Việt
+ * (`…(đợt T9/2026)`). Assert semantics giữ nguyên (rename before/after,
+ * duplicate 409, deactivate idempotent). Audit entity_id=projectId giữ nguyên.
+ *
  * Chạy:   node e2e-driver-prj-003.cjs
  * Yêu cầu: stack rebuild từ working tree (api có POST|GET /projects/:id/areas +
  *          PATCH /projects/:id/areas/:areaId, đã apply migration 0005;
  *          web có ProjectAreas trong ProjectDetail);
  *          admin (E2EAdmin@2025) + pm (E2EPm@2025) + worker1 (E2EWorker@2025).
  *
- * Quy ước: mã E2E3-% (cleanup đầu/cuối run, audit giữ nguyên — append-only).
+ * Quy ước: mã VDA3-% (cleanup đầu/cuối run, audit giữ nguyên — append-only).
  * Lưu ý DB: audit_logs có guard cấm DELETE/UPDATE + unique từng phần
  * (correlation_id, action) → mỗi request kèm correlation dùng UUID mới.
  */
@@ -22,24 +27,25 @@ const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const ADMIN_EMAIL = 'admin@example.com';
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
 const ADMIN_PASS = process.env.E2E_ADMIN_PASS ?? 'E2EAdmin@2025';
-const PM_EMAIL = 'pm@example.com';
+const PM_EMAIL = 'quoc.tran@vinacons.vn';
 const PM_PASS = process.env.E2E_PM_PASS ?? 'E2EPm@2025';
-const W1_EMAIL = 'worker1@example.com';
+const W1_EMAIL = 'thang.nguyen@vinacons.vn';
 const W1_PASS = process.env.E2E_WORKER_PASS ?? 'E2EWorker@2025';
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const PM_ID = '22222222-2222-4222-8222-222222222222';
 const W1_ID = '33333333-3333-4333-8333-333333333333';
 
-const CODE_A = 'E2E3-A';
-const CODE_B = 'E2E3-B';
+const CODE_A = 'VDA3-A';
+const CODE_B = 'VDA3-B';
 const START = '2026-10-01';
 const END = '2027-03-31';
-const NAME_ALPHA = 'Khu E2E3 Alpha';
-const NAME_ALPHA2 = 'Khu E2E3 Alpha Đổi Tên';
-const NAME_BETA = 'Khu E2E3 Beta';
+const NAME_ALPHA = 'Khu hành chính - Khối A';
+const NAME_ALPHA2 = 'Khu hành chính - Khối A (mở rộng)';
+const NAME_BETA = 'Khu kho vận - Khối B';
+const PROJ_NAMES = { 'VDA3-A': 'Trung tâm hội nghị Sông Hồng', 'VDA3-B': 'Khu căn hộ Flora Anh Đào' };
 
 const results = [];
 function step(id, name, fn) {
@@ -108,6 +114,20 @@ function uuid() {
 }
 function runCleanup() {
   try {
+    // Id-based: xóa sót lại của run trước theo ids đã ghi trong e2e-vars.json.
+    try {
+      const prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const ids = prev && prev.projectIds ? Object.values(prev.projectIds).filter(Boolean) : [];
+      for (const pid of ids) {
+        execFileSync('docker', ['exec', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-c',
+          `DELETE FROM work_orders WHERE project_id='${pid}';` +
+          `DELETE FROM attachments WHERE project_id='${pid}';` +
+          `DELETE FROM project_areas WHERE project_id='${pid}';` +
+          `DELETE FROM project_members WHERE project_id='${pid}';` +
+          `DELETE FROM projects WHERE id='${pid}';`],
+        { encoding: 'utf8', timeout: 20000 });
+      }
+    } catch {}
     const sql = fs.readFileSync(path.join(__dirname, 'seed-003.sql'), 'utf8');
     execFileSync('docker', ['exec', '-i', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-v', 'ON_ERROR_STOP=1'],
       { input: sql, encoding: 'utf8', timeout: 20000 });
@@ -117,7 +137,7 @@ function runCleanup() {
 }
 async function createProject(token, code) {
   const r = await api('POST', '/api/v1/projects', token, {
-    code, name: `Công trình ${code}`, address: `Số 1, đường ${code}`,
+    code, name: PROJ_NAMES[code] || `Dự án Vinacons ${code}`, address: `Số 1, đường Sông Hồng, Hà Nội`,
     plannedStartDate: START, plannedEndDate: END, managerId: W1_ID,
   });
   return r;
@@ -170,9 +190,9 @@ async function gotoDetail(page, id) {
 
   try {
     // ============ S1: tạo project + tạo area qua UI ============
-    await step('S1', 'Tạo project E2E3-A + tạo area qua UI → list active', async (id) => {
+    await step('S1', 'Tạo project VDA3-A + tạo area qua UI → list active', async (id) => {
       const ca = await createProject(adminToken, CODE_A);
-      if (ca.status !== 201) return fail(id, `tạo E2E3-A status=${ca.status} ${JSON.stringify(ca.body).slice(0, 200)}`);
+      if (ca.status !== 201) return fail(id, `tạo VDA3-A status=${ca.status} ${JSON.stringify(ca.body).slice(0, 200)}`);
       idA = ca.body.id;
       await loginWeb(adminPage, ADMIN_EMAIL, ADMIN_PASS);
       await gotoDetail(adminPage, idA);
@@ -184,7 +204,7 @@ async function gotoDetail(page, id) {
       await adminPage.waitForFunction(
         (n) => (document.body.textContent || '').includes(n),
         NAME_ALPHA, { timeout: 25000 });
-      await snap(adminPage, `${id}-created`, 'E2E3-A sau khi thêm Khu Alpha (active)');
+      await snap(adminPage, `${id}-created`, 'VDA3-A sau khi thêm Khu Alpha (active)');
       const lr = await api('GET', `/api/v1/projects/${idA}/areas`, adminToken);
       const hit = (lr.body && Array.isArray(lr.body.data) ? lr.body.data : []).find((a) => a.name === NAME_ALPHA);
       if (!hit || hit.isActive !== true) {
@@ -229,7 +249,7 @@ async function gotoDetail(page, id) {
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Đã đổi tên khu vực'),
         { timeout: 25000 });
-      await snap(adminPage, `${id}-renamed`, 'E2E3-A sau khi đổi tên Alpha');
+      await snap(adminPage, `${id}-renamed`, 'VDA3-A sau khi đổi tên Alpha');
       const t = await bodyText(adminPage);
       if (!t.includes(NAME_ALPHA2)) return fail(id, 'list UI thiếu tên mới');
       const db = psqlT(`SELECT name FROM project_areas WHERE id='${areaId}'`);
@@ -252,18 +272,18 @@ async function gotoDetail(page, id) {
       await adminPage.waitForSelector('#area-deactivate-reason', { timeout: 15000 });
       const counter = await bodyText(adminPage);
       if (!counter.includes('/500')) return fail(id, 'thiếu counter /500 ký tự');
-      await adminPage.fill('#area-deactivate-reason', 'Gộp khu E2E3 để kiểm thử');
+      await adminPage.fill('#area-deactivate-reason', 'Gộp khu hành chính để tối ưu mặt bằng (đợt T9/2026)');
       await adminPage.getByRole('button', { name: 'Xác nhận ngừng sử dụng', exact: true }).click();
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Đã ngừng sử dụng khu vực'),
         { timeout: 25000 });
-      await snap(adminPage, `${id}-deactivated`, 'E2E3-A: Alpha badge Ngừng sử dụng');
+      await snap(adminPage, `${id}-deactivated`, 'VDA3-A: Alpha badge Ngừng sử dụng');
       const t = await bodyText(adminPage);
       if (!t.includes('Ngừng sử dụng')) return fail(id, 'thiếu badge Ngừng sử dụng');
       const db = psqlT(`SELECT is_active::text FROM project_areas WHERE id='${areaId}'`);
       if (db !== 'false') return fail(id, `psql is_active=${db} (mong false) — row phải còn (no hard delete)`);
       const au = psqlT(`SELECT reason FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_AREA_UPDATED' ORDER BY created_at DESC LIMIT 1`);
-      if (!au.includes('Gộp khu E2E3')) return fail(id, `audit reason thiếu: ${au.slice(0, 200)}`);
+      if (!au.includes('Gộp khu hành chính')) return fail(id, `audit reason thiếu: ${au.slice(0, 200)}`);
       auditUpdatedAfterS4 = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_id='${idA}' AND action='PRJ_PROJECT_AREA_UPDATED'`);
       return ok(id, `UI badge Ngừng sử dụng; psql is_active=false row còn; audit reason đủ`);
     })();
@@ -291,19 +311,19 @@ async function gotoDetail(page, id) {
         if (c !== 0) return fail(id, `worker vẫn thấy nút "${n}" (${c})`);
       }
       await snap(workerPage, `${id}-worker-readonly`, 'Worker1: read-only, không write controls');
-      const wadd = await api('POST', `/api/v1/projects/${idA}/areas`, w1Token, { name: 'Khu Worker Chui' });
+      const wadd = await api('POST', `/api/v1/projects/${idA}/areas`, w1Token, { name: 'Khu vực tự ý thêm' });
       if (wadd.status !== 403) return fail(id, `worker1 add=${wadd.status} (mong 403)`);
-      const wupd = await api('PATCH', `/api/v1/projects/${idA}/areas/${areaId}`, w1Token, { name: 'Khu Worker Sửa' });
+      const wupd = await api('PATCH', `/api/v1/projects/${idA}/areas/${areaId}`, w1Token, { name: 'Khu vực tự ý sửa' });
       if (wupd.status !== 403) return fail(id, `worker1 patch=${wupd.status} (mong 403)`);
       // PM chỉ là member của B → write vào A phải 403 (ID tampering).
       const cb = await createProject(adminToken, CODE_B);
-      if (cb.status !== 201) return fail(id, `tạo E2E3-B status=${cb.status}`);
+      if (cb.status !== 201) return fail(id, `tạo VDA3-B status=${cb.status}`);
       idB = cb.body.id;
       const madd = await api('POST', `/api/v1/projects/${idB}/members`, adminToken, { userId: PM_ID, projectRole: 'COORDINATOR' });
       if (madd.status !== 201) return fail(id, `add pm vào B status=${madd.status} ${JSON.stringify(madd.body).slice(0, 200)}`);
-      const padd = await api('POST', `/api/v1/projects/${idA}/areas`, pmToken, { name: 'Khu PM Lạ' });
+      const padd = await api('POST', `/api/v1/projects/${idA}/areas`, pmToken, { name: 'Khu vực ngoài phạm vi' });
       if (padd.status !== 403) return fail(id, `pm-ngoài-A add=${padd.status} (mong 403)`);
-      const pupd = await api('PATCH', `/api/v1/projects/${idA}/areas/${areaId}`, pmToken, { name: 'Khu PM Sửa' });
+      const pupd = await api('PATCH', `/api/v1/projects/${idA}/areas/${areaId}`, pmToken, { name: 'Khu vực sửa trái phép' });
       if (pupd.status !== 403) return fail(id, `pm-ngoài-A patch=${pupd.status} (mong 403)`);
       return ok(id, `worker UI 0 nút + API POST/PATCH 403; pm-ngoài-A POST/PATCH 403`);
     })();
@@ -311,7 +331,7 @@ async function gotoDetail(page, id) {
     // ============ S7: areaId lạ → 404 ============
     await step('S7', 'PATCH areaId không tồn tại → 404 actionable', async (id) => {
       const fake = uuid();
-      const r = await api('PATCH', `/api/v1/projects/${idA}/areas/${fake}`, adminToken, { name: 'Khu Ma' });
+      const r = await api('PATCH', `/api/v1/projects/${idA}/areas/${fake}`, adminToken, { name: 'Khu vực không tồn tại' });
       if (r.status !== 404) return fail(id, `status=${r.status} (mong 404) ${JSON.stringify(r.body).slice(0, 200)}`);
       const msg = (r.body && r.body.message) || '';
       if (!msg) return fail(id, '404 thiếu message actionable');
@@ -344,9 +364,9 @@ async function gotoDetail(page, id) {
     })();
   } finally {
     runCleanup();
-    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'E2E3-%'`);
+    const rest = psqlT(`SELECT count(*) FROM projects WHERE code LIKE 'VDA3-%'`);
     const auditFinal = psqlT('SELECT count(*) FROM audit_logs');
-    console.log(`cleanup: E2E3-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do ADDED/UPDATED hợp lệ; audit giữ nguyên)`);
+    console.log(`cleanup: VDA3-% rest=${rest}, audit ${auditBaseline}→${auditFinal} (tăng do ADDED/UPDATED hợp lệ; audit giữ nguyên)`);
     fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
       _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
       admin: ADMIN_EMAIL, pm: PM_EMAIL, worker1: W1_EMAIL,

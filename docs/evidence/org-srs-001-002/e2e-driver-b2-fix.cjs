@@ -4,6 +4,7 @@
  * - Phase 2: contractor INACTIVE — edit contact/scope (status giữ nguyên INACTIVE) → kỳ vọng PATCH 200 + DB + audit
  * Ghi lại HTTP status thật của mọi PATCH /api/v1/contractors/:id qua page.on('response').
  * KHÔNG commit (docs/evidence). Chạy: node e2e-driver-b2-fix.cjs
+ * Dữ liệu realistic theo docs/demo-data.md (mã SCC-*, tên công ty Việt, email @vinacons.vn).
  */
 const fs = require('fs');
 const path = require('path');
@@ -13,11 +14,15 @@ const BASE = 'http://localhost:3001';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 
-const UNIQ = Date.now().toString(36).slice(-6).toUpperCase();
-const CODE_A = `E2EFX${UNIQ}`; // contractor ACTIVE
-const NAME_A = `E2E Fix Active ${UNIQ}`;
-const CODE_I = `E2EFX2${UNIQ}`; // contractor sẽ bị deactivate → INACTIVE
-const NAME_I = `E2E Fix Inactive ${UNIQ}`;
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
+const ADMIN_PASS = 'E2EAdmin@2025';
+
+const UNIQ = String(Date.now()).slice(-6);
+const D4 = UNIQ.slice(-4);
+const CODE_A = `SCC-${UNIQ}`; // contractor ACTIVE
+const NAME_A = `Công ty TNHH Sửa chữa Cửu Long ${D4}`;
+const CODE_I = `SCC2-${UNIQ}`; // contractor sẽ bị deactivate → INACTIVE
+const NAME_I = `Công ty TNHH Cải tạo Cửu Long ${D4}`;
 
 const patchResponses = [];
 
@@ -44,10 +49,10 @@ const patchResponses = [];
     await page.goto(`${BASE}/contractors/new`, { waitUntil: 'networkidle' });
     await page.fill('#code', code);
     await page.fill('#name', name);
-    await page.fill('#contactName', 'Nguyễn E2E Fix');
+    await page.fill('#contactName', 'Phạm Văn Sửa');
     await page.fill('#phone', '0912345678');
-    await page.fill('#email', `e2efix.${UNIQ.toLowerCase()}@example.com`);
-    await page.fill('#scope', 'E2E fix: thi công phần thô');
+    await page.fill('#email', `lienhe.cuulong.${UNIQ}@vinacons.vn`);
+    await page.fill('#scope', 'Sửa chữa phần thô nhà xưởng');
     await page.click('button[type="submit"]');
     await page.waitForSelector(`text=${code}`, { timeout: 15000 });
   }
@@ -67,18 +72,19 @@ const patchResponses = [];
 
   async function deactivateContractor(href) {
     await page.goto(`${BASE}${href}`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('button:has-text("Chuyển sang Ngừng hoạt động")', { timeout: 15000 });
-    await page.click('button:has-text("Chuyển sang Ngừng hoạt động")');
-    await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-    await page.locator('button:has-text("Xác nhận")').last().click();
-    await page.waitForTimeout(2000);
+    await page.waitForSelector('button:has-text("Tạm ngừng")', { timeout: 15000 });
+    await page.click('button:has-text("Tạm ngừng")');
+    await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+    await page.fill('#lifecycle-reason', 'Tạm ngừng do chậm tiến độ tập kết vật tư');
+    await page.locator('button:has-text("Xác nhận tạm ngừng")').click();
+    await page.waitForTimeout(2500);
   }
 
   try {
     // login admin
     await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-    await page.fill('#email', 'admin@example.com');
-    await page.fill('#password', 'E2EAdmin@2025');
+    await page.fill('#email', ADMIN_EMAIL);
+    await page.fill('#password', ADMIN_PASS);
     await page.click('button[type="submit"]');
     await page.waitForURL('**/dashboard', { timeout: 15000 });
 
@@ -86,7 +92,7 @@ const patchResponses = [];
     await createContractor(CODE_A, NAME_A);
     const listHrefA = await page.locator(`tr:has-text("${CODE_A}") a:has-text("Xem chi tiết")`).getAttribute('href');
     const idA = listHrefA.split('/').pop();
-    await editContractorPage(listHrefA, 'Nguyễn E2E Fix Mới', 'E2E fix: phần thô + hoàn thiện', 'B2-fix-active-edit-form', 'B2-fix-active-detail');
+    await editContractorPage(listHrefA, 'Phạm Văn Sửa Mới', 'Sửa chữa phần thô và hoàn thiện nhà xưởng', 'B2-fix-active-edit-form', 'B2-fix-active-detail');
     console.log(`PHASE1 OK id=${idA} code=${CODE_A}`);
 
     // ---- Phase 2: contractor INACTIVE (deactivate trước), edit contact/scope, status giữ INACTIVE ----
@@ -95,7 +101,7 @@ const patchResponses = [];
     const listHrefI = await page.locator(`tr:has-text("${CODE_I}") a:has-text("Xem chi tiết")`).getAttribute('href');
     const idI = listHrefI.split('/').pop();
     await deactivateContractor(listHrefI);
-    await editContractorPage(listHrefI, 'Nguyễn E2E Fix Inactive Mới', 'E2E fix: cốp pha + cốt thép', 'B2-fix-inactive-edit-form', 'B2-fix-inactive-detail');
+    await editContractorPage(listHrefI, 'Phạm Văn Cải Tạo Mới', 'Cải tạo cốp pha và cốt thép', 'B2-fix-inactive-edit-form', 'B2-fix-inactive-detail');
     console.log(`PHASE2 OK id=${idI} code=${CODE_I}`);
 
     fs.writeFileSync(path.join(__dirname, 'e2e-b2fix-ids.json'), JSON.stringify({ uniq: UNIQ, codeA: CODE_A, idA, nameA: NAME_A, codeI: CODE_I, idI, nameI: NAME_I }, null, 2));

@@ -1,13 +1,20 @@
 /**
- * ORG-SRS-001/002 E2E driver (tạm thời, KHÔNG commit theo scope docs/evidence).
+ * ORG-SRS-001/002 E2E driver — phase 1 (tạm thời, KHÔNG commit theo scope docs/evidence).
  * Chạy: node e2e-driver.cjs
  * Yêu cầu: Docker stack buildflow đang chạy; admin password đã reset (xem doc E2E).
+ *
+ * Dữ liệu realistic theo docs/demo-data.md (chuẩn hóa 2026-09-07):
+ * worker运行时 tạo mới dùng tên Việt + email @vinacons.vn + mã TX-9xxx;
+ * contractor dùng mã XD-* + tên công ty Việt. UNIQ/DIGITS giữ cơ chế duy nhất
+ * cho rename/duplicate-409 flows. Passwords giữ nguyên.
  */
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { chromium } = require('/home/trung/.npm-global/lib/node_modules/@playwright/mcp/node_modules/playwright');
 
 const BASE = 'http://localhost:3001';
+const API = 'http://localhost:3000';
 const SHOTS = path.join(__dirname, 'shots');
 if (!fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 const log = [];
@@ -33,23 +40,70 @@ async function snap(page, id, desc) {
 function ok(id, note = '') { return { id, ok: true, note }; }
 function fail(id, note) { return { id, ok: false, note }; }
 
-function pickByText(scope, texts, tag) {
-  const candidates = [];
-  for (const el of scope.locator(`${tag || 'button, a, [role="button"]'}`).all()) {
-    candidates.push(el);
+/* ---------- realistic run identities (docs/demo-data.md) ---------- */
+const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
+const ADMIN_PASS = 'E2EAdmin@2025';
+
+function psql(sql) {
+  try {
+    return execFileSync('docker', [
+      'exec', 'buildflow-postgres-1', 'psql', '-U', 'buildflow', '-d', 'buildflow', '-P', 'pager=off', '-c', sql,
+    ], { encoding: 'utf8', timeout: 15000 }).trim();
+  } catch (e) {
+    return `PSQL ERROR: ${e.stderr || e.message}`;
   }
-  return async () => {
-    for (const el of candidates) {
-      try {
-        const t = (await el.textContent()) || '';
-        if (texts.some((x) => t.includes(x))) return el;
-      } catch {}
+}
+
+/** Xóa dư liệu run trước theo id đã ghi trong vars (fallback: cửa sổ created_at + pattern mã run). */
+function cleanupPreviousRun() {
+  const prevVars = path.join(__dirname, 'e2e-vars.json');
+  let prev = null;
+  try { prev = JSON.parse(fs.readFileSync(prevVars, 'utf8')); } catch {}
+  if (prev) {
+    const wIds = [prev.workerId].filter(Boolean).map((s) => `'${s}'`);
+    if (wIds.length) {
+      // chỉ xóa khi mã nhân viên vẫn là mã run (TX-8/TX-9/TXW-), KHÔNG đụng mã canonical TX-00xx
+      psql(`DELETE FROM resource_trades WHERE user_id IN (${wIds.join(',')}) AND user_id IN (SELECT id FROM users WHERE employee_code LIKE 'TX-9%' OR employee_code LIKE 'TX-8%' OR employee_code LIKE 'TXW-%')`);
+      const out = psql(`DELETE FROM users WHERE id IN (${wIds.join(',')}) AND (employee_code LIKE 'TX-9%' OR employee_code LIKE 'TX-8%' OR employee_code LIKE 'TXW-%')`);
+      console.log('cleanup prev worker:', out.split('\n').pop());
     }
-    throw new Error(`không tìm thấy phần tử chứa text: ${texts.join(' / ')}`);
-  };
+    const cCodes = [prev.contractorCode, prev.contractorCode2, prev.contractorCode3].filter(Boolean).map((s) => `'${s}'`);
+    if (cCodes.length) {
+      const out = psql(`DELETE FROM contractors WHERE code IN (${cCodes.join(',')}) AND (code LIKE 'XD%' OR code LIKE 'SCC%')`);
+      console.log('cleanup prev contractors:', out.split('\n').pop());
+    }
+  }
+  try {
+    const b2 = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-b2fix-ids.json'), 'utf8'));
+    const codes = [b2.codeA, b2.codeI].filter(Boolean).map((s) => `'${s}'`);
+    if (codes.length) {
+      const out = psql(`DELETE FROM contractors WHERE code IN (${codes.join(',')}) AND code LIKE 'SCC%'`);
+      console.log('cleanup prev b2fix contractors:', out.split('\n').pop());
+    }
+  } catch {}
+  // fallback: hàng run-pattern tạo trong 12h gần nhất (canonical VCC/NTA/HTB + TX-00xx không khớp pattern)
+  const f1 = psql(`DELETE FROM resource_trades WHERE user_id IN (SELECT id FROM users WHERE (employee_code LIKE 'TX-9%' OR employee_code LIKE 'TX-8%') AND created_at > now() - interval '12 hours')`);
+  const f2 = psql(`DELETE FROM users WHERE (employee_code LIKE 'TX-9%' OR employee_code LIKE 'TX-8%') AND created_at > now() - interval '12 hours'`);
+  const f3 = psql(`DELETE FROM contractors WHERE (code LIKE 'XD%' OR code LIKE 'SCC%') AND created_at > now() - interval '12 hours'`);
+  console.log('cleanup fallback:', f1.split('\n').pop(), '|', f2.split('\n').pop(), '|', f3.split('\n').pop());
+}
+
+async function apiToken(email, password) {
+  const res = await fetch(`${API}/api/v1/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const j = await res.json().catch(() => null);
+  return j && j.accessToken ? j.accessToken : null;
+}
+async function apiGet(urlPath, token) {
+  const res = await fetch(`${API}${urlPath}`, { headers: { Authorization: `Bearer ${token}` } });
+  return res.json().catch(() => null);
 }
 
 (async () => {
+  cleanupPreviousRun();
+
   const browser = await chromium.launch({
     executablePath: '/usr/bin/google-chrome',
     headless: true,
@@ -59,16 +113,32 @@ function pickByText(scope, texts, tag) {
   page.setDefaultTimeout(20000);
 
   const UNIQ = Date.now().toString(36).slice(-6);
-  const W_EMAIL = `e2e.w.${UNIQ}@example.com`;
-  const W_CODE = `E2EW${UNIQ.toUpperCase()}`;
+  const DIGITS = String(Date.now()).slice(-6);
+  const D4 = DIGITS.slice(-4);
+  // Worker: tên Việt trong pool + hậu tố số duy nhất; email/code theo docs/demo-data.md
+  const W_NAME = `Phạm Văn Khôi ${DIGITS}`;
+  const W_EMAIL = `khoi.pham.${DIGITS}@vinacons.vn`;
+  const W_CODE = `TX-9${DIGITS.slice(-4)}`;
+  const W_RENAMED = `Phạm Văn Khôi ${DIGITS} Mới`;
   const W_PASS = 'WorkerPass@123';
-  const C_CODE = `E2EC${UNIQ.toUpperCase()}`;
-  const C_NAME = `E2E Nhà thầu ${UNIQ}`;
-  const C_CODE2 = `E2EC2${UNIQ.toUpperCase()}`;
-  const C_NAME2 = `E2E Nhà thầu P2 ${UNIQ}`;
-  const C_ID = '20000000-0000-4000-8000-000000000001';
-  console.log(`UNIQ=${UNIQ} worker=${W_EMAIL} contractor=${C_CODE}`);
-  fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({ uniq: UNIQ, workerEmail: W_EMAIL, workerCode: W_CODE, contractorCode: C_CODE, contractorCode2: C_CODE2 }, null, 2));
+  // Contractor P1
+  const C_CODE = `XD-${DIGITS}`;
+  const C_NAME = `Công ty TNHH Xây dựng An Khang ${D4}`;
+  const C_EMAIL = `lienhe.ankhang.${DIGITS}@vinacons.vn`;
+  // Contractor P2 (dùng ở phase ctr-full)
+  const C_CODE2 = `XD2-${DIGITS}`;
+  const C_NAME2 = `Công ty CP Cơ khí Đông Anh ${D4}`;
+  const C_EMAIL2 = `lienhe.donganh.${DIGITS}@vinacons.vn`;
+  console.log(`UNIQ=${UNIQ} DIGITS=${DIGITS} worker=${W_EMAIL} code=${W_CODE} contractor=${C_CODE}`);
+  fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify({
+    _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
+    uniq: UNIQ, digits: DIGITS,
+    workerEmail: W_EMAIL, workerCode: W_CODE, workerName: W_NAME, renamedName: W_RENAMED,
+    workerId: null,
+    contractorCode: C_CODE, contractorName: C_NAME, contractorEmail: C_EMAIL, contractorId: null,
+    contractorCode2: C_CODE2, contractorName2: C_NAME2, contractorEmail2: C_EMAIL2, contractorId2: null,
+    contractorCode3: null, contractorId3: null,
+  }, null, 2));
 
   const TRADE_GOOD = '11111111-1111-4111-8111-111111111111';
   const TRADE_BAD = '99999999-9999-4999-8999-999999999999';
@@ -77,8 +147,8 @@ function pickByText(scope, texts, tag) {
     /* A1: login admin */
     await step('A1', 'login admin', async (id) => {
       await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
-      await page.fill('#email', 'admin@example.com');
-      await page.fill('#password', 'E2EAdmin@2025');
+      await page.fill('#email', ADMIN_EMAIL);
+      await page.fill('#password', ADMIN_PASS);
       await snap(page, id, 'Điền form đăng nhập');
       await page.click('button[type="submit"]');
       await page.waitForURL('**/dashboard', { timeout: 15000 });
@@ -90,12 +160,17 @@ function pickByText(scope, texts, tag) {
     /* A2: create worker */
     await step('A2', 'tạo worker mới', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
+      // #tradeId giờ là <select> (chỉ liệt kê trade ACTIVE) — chờ options rồi chọn
+      await page.waitForFunction(() => {
+        const s = document.querySelector('#tradeId');
+        return s && !s.disabled && s.options.length >= 2;
+      }, { timeout: 20000 });
+      await page.selectOption('#tradeId', TRADE_GOOD);
       await page.fill('#email', W_EMAIL);
       await page.fill('#password', W_PASS);
-      await page.fill('#fullName', `E2E Worker ${UNIQ}`);
+      await page.fill('#fullName', W_NAME);
       await page.fill('#phone', '0909' + String(Math.floor(100000 + Math.random() * 899999)));
       await page.fill('#employeeCode', W_CODE);
-      await page.fill('#tradeId', TRADE_GOOD);
       await page.selectOption('#skillLevel', '3');
       await snap(page, id, 'Form tạo worker đã điền');
       await page.click('button[type="submit"]');
@@ -109,8 +184,8 @@ function pickByText(scope, texts, tag) {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
       await page.fill('#email', W_EMAIL);
       await page.fill('#password', W_PASS);
-      await page.fill('#fullName', 'Duplicate Email');
-      await page.fill('#employeeCode', `E2EX${UNIQ.toUpperCase()}`);
+      await page.fill('#fullName', 'Trần Văn Công Trùng');
+      await page.fill('#employeeCode', `TX-8${DIGITS.slice(-4)}`);
       await snap(page, id, 'Form trùng email');
       await page.click('button[type="submit"]');
       await page.waitForSelector('text=Email đã tồn tại', { timeout: 15000 });
@@ -119,9 +194,9 @@ function pickByText(scope, texts, tag) {
     })();
     await step('A3b', 'trùng employee code -> 409 field', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
-      await page.fill('#email', `e2e.x.${UNIQ}@example.com`);
+      await page.fill('#email', `cong.tran.${DIGITS}@vinacons.vn`);
       await page.fill('#password', W_PASS);
-      await page.fill('#fullName', 'Duplicate Code');
+      await page.fill('#fullName', `Trần Văn Công ${DIGITS}`);
       await page.fill('#employeeCode', W_CODE);
       await snap(page, id, 'Form trùng mã nhân viên');
       await page.click('button[type="submit"]');
@@ -130,19 +205,33 @@ function pickByText(scope, texts, tag) {
       return ok(id, 'báo "Mã nhân viên đã tồn tại"');
     })();
 
-    /* A4: invalid trade -> 400 field */
+    /* A4: invalid trade -> 400 (mức API; UI giờ dùng <select> chỉ chứa trade ACTIVE
+       nên không nhập tay trade lạ được — select tự chặn, kiểm chứng 400 qua API) */
     await step('A4', 'trade không hợp lệ -> 400', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
-      await page.fill('#email', `e2e.bad.${UNIQ}@example.com`);
+      await page.waitForFunction(() => {
+        const s = document.querySelector('#tradeId');
+        return s && !s.disabled && s.options.length >= 2;
+      }, { timeout: 20000 });
+      await page.fill('#email', `tam.nguyen.${DIGITS}@vinacons.vn`);
       await page.fill('#password', W_PASS);
-      await page.fill('#fullName', 'Bad Trade');
-      await page.fill('#tradeId', TRADE_BAD);
-      await page.selectOption('#skillLevel', '3');
-      await snap(page, id, 'Form trade không hợp lệ');
-      await page.click('button[type="submit"]');
-      await page.waitForSelector('text=Trade không tồn tại', { timeout: 15000 });
-      await snap(page, id + '-2', 'Lỗi 400 trade hiển thị');
-      return ok(id, 'báo "Trade không tồn tại..."');
+      await page.fill('#fullName', `Nguyễn Văn Tám ${DIGITS}`);
+      await snap(page, id, 'Form tạo worker (select trade hợp lệ — case xấu kiểm qua API)');
+      const token = await apiToken(ADMIN_EMAIL, ADMIN_PASS);
+      const res = await fetch(`${API}/api/v1/workers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          email: `tam.nguyen.${DIGITS}@vinacons.vn`, password: W_PASS,
+          fullName: `Nguyễn Văn Tám ${DIGITS}`, employeeCode: `TX-7${DIGITS.slice(-4)}`,
+          trades: [{ tradeId: TRADE_BAD, skillLevel: 3 }],
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      await snap(page, id + '-2', `API trade lạ trả HTTP ${res.status}`);
+      if (res.status !== 400) return fail(id, `HTTP ${res.status} thay vì 400: ${JSON.stringify(body).slice(0, 200)}`);
+      if (!/Trade không tồn tại/.test(String(body.message || ''))) return fail(id, `message không rõ: ${JSON.stringify(body).slice(0, 200)}`);
+      return ok(id, 'API 400 "Trade không tồn tại..."');
     })();
 
     /* A5: search/filter */
@@ -153,29 +242,26 @@ function pickByText(scope, texts, tag) {
       await page.waitForSelector(`text=${W_EMAIL}`, { timeout: 10000 });
       await snap(page, id, 'Kết quả search đúng worker');
       const rows = await page.locator('body').innerText();
-      if (rows.includes('Duplicate Email')) return fail(id, 'search trả về worker khác');
+      if (rows.includes('Trần Văn Công')) return fail(id, 'search trả về worker khác');
       return ok(id, 'chỉ 1 worker khớp');
     })();
 
-    /* A6: edit rename -> DB verify */
-    let renamedDbName = '';
+    /* A6: edit rename -> DB verify (id resolve qua API, vào thẳng trang edit) */
     await step('A6', 'edit đổi tên worker', async (id) => {
-      await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
-      await page.fill('#worker-search', W_CODE);
-      await page.click('button:has-text("Tìm")');
-      await page.waitForSelector(`a[href*="/workers/"]:has-text("E2E Worker")`, { timeout: 10000 });
-      // Locate the detail link of the card matching full name
-      const link = page.locator(`div:has-text("E2E Worker ${UNIQ}") a[href*="/workers/"]`).first();
-      const href = await link.getAttribute('href');
-      if (!href) throw new Error('không lấy được href detail');
-      const newName = `E2E Worker Renamed ${UNIQ}`;
-      await page.goto(`${BASE}${href}/edit`, { waitUntil: 'networkidle' });
-      await page.fill('#fullName', newName);
+      const token0 = await apiToken(ADMIN_EMAIL, ADMIN_PASS);
+      const w0 = await apiGet(`/api/v1/workers?search=${encodeURIComponent(W_CODE)}`, token0);
+      const wId0 = w0 && Array.isArray(w0.data) && w0.data.length ? w0.data[0].id : null;
+      if (!wId0) throw new Error('không resolve được workerId qua API');
+      const v0 = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      v0.workerId = wId0;
+      fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify(v0, null, 2));
+      await page.goto(`${BASE}/workers/${wId0}/edit`, { waitUntil: 'networkidle' });
+      await page.waitForSelector('#fullName', { timeout: 15000 });
+      await page.fill('#fullName', W_RENAMED);
       await snap(page, id, 'Form edit đã đổi tên');
       await page.click('button[type="submit"]');
       await page.waitForSelector(`text=${W_EMAIL}`, { timeout: 15000 });
       await snap(page, id + '-2', 'List sau edit');
-      renamedDbName = newName;
       return ok(id, 'đã lưu, về list');
     })();
     await step('A6-DB', 'DB xác nhận tên đã đổi', async () => {
@@ -183,39 +269,51 @@ function pickByText(scope, texts, tag) {
       return ok('A6-DB');
     })();
 
-    /* A7: deactivate with confirm -> DB verify status/audit */
-    await step('A7', 'deactivate worker (confirm dialog)', async (id) => {
+    /* A7: suspend lifecycle (dialog + reason) -> DB verify status/audit ORG_WORKER_SUSPENDED */
+    const W_SUSPEND_REASON = 'Tạm ngừng để luân chuyển sang công trình khác';
+    const W_REACT_REASON = 'Tiếp nhận lại vào đội thi công';
+    await step('A7', 'tạm ngừng worker (dialog + lý do)', async (id) => {
+      const vA7 = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const wId = vA7.workerId;
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
       await page.fill('#worker-search', W_CODE);
       await page.click('button:has-text("Tìm")');
-      const card = page.locator(`div:has-text("E2E Worker Renamed ${UNIQ}")`).first();
-      await page.waitForSelector(`text=${W_EMAIL}`, { timeout: 10000 });
-      // find card with name and its "Ngừng hoạt động" button
-      const btn = card.locator('button:has-text("Ngừng hoạt động")');
-      await btn.click();
-      await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-      await snap(page, id, 'Confirm dialog deactivate');
-      await page.click('button:has-text("Xác nhận")');
-      await page.waitForSelector('text=Ngừng hoạt động', { timeout: 15000 });
+      await page.waitForSelector(`a[href="/workers/${wId}"]`, { timeout: 15000 });
+      await page.waitForTimeout(800);
+      const card = page.locator(`a[href="/workers/${wId}"]`).first().locator('xpath=ancestor::div[contains(@style,"space-between")][1]');
+      await card.locator('button:has-text("Tạm ngừng")').click();
+      await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+      await page.fill('#lifecycle-reason', W_SUSPEND_REASON);
+      await snap(page, id, 'Dialog tạm ngừng worker (lý do đã nhập)');
+      await page.locator('button:has-text("Xác nhận tạm ngừng")').click();
+      await page.waitForTimeout(2500);
       await snap(page, id + '-2', 'Worker INACTIVE trên list');
-      return ok(id, 'status chuyển INACTIVE, có confirm');
+      const t = await card.innerText().catch(() => '');
+      if (!/Kích hoạt lại|Ngừng hoạt động|INACTIVE/.test(t)) throw new Error('list chưa phản ánh trạng thái mới: ' + t.slice(0, 120));
+      return ok(id, 'status chuyển INACTIVE, có dialog + lý do');
     })();
     await step('A7-DB', 'DB xác nhận INACTIVE', async () => { return ok('A7-DB'); })();
     await step('A7-DB2', 'DB audit IAM_USER_DEACTIVATED', async () => { return ok('A7-DB2'); })();
 
-    /* A8: reactivate */
-    await step('A8', 'reactivate worker', async (id) => {
+    /* A8: reactivate lifecycle */
+    await step('A8', 'kích hoạt lại worker', async (id) => {
+      const vA8 = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+      const wId = vA8.workerId;
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
       await page.fill('#worker-search', W_CODE);
       await page.click('button:has-text("Tìm")');
-      const card = page.locator(`div:has-text("E2E Worker Renamed ${UNIQ}")`).first();
-      await page.waitForSelector(`button:has-text("Kích hoạt lại")`, { timeout: 10000 });
+      await page.waitForSelector(`a[href="/workers/${wId}"]`, { timeout: 15000 });
+      await page.waitForTimeout(800);
+      const card = page.locator(`a[href="/workers/${wId}"]`).first().locator('xpath=ancestor::div[contains(@style,"space-between")][1]');
       await card.locator('button:has-text("Kích hoạt lại")').click();
-      await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-      await snap(page, id, 'Confirm dialog reactivate');
-      await page.click('button:has-text("Xác nhận")');
-      await page.waitForSelector('text=Kích hoạt lại', { timeout: 15000 });
+      await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+      await page.fill('#lifecycle-reason', W_REACT_REASON);
+      await snap(page, id, 'Dialog kích hoạt lại worker');
+      await page.locator('button:has-text("Xác nhận kích hoạt lại")').click();
+      await page.waitForTimeout(2500);
       await snap(page, id + '-2', 'Worker ACTIVE trở lại');
+      const t = await card.innerText().catch(() => '');
+      if (!/Tạm ngừng/.test(t)) throw new Error('sau reactivate list không có nút Tạm ngừng (chưa ACTIVE): ' + t.slice(0, 120));
       return ok(id, 'status ACTIVE');
     })();
 
@@ -225,37 +323,41 @@ function pickByText(scope, texts, tag) {
       await page.waitForSelector('.bf-table tbody tr', { timeout: 15000 });
       await snap(page, id, 'Audit logs page');
       const bodyText = await page.locator('body').innerText();
-      if (!bodyText.includes('IAM_USER_DEACTIVATED')) return fail(id, 'không thấy action IAM_USER_DEACTIVATED trong view');
+      if (!bodyText.includes('ORG_WORKER_SUSPENDED')) return fail(id, 'không thấy action ORG_WORKER_SUSPENDED trong view');
       if (!bodyText.includes('ORG_WORKER_CREATED')) return fail(id, 'không thấy ORG_WORKER_CREATED trong view');
-      return ok(id, 'thấy IAM_USER_DEACTIVATED / ORG_WORKER_CREATED');
+      return ok(id, 'thấy ORG_WORKER_SUSPENDED / ORG_WORKER_CREATED');
     })();
 
     /* B1: create contractor */
+    let contractorHref = null;
     await step('B1', 'tạo contractor mới', async (id) => {
       await page.goto(`${BASE}/contractors/new`, { waitUntil: 'networkidle' });
       await page.fill('#code', C_CODE);
       await page.fill('#name', C_NAME);
-      await page.fill('#contactName', 'Nguyễn E2E');
+      await page.fill('#contactName', 'Nguyễn Văn An');
       await page.fill('#phone', '0912' + String(Math.floor(100000 + Math.random() * 899999)));
-      await page.fill('#email', `ct.${UNIQ}@example.com`);
-      await page.fill('#scope', 'E2E thi công phần thô');
+      await page.fill('#email', C_EMAIL);
+      await page.fill('#scope', 'Thi công phần thô khu B1');
       await snap(page, id, 'Form tạo contractor đã điền');
       await page.click('button[type="submit"]');
       await page.waitForSelector(`text=${C_NAME}`, { timeout: 15000 });
       await snap(page, id + '-2', 'Contractor trong list');
+      try {
+        contractorHref = await page.locator(`tr:has-text("${C_CODE}") a:has-text("Xem chi tiết")`).getAttribute('href');
+      } catch {}
       return ok(id, 'tạo xong, list hiển thị');
     })();
 
     /* B2: edit contact/scope */
     await step('B2', 'edit contact/scope contractor', async (id) => {
       await page.goto(`${BASE}/contractors`, { waitUntil: 'networkidle' });
-      const link = page.locator(`a[href*="/contractors/"]:has-text("${C_NAME}")`).first();
-      await page.waitForSelector(`a[href*="/contractors/"]:has-text("${C_NAME}")`, { timeout: 10000 });
-      const href = await link.getAttribute('href');
+      const row = page.locator('tr', { hasText: C_NAME }).filter({ hasText: C_CODE }).first();
+      await row.waitFor({ timeout: 15000 });
+      const href = await row.locator('a:has-text("Xem chi tiết")').getAttribute('href');
       await page.goto(`${BASE}${href}/edit`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#contactName', { timeout: 10000 });
-      await page.fill('#contactName', 'Trần E2E Mới');
-      await page.fill('#scope', 'E2E thi công phần thô + hoàn thiện');
+      await page.fill('#contactName', 'Trần Văn Bình');
+      await page.fill('#scope', 'Thi công phần thô và hoàn thiện khu B1');
       await snap(page, id, 'Form edit contractor');
       await page.click('button[type="submit"]');
       await page.waitForSelector(`text=${C_NAME}`, { timeout: 15000 });
@@ -263,21 +365,25 @@ function pickByText(scope, texts, tag) {
       return ok(id, 'detail hiển thị contact/scope mới');
     })();
 
-    /* B3: deactivate with confirm */
-    await step('B3', 'deactivate contractor (confirm)', async (id) => {
+    /* B3: suspend contractor lifecycle qua detail (dialog + lý do) */
+    const C_SUSPEND_REASON = 'Tạm ngừng do chậm tiến độ tập kết vật tư';
+    await step('B3', 'tạm ngừng contractor (dialog + lý do)', async (id) => {
       await page.goto(`${BASE}/contractors`, { waitUntil: 'networkidle' });
       const row = page.locator(`tr:has-text("${C_NAME}")`).first();
       await page.waitForSelector(`tr:has-text("${C_NAME}")`, { timeout: 10000 });
       const link = row.locator('a:has-text("Xem chi tiết")');
       const href = await link.getAttribute('href');
       await page.goto(`${BASE}${href}`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('button:has-text("Chuyển sang Ngừng hoạt động")', { timeout: 10000 });
-      await page.click('button:has-text("Chuyển sang Ngừng hoạt động")');
-      await page.waitForSelector('text=Xác nhận chuyển trạng thái', { timeout: 10000 });
-      await snap(page, id, 'Confirm dialog contractor INACTIVE');
-      await page.click('button:has-text("Xác nhận")');
-      await page.waitForSelector('text=Ngừng hoạt động', { timeout: 15000 });
+      await page.waitForSelector('button:has-text("Tạm ngừng")', { timeout: 15000 });
+      await page.click('button:has-text("Tạm ngừng")');
+      await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
+      await page.fill('#lifecycle-reason', C_SUSPEND_REASON);
+      await snap(page, id, 'Dialog tạm ngừng contractor (lý do đã nhập)');
+      await page.locator('button:has-text("Xác nhận tạm ngừng")').click();
+      await page.waitForTimeout(2500);
       await snap(page, id + '-2', 'Contractor INACTIVE trên detail');
+      const t = await page.locator('body').innerText();
+      if (!/Ngừng hoạt động|INACTIVE/.test(t)) throw new Error('detail chưa phản ánh INACTIVE');
       return ok(id, 'status INACTIVE');
     })();
     await step('B3-DB', 'DB contractor INACTIVE + audit', async () => { return ok('B3-DB'); })();
@@ -314,6 +420,21 @@ function pickByText(scope, texts, tag) {
       await snap(page, id, 'Detail contractor INACTIVE vẫn mở');
       return ok(id, 'detail render (không 404/hard delete)');
     })();
+
+    // Resolve ids qua API để các phase sau không hardcode UUID
+    try {
+      const token = await apiToken(ADMIN_EMAIL, ADMIN_PASS);
+      if (token) {
+        const w = await apiGet(`/api/v1/workers?search=${encodeURIComponent(W_CODE)}`, token);
+        const wId = w && Array.isArray(w.data) && w.data.length ? w.data[0].id : null;
+        const c = await apiGet(`/api/v1/contractors?search=${encodeURIComponent(C_CODE)}`, token);
+        const cId = c && Array.isArray(c.data) && c.data.length ? c.data[0].id : null;
+        const v = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8'));
+        v.workerId = wId; v.contractorId = cId;
+        fs.writeFileSync(path.join(__dirname, 'e2e-vars.json'), JSON.stringify(v, null, 2));
+        console.log(`ids: worker=${wId} contractor=${cId} href=${contractorHref}`);
+      }
+    } catch (e) { console.log('resolve ids warn:', e.message); }
   } catch (err) {
     console.log('FATAL driver error:', err.message);
     try { await snap(page, 'ZZ-fatal', 'Fatal: ' + err.message); } catch {}

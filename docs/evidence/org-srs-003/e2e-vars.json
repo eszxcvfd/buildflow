@@ -1,12 +1,15 @@
 {
-  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
-  "uniq": "OO1CBY",
-  "tradeCode": "E2E-TOO1CBY",
-  "tradeCode2": "E2E-T2OO1CBY",
-  "workerEmail": "e2e.t.oo1cby@example.com",
-  "tradeId": "85fc5da0-cb00-4650-9e3c-fae7a83ab656",
-  "workerId": "a2e62200-0305-4d33-a553-4f200859423e",
-  "correlationId": "b1f00000-0000-4000-8000-607828498562",
+  "uniq": "R5S2B7",
+  "tradeCode": "NK-R5S2B7",
+  "tradeCode2": "NK2-R5S2B7",
+  "workerEmail": "luc.tran.r5s2b7@vinacons.vn",
+  "workerName": "Bùi Văn Lực R5S2B7",
+  "workerCode": "TXW-R5S2B7",
+  "tradeId": "cb225985-78ca-471b-8c1c-e2eb97e41231",
+  "workerId": "957d95b1-f74c-4724-ab4d-536e93128ff9",
+  "dupCode": "XT-R5S2B7",
+  "dupTradeId": "a609b4fc-7405-44ff-afd4-8af616f65f00",
+  "correlationId": "b1f00000-0000-4000-8000-654533374477",
   "results": [
     {
       "id": "B1",
@@ -16,12 +19,12 @@
     {
       "id": "B2",
       "ok": true,
-      "note": "bảng render, 5 rows; row đầu: E2E Ngành nghề ONWFWD RENAMEDE2E-TONWFWDE2E mô tả: ONWFWDACTIVENgừng hoạt độngCh"
+      "note": "bảng render, 4 rows; row đầu: Tho cat gachTHO-CATThi cong cat gach, op latACTIVENgừng hoạt độngChi tiết"
     },
     {
       "id": "B3",
       "ok": true,
-      "note": "DB row:\ncode     |         name          | is_active \n-------------+-----------------------+-----------\n E2E-TOO1CBY | E2E Ngành nghề OO1CBY | t\n(1 row)\naudit:\naction       | entity_type | result  \n-------------------+-------------+---------\n ORG_TRADE_CREATED | TRADE       | SUCCESS\n(1 row)"
+      "note": "DB row:\ncode    |         name         | is_active \n-----------+----------------------+-----------\n NK-R5S2B7 | Thợ nhôm kính R5S2B7 | t\n(1 row)\naudit:\naction       | entity_type | result  \n-------------------+-------------+---------\n ORG_TRADE_CREATED | TRADE       | SUCCESS\n(1 row)"
     },
     {
       "id": "B4",
@@ -36,37 +39,37 @@
     {
       "id": "B6",
       "ok": true,
-      "note": "DB:\ncode     |             name              \n-------------+-------------------------------\n E2E-TOO1CBY | E2E Ngành nghề OO1CBY RENAMED\n(1 row)\naudit:\naction       |        b_name         |            a_name             \n-------------------+-----------------------+-------------------------------\n ORG_TRADE_UPDATED | E2E Ngành nghề OO1CBY | E2E Ngành nghề OO1CBY RENAMED\n(1 row)"
+      "note": "DB:\ncode    |             name             \n-----------+------------------------------\n NK-R5S2B7 | Thợ nhôm kính R5S2B7 cao cấp\n(1 row)\naudit:\naction       |        b_name        |            a_name            \n-------------------+----------------------+------------------------------\n ORG_TRADE_UPDATED | Thợ nhôm kính R5S2B7 | Thợ nhôm kính R5S2B7 cao cấp\n(1 row)"
     },
     {
       "id": "B7",
       "ok": true,
-      "note": "worker=a2e62200-0305-4d33-a553-4f200859423e; DB:\ntrade_id               | skill_level | is_active |          email           \n--------------------------------------+-------------+-----------+--------------------------\n 85fc5da0-cb00-4650-9e3c-fae7a83ab656 |           3 | t         | e2e.t.oo1cby@example.com\n(1 row)"
+      "note": "worker=957d95b1-f74c-4724-ab4d-536e93128ff9; DB:\ntrade_id               | skill_level | is_active |            email            \n--------------------------------------+-------------+-----------+-----------------------------\n cb225985-78ca-471b-8c1c-e2eb97e41231 |           3 | t         | luc.tran.r5s2b7@vinacons.vn\n(1 row)"
     },
     {
       "id": "B8",
       "ok": true,
-      "note": "DB:\ncode     | is_active \n-------------+-----------\n E2E-TOO1CBY | f\n(1 row)\naudit:\naction          |                                      warning                                       \n--------------------------+------------------------------------------------------------------------------------\n ORG_TRADE_STATUS_CHANGED | Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực\n(1 row)"
+      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-R5S2B7 | f\n(1 row)\naudit:\naction          |                                      warning                                       \n--------------------------+------------------------------------------------------------------------------------\n ORG_TRADE_STATUS_CHANGED | Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực\n(1 row)"
     },
     {
       "id": "B9",
       "ok": true,
-      "note": "option hiện có: — Giữ nguyên ngành nghề hiện tại — | E2E-TONWFWD — E2E Ngành nghề ONWFWD RENAMED | E2E-TONZFUF — E2E Ngành nghề ONZFUF RENAMED | E2E-DUP-ONWFWD — E2E dup ONWFWD | E2E-DUP-ONZFUF — E2E dup ONZFUF | THO-CAT — Tho cat gach"
+      "note": "inactive chỉ còn option '(hiện tại)'; các lựa chọn mới: THO-CAT — Tho cat gach | SON-NUOC — Thợ sơn nước | DIEN — Thợ điện | OP-LAT — Thợ ốp lát"
     },
     {
       "id": "B10",
       "ok": true,
-      "note": "HTTP 400 message=\"Trade không tồn tại hoặc đã ngừng hoạt động: 85fc5da0-cb00-4650-9e3c-fae7a83ab656\""
+      "note": "HTTP 400 message=\"Trade không tồn tại hoặc đã ngừng hoạt động: cb225985-78ca-471b-8c1c-e2eb97e41231\""
     },
     {
       "id": "B11",
       "ok": true,
-      "note": "HTTP 200; DB:\nfull_name      | active_trades \n--------------------+---------------\n E2E Worker Renamed |             1\n(1 row)"
+      "note": "HTTP 200; DB:\nfull_name        | active_trades \n------------------------+---------------\n Bùi Văn Lực R5S2B7 Mới |             1\n(1 row)"
     },
     {
       "id": "B12",
       "ok": true,
-      "note": "DB:\ncode     | is_active \n-------------+-----------\n E2E-TOO1CBY | t\n(1 row)\naudit:\naction          |    b     |   a    \n--------------------------+----------+--------\n ORG_TRADE_STATUS_CHANGED | INACTIVE | ACTIVE\n(1 row)"
+      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-R5S2B7 | t\n(1 row)\naudit:\naction          |    b     |   a    \n--------------------------+----------+--------\n ORG_TRADE_STATUS_CHANGED | INACTIVE | ACTIVE\n(1 row)"
     },
     {
       "id": "B13",
@@ -76,7 +79,7 @@
     {
       "id": "B14",
       "ok": true,
-      "note": "API pm GET=403 POST=403; anon=401; UI sidebar ẩn + card 403"
+      "note": "API pm GET=200 (đọc) POST=403 (ghi); anon=401; UI sidebar ẩn + list đọc"
     },
     {
       "id": "B15",

@@ -12,6 +12,6 @@
   {
     "id": "B3",
     "ok": true,
-    "note": "deactivate P2 có confirm xong, DB kiểm tra riêng"
+    "note": "tạm ngừng P2 có dialog + lý do xong, DB kiểm tra riêng"
   }
 ]

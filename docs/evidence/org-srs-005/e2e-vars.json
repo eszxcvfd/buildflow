@@ -1,5 +1,4 @@
 {
-  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
   "results": [
     {
       "id": "S1",
@@ -9,42 +8,42 @@
     {
       "id": "S2",
       "ok": true,
-      "note": "combined: API total=1 = SQL count=1 = UI Tổng=1 (E2E Worker ONZFUF); search đổi Tổng → 0"
+      "note": "combined: API total=1 = SQL count=1 = UI Tổng=1 (Phạm Văn Tuấn); search đổi Tổng → 0"
     },
     {
       "id": "S3",
       "ok": true,
-      "note": "API asc[0..2]=E2E Worker ONZFUF / E2E Worker Renamed / E2E4 Worker Lifecycle; desc đảo đúng; UI khớp cả 2 chiều"
+      "note": "API asc[0..2]=Lê Văn Hậu / Nguyễn Văn Ba / Nguyễn Văn Thắng; desc đảo đúng; UI khớp cả 2 chiều"
     },
     {
       "id": "S4",
       "ok": true,
-      "note": "API limit=2: trang1=[E2E Worker ONZFUF, E2E Worker Renamed] trang2=[E2E4 Worker Lifecycle, Lê Văn Thợ] total=5 khớp; UI page=2 Tổng=5 (empty vì PAGE_SIZE=20 > dataset — đúng thiết kế)"
+      "note": "API limit=2: trang1=[Lê Văn Hậu, Nguyễn Văn Ba] trang2=[Nguyễn Văn Thắng, Phạm Văn Tuấn] total=6 khớp; UI page=2 Tổng=6 (empty vì PAGE_SIZE=20 > dataset — đúng thiết kế)"
     },
     {
       "id": "S5",
       "ok": true,
-      "note": "empty state đúng + clear → Tổng=5 = DB 5; URL giữ filter sau refresh (true) và back (true)"
+      "note": "empty state đúng + clear → Tổng=6 = DB 6; URL giữ filter sau refresh (true) và back (true)"
     },
     {
       "id": "S6",
       "ok": true,
-      "note": "Tổng=3 khớp API; INACTIVE sql=0 + empty UI; sort asc=[Công ty CP Hạ tầng Bình Minh / Công ty TNHH Xây dựng Nam Tiến / E2E4 Nhà thầu Lifecycle] đảo đúng; search 'Nam Tiến' khớp"
+      "note": "Tổng=3 khớp API; INACTIVE sql=0 + empty UI; sort asc=[Công ty CP Hạ tầng Bình Minh / Công ty CP Xây dựng Vinacons / Công ty TNHH Xây dựng Nam Tiến] đảo đúng; search 'Nam Tiến' khớp"
     },
     {
       "id": "S7",
       "ok": true,
-      "note": "tab Đội disabled + note \"Sắp có — ORG-SRS-006\" hiển thị"
+      "note": "tab Đội enabled; ?tab=crews Tổng=1 = API total (thấy DD-CD 'Đội cơ điện Vinacons')"
     },
     {
       "id": "S8",
       "ok": true,
-      "note": "profile 'E2E Worker ONZFUF' hiện; ghi chú chỉ-xem + history admin-only; không nút lifecycle; PM open-work=403"
+      "note": "profile 'Lê Văn Hậu' hiện; ghi chú chỉ-xem + history admin-only; không nút lifecycle; PM open-work=403"
     },
     {
       "id": "S9",
       "ok": true,
-      "note": "PM PATCH worker=403 contractor-inline=403; WORKER GET workers=403 contractors=403; anon workers=401 contractor-detail=401; PM ghost worker=404 contractor=404; status sau tamper=INACTIVE"
+      "note": "PM PATCH worker=403 contractor-inline=403; WORKER GET workers=403 contractors=403; anon workers=401 contractor-detail=401; PM ghost worker=404 contractor=404; status sau tamper=ACTIVE"
     },
     {
       "id": "S10",
@@ -59,7 +58,7 @@
     {
       "id": "S12",
       "ok": true,
-      "note": "list=200 search=200(total=2) detail=200 contractors=200/200 trades=200; PATCH scope 200→verify='seed ORG-SRS-004 (E2E28)' revert 200→final='seed ORG-SRS-004'; admin UI /resources OK"
+      "note": "list=200 search=200(total=0) detail=200 contractors=200/200 trades=200; PATCH scope 200→verify='Tổng thầu thi công kết cấu và hoàn thiện (đợt T9/2026)' revert 200→final='Tổng thầu thi công kết cấu và hoàn thiện'; admin UI /resources OK"
     }
   ]
 }
