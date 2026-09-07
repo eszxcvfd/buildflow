@@ -11,8 +11,17 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
-import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { Tabs } from '@/components/ui/tabs/Tabs';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ActiveChips,
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 type ApiError = WorkerApiError | ContractorApiError | CrewApiError;
 type Tab = 'workers' | 'contractors' | 'crews';
@@ -273,6 +282,38 @@ export function ResourceDirectory() {
     };
   }, [canView, query, retryKey]);
 
+  const statusOptions = query.tab === 'workers' ? WORKER_STATUSES : CONTRACTOR_STATUSES;  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasActiveFilter = Boolean(query.status || query.trade || query.skill || query.crew || query.q);
+
+  function handleClear() {
+    setQInput('');
+    apply({ status: '', trade: '', skill: '', crew: '', q: '', sort: 'createdAt', order: 'desc', page: 1 });
+  }
+
+  const directoryChips = React.useMemo(() => {
+    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    if (query.status) {
+      const opt = statusOptions.find((o) => o.value === query.status);
+      chips.push({ key: 'status', label: `Trạng thái: ${opt?.label ?? query.status}`, onRemove: () => apply({ status: '' }) });
+    }
+    if (query.tab === 'workers' && query.trade) {
+      const t = trades.find((x) => x.id === query.trade);
+      chips.push({ key: 'trade', label: `Ngành: ${t ? `${t.code} — ${t.name}` : 'đã chọn'}`, onRemove: () => apply({ trade: '' }) });
+    }
+    if (query.tab === 'workers' && query.skill) {
+      chips.push({ key: 'skill', label: `Cấp ${query.skill}`, onRemove: () => apply({ skill: '' }) });
+    }
+    if (query.tab === 'workers' && query.crew) {
+      const c = activeCrews.find((x) => x.id === query.crew);
+      chips.push({ key: 'crew', label: `Đội: ${c ? c.name : 'đã chọn'}`, onRemove: () => apply({ crew: '' }) });
+    }
+    if (query.q) {
+      chips.push({ key: 'q', label: `Tìm: “${query.q}”`, onRemove: () => { setQInput(''); apply({ q: '' }); } });
+    }
+    return chips;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, trades, activeCrews, statusOptions]);
+
   if (!canView) {
     return (
       <Card>
@@ -292,14 +333,6 @@ export function ResourceDirectory() {
   const sortError = pickFieldError(fieldErrors, ['sort']);
   const orderError = pickFieldError(fieldErrors, ['order']);
   const globalFilterError = pickFieldError(fieldErrors, ['_global']) ?? (error?.status === 400 && !statusError && !tradeError && !skillError && !crewError && !sortError && !orderError ? error.message : null);
-
-  const statusOptions = query.tab === 'workers' ? WORKER_STATUSES : CONTRACTOR_STATUSES;  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasActiveFilter = Boolean(query.status || query.trade || query.skill || query.crew || query.q);
-
-  function handleClear() {
-    setQInput('');
-    apply({ status: '', trade: '', skill: '', crew: '', q: '', sort: 'createdAt', order: 'desc', page: 1 });
-  }
 
   function renderError() {
     if (!error || error.status === 400) return null;
@@ -355,73 +388,40 @@ export function ResourceDirectory() {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <div role="tablist" aria-label="Loại nguồn lực" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={query.tab === 'workers'}
-          onClick={() => apply({ tab: 'workers' })}
-          className="bf-btn"
-          style={query.tab === 'workers' ? { borderColor: 'var(--bf-accent)' } : undefined}
-        >
-          Công nhân
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={query.tab === 'contractors'}
-          onClick={() => apply({ tab: 'contractors' })}
-          className="bf-btn"
-          style={query.tab === 'contractors' ? { borderColor: 'var(--bf-accent)' } : undefined}
-        >
-          Nhà thầu
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={query.tab === 'crews'}
-          onClick={() => apply({ tab: 'crews' })}
-          className="bf-btn"
-          style={query.tab === 'crews' ? { borderColor: 'var(--bf-accent)' } : undefined}
-        >
-          Đội
-        </button>
-      </div>
+      <Tabs
+        value={query.tab}
+        aria-label="Loại nguồn lực"
+        onChange={(v) => apply({ tab: v as Tab })}
+        items={[
+          { value: 'workers', label: 'Công nhân' },
+          { value: 'contractors', label: 'Nhà thầu' },
+          { value: 'crews', label: 'Đội' },
+        ]}
+      />
 
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="directory-q">
-              Tìm kiếm
-            </label>
-            <Input
-              id="directory-q"
-              placeholder={query.tab === 'workers' ? 'Tên, email, mã nhân viên…' : query.tab === 'crews' ? 'Mã, tên, mô tả đội…' : 'Mã, tên, liên hệ, email…'}
-              value={qInput}
-              onChange={(e) => setQInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') apply({ q: qInput.trim(), page: 1 });
-              }}
-            />
-          </div>
-          <div className="bf-field" style={{ minWidth: 160 }}>
-            <label className="bf-label" htmlFor="directory-status">
-              Trạng thái
-            </label>
-            <select
+        <ListToolbar
+          count={`Tổng: ${total} hồ sơ · Hiển thị ${query.tab === 'workers' ? workers.length : query.tab === 'crews' ? crews.length : contractors.length} · Trang ${query.page}/${totalPages}`}
+        >
+          <SearchField
+            id="directory-q"
+            label="Tìm kiếm"
+            placeholder={query.tab === 'workers' ? 'Tên, email, mã nhân viên…' : query.tab === 'crews' ? 'Mã, tên, mô tả đội…' : 'Mã, tên, liên hệ, email…'}
+            value={qInput}
+            onChange={setQInput}
+            onSubmit={() => apply({ q: qInput.trim(), page: 1 })}
+          />
+          <div className="bf-filter">
+            <Select
               id="directory-status"
-              className="bf-input"
+              label="Trạng thái"
+              hideLabel
               value={query.status}
-              onChange={(e) => apply({ status: e.target.value })}
+              options={statusOptions}
+              onChange={(v) => apply({ status: v })}
               aria-invalid={statusError ? true : undefined}
               aria-describedby={statusError ? 'directory-status-error' : undefined}
-            >
-              {statusOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            />
             {statusError ? (
               <p id="directory-status-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                 {statusError}
@@ -430,74 +430,57 @@ export function ResourceDirectory() {
           </div>
           {query.tab === 'workers' ? (
             <>
-              <div className="bf-field" style={{ minWidth: 180 }}>
-                <label className="bf-label" htmlFor="directory-trade">
-                  Ngành nghề
-                </label>
-                <select
+              <div className="bf-filter bf-filter-wide">
+                <Select
                   id="directory-trade"
-                  className="bf-input"
+                  label="Ngành nghề"
+                  hideLabel
                   value={query.trade}
-                  onChange={(e) => apply({ trade: e.target.value })}
+                  options={[
+                    { value: '', label: 'Tất cả ngành nghề' },
+                    ...activeTrades.map((t) => ({ value: t.id, label: `${t.code} — ${t.name}` })),
+                  ]}
+                  onChange={(v) => apply({ trade: v })}
                   aria-invalid={tradeError ? true : undefined}
                   aria-describedby={tradeError ? 'directory-trade-error' : undefined}
-                >
-                  <option value="">Tất cả ngành nghề</option>
-                  {activeTrades.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.code} — {t.name}
-                    </option>
-                  ))}
-                </select>
+                />
                 {tradeError ? (
                   <p id="directory-trade-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                     {tradeError}
                   </p>
                 ) : null}
               </div>
-              <div className="bf-field" style={{ minWidth: 140 }}>
-                <label className="bf-label" htmlFor="directory-skill">
-                  Cấp kỹ năng
-                </label>
-                <select
+              <div className="bf-filter">
+                <Select
                   id="directory-skill"
-                  className="bf-input"
+                  label="Cấp kỹ năng"
+                  hideLabel
                   value={query.skill}
-                  onChange={(e) => apply({ skill: e.target.value })}
+                  options={SKILLS}
+                  onChange={(v) => apply({ skill: v })}
                   aria-invalid={skillError ? true : undefined}
                   aria-describedby={skillError ? 'directory-skill-error' : undefined}
-                >
-                  {SKILLS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                />
                 {skillError ? (
                   <p id="directory-skill-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                     {skillError}
                   </p>
                 ) : null}
               </div>
-              <div className="bf-field" style={{ minWidth: 180 }}>
-                <label className="bf-label" htmlFor="directory-crew">
-                  Đội thi công
-                </label>
-                <select
+              <div className="bf-filter bf-filter-wide">
+                <Select
                   id="directory-crew"
-                  className="bf-input"
+                  label="Đội thi công"
+                  hideLabel
                   value={query.crew}
-                  onChange={(e) => apply({ crew: e.target.value })}
+                  options={[
+                    { value: '', label: 'Tất cả các đội' },
+                    ...activeCrews.map((c) => ({ value: c.id, label: `${c.name} · ${c.code}` })),
+                  ]}
+                  onChange={(v) => apply({ crew: v })}
                   aria-invalid={crewError ? true : undefined}
                   aria-describedby={crewError ? 'directory-crew-error' : undefined}
-                >
-                  <option value="">Tất cả các đội</option>
-                  {activeCrews.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} · {c.code}
-                    </option>
-                  ))}
-                </select>
+                />
                 {crewError ? (
                   <p id="directory-crew-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                     {crewError}
@@ -506,48 +489,34 @@ export function ResourceDirectory() {
               </div>
             </>
           ) : null}
-          <div className="bf-field" style={{ minWidth: 140 }}>
-            <label className="bf-label" htmlFor="directory-sort">
-              Sắp xếp
-            </label>
-            <select
+          <div className="bf-filter">
+            <Select
               id="directory-sort"
-              className="bf-input"
+              label="Sắp xếp"
+              hideLabel
               value={query.sort}
-              onChange={(e) => apply({ sort: e.target.value })}
+              options={SORTS}
+              onChange={(v) => apply({ sort: v })}
               aria-invalid={sortError ? true : undefined}
               aria-describedby={sortError ? 'directory-sort-error' : undefined}
-            >
-              {SORTS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            />
             {sortError ? (
               <p id="directory-sort-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                 {sortError}
               </p>
             ) : null}
           </div>
-          <div className="bf-field" style={{ minWidth: 130 }}>
-            <label className="bf-label" htmlFor="directory-order">
-              Thứ tự
-            </label>
-            <select
+          <div className="bf-filter">
+            <Select
               id="directory-order"
-              className="bf-input"
+              label="Thứ tự"
+              hideLabel
               value={query.order}
-              onChange={(e) => apply({ order: e.target.value })}
+              options={ORDERS}
+              onChange={(v) => apply({ order: v })}
               aria-invalid={orderError ? true : undefined}
               aria-describedby={orderError ? 'directory-order-error' : undefined}
-            >
-              {ORDERS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            />
             {orderError ? (
               <p id="directory-order-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
                 {orderError}
@@ -558,19 +527,17 @@ export function ResourceDirectory() {
             Tìm
           </Button>
           {hasActiveFilter ? (
-            <Button variant="secondary" onClick={handleClear}>
-              Xóa bộ lọc
-            </Button>
+            <ClearFiltersButton onClear={handleClear} />
           ) : null}
-        </div>
+        </ListToolbar>
+        <ActiveChips chips={directoryChips} />
         {globalFilterError ? (
           <div style={{ marginTop: '0.75rem' }}>
             <Alert tone="error">{globalFilterError}</Alert>
           </div>
         ) : null}
         <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} hồ sơ · Hiển thị {query.tab === 'workers' ? workers.length : query.tab === 'crews' ? crews.length : contractors.length} · Dữ liệu
-          hiện hành (không cache) · Trang {query.page}/{totalPages}
+          Dữ liệu hiện hành (không cache).
         </p>
       </Card>
 
@@ -592,28 +559,35 @@ export function ResourceDirectory() {
               </EmptyState>
             </Card>
           ) : (
-            <>
-              <div style={{ display: 'grid', gap: '0.75rem' }}>
-                {workers.map((w) => (
-                  <Card key={w.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>
-                          <a href={`/workers/${w.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+            <Card>
+              <div className="bf-table-wrap">
+                <table className="bf-table">
+                  <thead>
+                    <tr>
+                      <th>Tên</th>
+                      <th>Mã NV</th>
+                      <th>Trạng thái</th>
+                      <th>Điều kiện phân công</th>
+                      <th>Ngành nghề</th>
+                      <th style={{ textAlign: 'right' }}>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workers.map((w) => (
+                      <tr key={w.id}>
+                        <td>
+                          <a href={`/workers/${w.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                             {w.fullName}
-                          </a>{' '}
-                          <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.9rem' }}>
-                            · {w.employeeCode ?? shortUuid(w.id)}
-                          </span>
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
-                          <StatusBadge status={w.status} /> ·{' '}
+                          </a>
+                        </td>
+                        <td>{w.employeeCode ?? shortUuid(w.id)}</td>
+                        <td><StatusBadge status={w.status} /></td>
+                        <td>
                           <span style={{ color: w.eligible ? '#065f46' : '#991b1b' }}>
                             {w.eligible ? 'Đủ điều kiện phân công' : 'Không đủ điều kiện (inactive/locked)'}
                           </span>
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
-                          Ngành nghề:{' '}
+                        </td>
+                        <td style={{ color: '#6b7280', maxWidth: 260 }}>
                           {w.trades.length
                             ? w.trades
                               .map((t) => {
@@ -622,19 +596,23 @@ export function ResourceDirectory() {
                               })
                               .join(', ')
                             : '—'}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <a href={`/workers/${w.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                          Chi tiết
-                        </a>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                        </td>
+                        <td className="bf-cell-actions">
+                          <span className="bf-row-actions">
+                            <Tooltip content="Xem hồ sơ chi tiết">
+                              <a className="bf-detail-link" href={`/workers/${w.id}`}>
+                                Chi tiết
+                              </a>
+                            </Tooltip>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <Pagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} />
-            </>
+              <ListPagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} prevLabel="Trang trước" nextLabel="Trang sau" />
+            </Card>
           ))
           : query.tab === 'crews'
             ? (crews.length === 0 ? (
@@ -648,39 +626,53 @@ export function ResourceDirectory() {
                 </EmptyState>
               </Card>
             ) : (
-              <>
-                <div style={{ display: 'grid', gap: '0.75rem' }}>
-                  {crews.map((c) => (
-                    <Card key={c.id}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                        <div>
-                          <div style={{ fontWeight: 700 }}>
-                            <a href={`/crews/${c.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+              <Card>
+                <div className="bf-table-wrap">
+                  <table className="bf-table">
+                    <thead>
+                      <tr>
+                        <th>Tên</th>
+                        <th>Mã</th>
+                        <th>Trạng thái</th>
+                        <th>Điều kiện phân công</th>
+                        <th>Trưởng nhóm</th>
+                        <th style={{ textAlign: 'right' }}>Hành động</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {crews.map((c) => (
+                        <tr key={c.id}>
+                          <td>
+                            <a href={`/crews/${c.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                               {c.name}
-                            </a>{' '}
-                            <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.9rem' }}>· {c.code}</span>
-                          </div>
-                          <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
-                            <StatusBadge status={c.status} /> ·{' '}
+                            </a>
+                          </td>
+                          <td>{c.code}</td>
+                          <td><StatusBadge status={c.status} /></td>
+                          <td>
                             <span style={{ color: c.eligible ? '#065f46' : '#991b1b' }}>
                               {c.eligible ? 'Đủ điều kiện phân công' : 'Không nhận việc mới'}
                             </span>
-                          </div>
-                          <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
-                            Trưởng nhóm: {c.leaderUserId ? shortUuid(c.leaderUserId) : '— chưa chỉ định —'}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <a href={`/crews/${c.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                            Chi tiết
-                          </a>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+                          </td>
+                          <td style={{ color: '#6b7280' }}>
+                            {c.leaderUserId ? shortUuid(c.leaderUserId) : '— chưa chỉ định —'}
+                          </td>
+                          <td className="bf-cell-actions">
+                            <span className="bf-row-actions">
+                              <Tooltip content="Xem chi tiết đội">
+                                <a className="bf-detail-link" href={`/crews/${c.id}`}>
+                                  Chi tiết
+                                </a>
+                              </Tooltip>
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <Pagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} />
-              </>
+                <ListPagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} prevLabel="Trang trước" nextLabel="Trang sau" />
+              </Card>
             ))
             : (contractors.length === 0 ? (
             <Card>
@@ -693,59 +685,60 @@ export function ResourceDirectory() {
               </EmptyState>
             </Card>
           ) : (
-            <>
-              <div style={{ display: 'grid', gap: '0.75rem' }}>
-                {contractors.map((c) => (
-                  <Card key={c.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>
-                          <a href={`/contractors/${c.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+            <Card>
+              <div className="bf-table-wrap">
+                <table className="bf-table">
+                  <thead>
+                    <tr>
+                      <th>Tên</th>
+                      <th>Mã</th>
+                      <th>Liên hệ</th>
+                      <th>Trạng thái</th>
+                      <th>Điều kiện phân công</th>
+                      <th>Phạm vi</th>
+                      <th style={{ textAlign: 'right' }}>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contractors.map((c) => (
+                      <tr key={c.id}>
+                        <td>
+                          <a href={`/contractors/${c.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                             {c.name}
-                          </a>{' '}
-                          <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.9rem' }}>· {c.code}</span>
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
-                          Liên hệ: {c.contactName ?? '—'} · SĐT: {c.phone ?? '—'} ·{' '}
-                          <StatusBadge status={c.status} /> ·{' '}
+                          </a>
+                        </td>
+                        <td>{c.code}</td>
+                        <td style={{ color: '#374151' }}>
+                          {c.contactName ?? '—'}
+                          <div className="bf-card-meta">{c.phone ?? ''}</div>
+                        </td>
+                        <td><StatusBadge status={c.status} /></td>
+                        <td>
                           <span style={{ color: c.eligible ? '#065f46' : '#991b1b' }}>
                             {c.eligible ? 'Đủ điều kiện phân công' : 'Không đủ điều kiện'}
                           </span>
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
-                          Phạm vi: {c.scope ? (c.scope.length > 120 ? `${c.scope.slice(0, 120)}…` : c.scope) : '—'}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                        <a href={`/contractors/${c.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                          Chi tiết
-                        </a>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                        </td>
+                        <td style={{ color: '#6b7280', maxWidth: 240 }}>
+                          {c.scope ? (c.scope.length > 120 ? `${c.scope.slice(0, 120)}…` : c.scope) : '—'}
+                        </td>
+                        <td className="bf-cell-actions">
+                          <span className="bf-row-actions">
+                            <Tooltip content="Xem hồ sơ chi tiết">
+                              <a className="bf-detail-link" href={`/contractors/${c.id}`}>
+                                Chi tiết
+                              </a>
+                            </Tooltip>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <Pagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} />
-            </>
+              <ListPagination page={query.page} totalPages={totalPages} onPage={(page) => apply({ page })} prevLabel="Trang trước" nextLabel="Trang sau" />
+            </Card>
           )))
       )}
     </div>
-  );
-}
-
-function Pagination({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (page: number) => void }) {
-  if (totalPages <= 1) return null;
-  return (
-    <nav aria-label="Phân trang" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
-      <Button variant="secondary" onClick={() => onPage(page - 1)} disabled={page <= 1}>
-        Trang trước
-      </Button>
-      <span style={{ fontSize: '0.9rem', color: 'var(--bf-muted)' }} aria-live="polite">
-        Trang {page}/{totalPages}
-      </span>
-      <Button variant="secondary" onClick={() => onPage(page + 1)} disabled={page >= totalPages}>
-        Trang sau
-      </Button>
-    </nav>
   );
 }

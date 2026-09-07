@@ -120,6 +120,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
@@ -218,7 +254,7 @@ async function uiTransition(page, action, reason) {
       await adminPage.fill('#project-address', PROJ[C.A].address);
       await adminPage.fill('#project-start', START);
       await adminPage.fill('#project-end', END);
-      await adminPage.selectOption('#project-manager', W1_ID);
+      await arkSelectOption(adminPage, 'project-manager', W1_ID);
       await adminPage.click('button[type="submit"]');
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tạo dự án thành công'), { timeout: 25000 });
       const lr = await api('GET', '/api/v1/projects?limit=100&offset=0', adminToken);

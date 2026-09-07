@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   crewId: string;
@@ -167,6 +169,7 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
       });
       const name = memberDisplayName(res, workerNames);
       setAddSuccess(`Đã thêm ${name} vào đội.`);
+      toast.success({ title: `Đã thêm ${name} vào đội.` });
       if (res.warning?.code === 'MEMBER_IN_OTHER_CREW') {
         const others = res.warning.otherCrews.map((c) => `${c.crewName} (${c.crewCode})`).join(', ');
         setAddWarning(
@@ -446,25 +449,19 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
           />
         </div>
         <div className="bf-field">
-          <label className="bf-label" htmlFor="member-add-user">
-            Công nhân
-          </label>
-          <select
+          <Select
             id="member-add-user"
-            className="bf-input"
+            label="Công nhân"
             value={userId}
-            onChange={(e) => setUserId(e.target.value)}
+            options={[
+              { value: '', label: '— Chọn công nhân đang hoạt động —' },
+              ...filteredWorkers.map((w) => ({ value: w.id, label: workerLabel(w) })),
+            ]}
+            onChange={setUserId}
             disabled={!isCrewActive || addPending}
             aria-invalid={addFieldErrors.userId ? true : undefined}
             aria-describedby={addFieldErrors.userId ? 'member-add-user-error' : undefined}
-          >
-            <option value="">— Chọn công nhân đang hoạt động —</option>
-            {filteredWorkers.map((w) => (
-              <option key={w.id} value={w.id}>
-                {workerLabel(w)}
-              </option>
-            ))}
-          </select>
+          />
           {addFieldErrors.userId ? (
             <p id="member-add-user-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
               {addFieldErrors.userId.join(' ')}

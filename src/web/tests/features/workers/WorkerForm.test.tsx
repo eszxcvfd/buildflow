@@ -8,6 +8,7 @@
  */
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { WorkerForm } from '@/features/workers/components/WorkerForm';
 
 const routerMock = { replace: jest.fn(), push: jest.fn(), refresh: jest.fn() };
@@ -91,6 +92,31 @@ async function submitEdit() {
   fireEvent.click(screen.getByRole('button', { name: /lưu thay đổi/i }));
 }
 
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>. Toggle-safe for sequential
+ * choices across different comboboxes in one test.
+ */
+async function chooseOption(comboboxName: RegExp, optionName: string) {
+  const user = userEvent.setup();
+  // Đóng listbox còn sót từ lựa chọn trước (zag đóng async) rồi mới mở mới.
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
+/** Open a combobox and return its rendered options (async lists included). */
+async function openOptions(comboboxName: RegExp) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  const options = await screen.findAllByRole('option');
+  return { user, options };
+}
+
+function optionValues(options: HTMLElement[]): string[] {
+  return options.map((o) => o.getAttribute('data-value') ?? '');
+}
+
 describe('WorkerForm (review #26 — trades payload gating)', () => {
   beforeEach(() => {
     createMock.mockReset();
@@ -139,16 +165,17 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
     // options của select ngành nghề: option hiện tại + 2 ACTIVE (không option rỗng)
-    const select = screen.getByLabelText(/ngành nghề \(đang hoạt động\)/i) as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).not.toContain('');
-    expect(options[0]).toBe(TRADE_INACTIVE);
-    expect(options).toContain(TRADE_ACTIVE_1);
-    expect(options).toContain(TRADE_ACTIVE_2);
+    const { user, options } = await openOptions(/ngành nghề \(đang hoạt động\)/i);
+    const values = optionValues(options);
+    expect(values).not.toContain('');
+    expect(values[0]).toBe(TRADE_INACTIVE);
+    expect(values).toContain(TRADE_ACTIVE_1);
+    expect(values).toContain(TRADE_ACTIVE_2);
     // trade INACTIVE không bị lặp lại từ danh sách ACTIVE (vốn không có nó)
-    expect(options.filter((v) => v === TRADE_INACTIVE)).toHaveLength(1);
+    expect(values.filter((v) => v === TRADE_INACTIVE)).toHaveLength(1);
     // label trade đã ngừng: không có trong map tên → fallback
     expect(screen.getByRole('option', { name: 'Ngành nghề hiện tại (đã ngừng hoạt động)' })).toBeTruthy();
+    await user.keyboard('{Escape}');
 
     await submitEdit();
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
@@ -160,7 +187,7 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     render(<WorkerForm mode="edit" initial={makeWorker()} />);
 
     await waitFor(() => expect(listMock).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText(/skill lv/i), { target: { value: '4' } });
+    await chooseOption(/skill lv/i, '4');
     await submitEdit();
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     const payload = updateMock.mock.calls[0][1];
@@ -174,7 +201,7 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     render(<WorkerForm mode="edit" initial={makeWorker()} />);
 
     await waitFor(() => expect(listMock).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText(/ngành nghề/i), { target: { value: TRADE_ACTIVE_2 } });
+    await chooseOption(/ngành nghề/i, 'TRD-002 — Tho son');
     await submitEdit();
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     expect(updateMock.mock.calls[0][1]).toMatchObject({
@@ -187,8 +214,8 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     render(<WorkerForm mode="edit" initial={makeWorker()} />);
 
     await waitFor(() => expect(listMock).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText(/ngành nghề/i), { target: { value: TRADE_ACTIVE_2 } });
-    fireEvent.change(screen.getByLabelText(/skill lv/i), { target: { value: '5' } });
+    await chooseOption(/ngành nghề/i, 'TRD-002 — Tho son');
+    await chooseOption(/skill lv/i, '5');
     await submitEdit();
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));
     expect(updateMock.mock.calls[0][1]).toMatchObject({
@@ -204,8 +231,8 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'new@example.com' } });
     fireEvent.change(screen.getByLabelText(/mật khẩu/i), { target: { value: 'password123' } });
     fireEvent.change(screen.getByLabelText(/họ tên/i), { target: { value: 'Nguyen Van Moi' } });
-    fireEvent.change(screen.getByLabelText(/ngành nghề/i), { target: { value: TRADE_ACTIVE_1 } });
-    fireEvent.change(screen.getByLabelText(/skill lv/i), { target: { value: '2' } });
+    await chooseOption(/ngành nghề/i, 'TRD-001 — Xay dung');
+    await chooseOption(/skill lv/i, '2');
     fireEvent.click(screen.getByRole('button', { name: /tạo worker/i }));
 
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1));
@@ -220,13 +247,17 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     render(<WorkerForm mode="edit" initial={makeWorker()} />);
     await waitFor(() => expect(listMock).toHaveBeenCalled());
 
-    const current = screen.getByRole('option', { name: 'TRD-001 — Xay dung (hiện tại)' }) as HTMLOptionElement;
-    expect(current.value).toBe(TRADE_ACTIVE_1);
-    expect((screen.getByRole('combobox', { name: /ngành nghề/i }) as HTMLSelectElement).value).toBe(TRADE_ACTIVE_1);
+    const { user, options } = await openOptions(/ngành nghề \(đang hoạt động\)/i);
+    const current = options.find((o) => (o.textContent ?? '').includes('TRD-001 — Xay dung (hiện tại)'))!;
+    expect(current).toBeTruthy();
+    expect(current.getAttribute('data-value')).toBe(TRADE_ACTIVE_1);
+    expect(screen.getByRole('combobox', { name: /ngành nghề/i }).textContent).toContain(
+      'TRD-001 — Xay dung (hiện tại)',
+    );
     // trade đang giữ không xuất hiện lần 2 như option "đang hoạt động"
-    const plain = screen.queryByRole('option', { name: 'TRD-001 — Xay dung' });
-    expect(plain).toBeNull();
+    expect(screen.queryByRole('option', { name: 'TRD-001 — Xay dung' })).toBeNull();
     expect(screen.getByRole('option', { name: 'TRD-002 — Tho son' })).toBeTruthy();
+    await user.keyboard('{Escape}');
   });
 
   it('edit với worker KHÔNG có trade: select vẫn có option rỗng "Không gán", submit không gửi trades', async () => {
@@ -234,10 +265,11 @@ describe('WorkerForm (review #26 — trades payload gating)', () => {
     render(<WorkerForm mode="edit" initial={makeWorker({ trades: [] })} />);
 
     await waitFor(() => expect(listMock).toHaveBeenCalled());
-    const select = screen.getByLabelText(/ngành nghề \(đang hoạt động\)/i) as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options[0]).toBe('');
-    expect(select.value).toBe('');
+    const { user, options } = await openOptions(/ngành nghề \(đang hoạt động\)/i);
+    const values = optionValues(options);
+    expect(values[0]).toBe('');
+    expect(screen.getByRole('combobox', { name: /ngành nghề/i }).textContent).toContain('Không gán');
+    await user.keyboard('{Escape}');
 
     await submitEdit();
     await waitFor(() => expect(updateMock).toHaveBeenCalledTimes(1));

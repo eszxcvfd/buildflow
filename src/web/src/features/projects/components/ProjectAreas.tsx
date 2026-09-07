@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   projectId: string;
@@ -56,6 +57,14 @@ export function ProjectAreas({ projectId, onChanged }: Props) {
   const [activeOnly, setActiveOnly] = React.useState(false);
 
   const [notice, setNotice] = React.useState<{ tone: 'success' | 'info'; text: string } | null>(null);
+  // Thông báo tạo/sửa/xóa khu vực hiển thị cả inline (giữ assert hiện có) lẫn
+  // Ark Toast thoáng qua.
+  React.useEffect(() => {
+    if (notice) {
+      if (notice.tone === 'success') toast.success({ title: notice.text });
+      else toast.info({ title: notice.text });
+    }
+  }, [notice]);
 
   // Create form
   const [createName, setCreateName] = React.useState('');

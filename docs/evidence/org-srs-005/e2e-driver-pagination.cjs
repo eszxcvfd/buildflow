@@ -49,6 +49,42 @@ async function login(page) {
   await Promise.all([page.waitForURL('**/dashboard', { timeout: 25000 }), page.click('button[type="submit"]')]);
 }
 async function bodyText(page) { return (await page.locator('body').textContent()) || ''; }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 async function waitLoaded(page) {
   await page.waitForFunction(
     () => (document.body.textContent || '').includes('Tổng:') && !(document.body.textContent || '').includes('Đang tải danh sách'),
@@ -181,7 +217,7 @@ async function navState(page) {
     // ---- P4: filter status → total giảm, reset về trang 1 ----
     try {
       // đang ở ?page=2 (sort name asc) → chọn INACTIVE: phải reset page=1
-      await page.selectOption('#directory-status', 'INACTIVE');
+      await arkSelectOption(page, 'directory-status', 'INACTIVE');
       await page.waitForFunction(() => !window.location.search.includes('page=2'), { timeout: 15000 });
       await waitLoaded(page);
       let t = await bodyText(page);
@@ -189,7 +225,7 @@ async function navState(page) {
       const sqlI = psqlT(`SELECT count(*) FROM users WHERE user_type='WORKER' AND status='INACTIVE'`);
       const navI = await navState(page);
       // combo ACTIVE → total 25, nav hiện lại Trang 1/2
-      await page.selectOption('#directory-status', 'ACTIVE');
+      await arkSelectOption(page, 'directory-status', 'ACTIVE');
       await waitLoaded(page);
       t = await bodyText(page);
       const utA = uiTotal(t); const upA = uiPage(t);

@@ -27,6 +27,42 @@ const phase = process.argv[2] || 'w-deact';
 const results = [];
 async function snap(page, id, desc) { const p = path.join(SHOTS, `${id}.png`); await page.screenshot({ path: p }); console.log('shot', p); }
 function note(res) { results.push(res); console.log((res.ok ? 'PASS ' : 'FAIL ') + res.id + ' :: ' + (res.note || '')); }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 
 async function workerCard(page, name) {
   const cards = page.locator(`a[href="/workers/${W_ID}"]`).first().locator('xpath=ancestor::div[contains(@style,"space-between")][1]');
@@ -145,7 +181,7 @@ async function apiToken(email, password) {
       const t1 = await page.locator('body').innerText();
       const hides = !t1.includes(C2_NAME) && !t1.includes(C1_NAME);
       await page.uncheck('input[type="checkbox"]');
-      await page.selectOption('#contractor-status', 'INACTIVE');
+      await arkSelectOption(page, 'contractor-status', 'INACTIVE');
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`text=${C2_CODE}`, { timeout: 10000 });
       await page.waitForTimeout(800);

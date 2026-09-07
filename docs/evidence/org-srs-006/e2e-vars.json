@@ -1,9 +1,9 @@
 {
-  "digits": "RENV3P",
-  "crewId": "1b25f32e-839c-41bb-b3da-4c22c1a86181",
-  "crewCode": "DCD-RENV3P",
-  "dsCrewId": "7caaaaaf-b05e-4156-9c8a-ecfd74869884",
-  "dsCode": "DCT-RENV3P",
+  "digits": "RM9JJR",
+  "crewId": "eb6d6a5f-a337-4348-b642-5e609e2bf4f2",
+  "crewCode": "DCD-RM9JJR",
+  "dsCrewId": "f20d0017-7ed6-44d4-92f5-6a8e8d36ec2e",
+  "dsCode": "DCT-RM9JJR",
   "woCode": "PRD-B1-006",
   "woId": "e2e6b300-0000-4000-8000-0000000000b4",
   "asnId": "e2e6c100-0000-4000-8000-0000000000c2",
@@ -13,7 +13,7 @@
     {
       "id": "S1",
       "ok": true,
-      "note": "crewId=1b25f32e-839c-41bb-b3da-4c22c1a86181 UI list thấy DCD-RENV3P; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
+      "note": "crewId=eb6d6a5f-a337-4348-b642-5e609e2bf4f2 UI list thấy DCD-RM9JJR; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
     },
     {
       "id": "S2",
@@ -58,7 +58,7 @@
     {
       "id": "S10",
       "ok": true,
-      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=fd36c874…)"
+      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=25732bfc…)"
     },
     {
       "id": "S11",

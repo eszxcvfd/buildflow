@@ -7,6 +7,7 @@
  */
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AuditLogList } from '@/features/audit-logs/components/AuditLogList';
 
 const routerMock = { replace: jest.fn(), push: jest.fn(), refresh: jest.fn() };
@@ -65,12 +66,31 @@ describe('AuditLogList (IAM-SRS-008)', () => {
 
   afterEach(cleanup);
 
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>.
+ */
+async function chooseOption(comboboxName: string, optionName: string) {
+  const user = userEvent.setup();
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
+/** Open a combobox and return its rendered options. */
+async function openOptions(comboboxName: string) {
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  const options = await screen.findAllByRole('option');
+  return { user, options };
+}
+
   it('hiển thị Đang tải… rồi render rows sau khi load', async () => {
     listMock.mockResolvedValueOnce(makePage(1, 1, 0));
     render(<AuditLogList />);
     expect(screen.getByText(/Đang tải/)).toBeTruthy();
     expect(await screen.findByText(/Tổng: 1 bản ghi/)).toBeTruthy();
-    // action code xuất hiện cả trong <option> của select nên dùng getAllByText
+    // Ark Select: options chỉ render khi mở — rows vẫn assert được khi đóng
     expect(screen.getAllByText('AUTH_LOGIN_SUCCESS').length).toBeGreaterThan(0);
   });
 
@@ -133,17 +153,17 @@ describe('AuditLogList (IAM-SRS-008)', () => {
       .mockResolvedValueOnce(makePage(20, 45, 20))
       .mockResolvedValueOnce(makePage(5, 45, 40));
     render(<AuditLogList />);
-    expect(await screen.findByText('Trang 1 / 3 (tổng 45)')).toBeTruthy();
+    expect(await screen.findByText('Trang 1/3')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Trang trước' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await screen.findByText('Trang 2 / 3 (tổng 45)');
+    await screen.findByText('Trang 2/3');
     await waitFor(() => {
       expect(listMock).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 20, limit: 20 }));
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await screen.findByText('Trang 3 / 3 (tổng 45)');
+    await screen.findByText('Trang 3/3');
     expect((screen.getByRole('button', { name: 'Trang sau' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Trang trước' }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -151,12 +171,12 @@ describe('AuditLogList (IAM-SRS-008)', () => {
   it('filter: chọn result FAILED + Lọc → gọi lại với result=FAILED và offset reset về 0', async () => {
     listMock.mockResolvedValue(makePage(20, 45, 0));
     render(<AuditLogList />);
-    await screen.findByText('Trang 1 / 3 (tổng 45)');
+    await screen.findByText('Trang 1/3');
 
     fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await screen.findByText('Trang 2 / 3 (tổng 45)');
+    await screen.findByText('Trang 2/3');
 
-    fireEvent.change(screen.getByLabelText('Kết quả'), { target: { value: 'FAILED' } });
+    await chooseOption('Kết quả', 'FAILED');
     fireEvent.click(screen.getByRole('button', { name: 'Lọc' }));
 
     await waitFor(() => {
@@ -174,8 +194,8 @@ describe('AuditLogList (IAM-SRS-008)', () => {
     await waitFor(() => {
       expect(listMock.mock.calls[0][0]).toMatchObject({ action: 'AUTH_LOGIN_FAILED' });
     });
-    // draft select cũng được khởi tạo theo deep link
-    expect((screen.getByLabelText('Hành động') as HTMLSelectElement).value).toBe('AUTH_LOGIN_FAILED');
+    // draft select cũng được khởi tạo theo deep link (trigger hiển thị label đã chọn)
+    expect(screen.getByRole('combobox', { name: 'Hành động' }).textContent).toContain('AUTH_LOGIN_FAILED');
   });
 
   it('deep link ?entityType=&entityId=&result= (StatusTimeline ORG-SRS-004) → lần gọi đầu đã mang đủ filter', async () => {
@@ -190,22 +210,25 @@ describe('AuditLogList (IAM-SRS-008)', () => {
         result: 'SUCCESS',
       });
     });
-    // draft filter cũng được khởi tạo theo deep link
-    expect((screen.getByLabelText('Loại đối tượng') as HTMLSelectElement).value).toBe('WORKER');
+    // draft filter cũng được khởi tạo theo deep link (trigger hiển thị label đã chọn)
+    expect(screen.getByRole('combobox', { name: 'Loại đối tượng' }).textContent).toContain('WORKER');
     expect((screen.getByLabelText('ID đối tượng') as HTMLInputElement).value).toBe(
       'e2e4a000-0000-4000-8000-0000000000a1',
     );
-    expect((screen.getByLabelText('Kết quả') as HTMLSelectElement).value).toBe('SUCCESS');
+    expect(screen.getByRole('combobox', { name: 'Kết quả' }).textContent).toContain('SUCCESS');
   });
 
   it('dropdown Hành động có option ORG_WORKER_*/ORG_CONTRACTOR_* (E2E ORG-SRS-004 §5e)', async () => {
     listMock.mockResolvedValueOnce(makePage(1, 1, 0));
     render(<AuditLogList />);
     await screen.findByText(/Tổng: 1 bản ghi/);
+    // Ark Select: options chỉ render khi listbox mở
+    const { user } = await openOptions('Hành động');
     for (const a of ['ORG_WORKER_SUSPENDED', 'ORG_WORKER_REACTIVATED', 'ORG_WORKER_TERMINATED',
       'ORG_CONTRACTOR_SUSPENDED', 'ORG_CONTRACTOR_REACTIVATED', 'ORG_CONTRACTOR_TERMINATED']) {
       expect(screen.getByRole('option', { name: a })).toBeTruthy();
     }
+    await user.keyboard('{Escape}');
   });
   it('deep link action ngoài KNOWN_ACTIONS → option bổ sung, select giữ giá trị (Finding 5)', async () => {
     mockSearch = 'action=IAM_PROFILE_UPDATED';
@@ -214,9 +237,10 @@ describe('AuditLogList (IAM-SRS-008)', () => {
     await screen.findByText(/Tổng: 1 bản ghi/);
 
     // Select hiển thị đúng action deep-link thay vì rơi về rỗng.
-    const select = screen.getByLabelText('Hành động') as HTMLSelectElement;
-    expect(select.value).toBe('IAM_PROFILE_UPDATED');
+    expect(screen.getByRole('combobox', { name: 'Hành động' }).textContent).toContain('IAM_PROFILE_UPDATED');
+    const { user } = await openOptions('Hành động');
     expect(screen.getByRole('option', { name: 'IAM_PROFILE_UPDATED' })).toBeTruthy();
+    await user.keyboard('{Escape}');
 
     // Lần gọi đầu vẫn mang action=IAM_PROFILE_UPDATED (hành vi không đổi).
     await waitFor(() => {
@@ -263,7 +287,8 @@ describe('AuditLogList (IAM-SRS-008)', () => {
       });
     });
     expect(screen.getByText(/Tổng: 7 bản ghi/)).toBeTruthy();
-    expect(screen.getByText(/Trang 1 \/ 1 \(tổng 7\)/)).toBeTruthy();
+    // 7 bản ghi / limit 20 = 1 trang → kit ẩn pagination (ListPagination null).
+    expect(screen.queryByLabelText('Phân trang')).toBeNull();
     expect(screen.getByText('REASON_PAGE_2')).toBeTruthy();
     expect(screen.queryByText(/Tổng: 99 bản ghi/)).toBeNull();
     expect(screen.queryByText('REASON_PAGE_1')).toBeNull();

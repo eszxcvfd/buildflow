@@ -39,6 +39,42 @@ async function snap(page, id, desc) {
 }
 function ok(id, note = '') { return { id, ok: true, note }; }
 function fail(id, note) { return { id, ok: false, note }; }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 
 /* ---------- realistic run identities (docs/demo-data.md) ---------- */
 const ADMIN_EMAIL = 'hoang.anh@vinacons.vn';
@@ -160,18 +196,17 @@ async function apiGet(urlPath, token) {
     /* A2: create worker */
     await step('A2', 'tạo worker mới', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
-      // #tradeId giờ là <select> (chỉ liệt kê trade ACTIVE) — chờ options rồi chọn
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#tradeId');
-        return s && !s.disabled && s.options.length >= 2;
-      }, { timeout: 20000 });
-      await page.selectOption('#tradeId', TRADE_GOOD);
+      // #tradeId giờ là Ark Select (chỉ liệt kê trade ACTIVE) — chờ trigger enabled
+      // rồi đợi options của chính nó (placeholder + trades, qua aria-controls)
+      await page.waitForSelector('#tradeId:not([disabled])', { timeout: 20000 });
+      await arkWaitOptions(page, 'tradeId', 2);
+      await arkSelectOption(page, 'tradeId', TRADE_GOOD);
       await page.fill('#email', W_EMAIL);
       await page.fill('#password', W_PASS);
       await page.fill('#fullName', W_NAME);
       await page.fill('#phone', '0909' + String(Math.floor(100000 + Math.random() * 899999)));
       await page.fill('#employeeCode', W_CODE);
-      await page.selectOption('#skillLevel', '3');
+      await arkSelectOption(page, 'skillLevel', '3');
       await snap(page, id, 'Form tạo worker đã điền');
       await page.click('button[type="submit"]');
       await page.waitForSelector(`text=${W_EMAIL}`, { timeout: 15000 });
@@ -205,14 +240,11 @@ async function apiGet(urlPath, token) {
       return ok(id, 'báo "Mã nhân viên đã tồn tại"');
     })();
 
-    /* A4: invalid trade -> 400 (mức API; UI giờ dùng <select> chỉ chứa trade ACTIVE
+    /* A4: invalid trade -> 400 (mức API; UI giờ dùng Ark Select chỉ chứa trade ACTIVE
        nên không nhập tay trade lạ được — select tự chặn, kiểm chứng 400 qua API) */
     await step('A4', 'trade không hợp lệ -> 400', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#tradeId');
-        return s && !s.disabled && s.options.length >= 2;
-      }, { timeout: 20000 });
+      await page.waitForSelector('#tradeId:not([disabled])', { timeout: 20000 });
       await page.fill('#email', `tam.nguyen.${DIGITS}@vinacons.vn`);
       await page.fill('#password', W_PASS);
       await page.fill('#fullName', `Nguyễn Văn Tám ${DIGITS}`);
@@ -399,7 +431,7 @@ async function apiGet(urlPath, token) {
       if (bodyText.includes(C_NAME)) return fail(id, 'contractor INACTIVE vẫn hiện khi eligibleOnly=true');
       // status filter INACTIVE
       await page.uncheck('input[type="checkbox"]');
-      await page.selectOption('#contractor-status', 'INACTIVE');
+      await arkSelectOption(page, 'contractor-status', 'INACTIVE');
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`text=${C_NAME}`, { timeout: 10000 });
       await snap(page, id + '-2', 'List filter status INACTIVE thấy contractor');
@@ -409,7 +441,7 @@ async function apiGet(urlPath, token) {
     /* B5: detail still viewable when INACTIVE */
     await step('B5', 'detail INACTIVE vẫn xem được', async (id) => {
       await page.goto(`${BASE}/contractors`, { waitUntil: 'networkidle' });
-      await page.selectOption('#contractor-status', 'INACTIVE');
+      await arkSelectOption(page, 'contractor-status', 'INACTIVE');
       await page.click('button:has-text("Tìm")');
       const row = page.locator(`tr:has-text("${C_NAME}")`).first();
       await page.waitForSelector(`tr:has-text("${C_NAME}")`, { timeout: 10000 });

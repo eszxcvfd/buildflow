@@ -9,6 +9,13 @@ import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ClearFiltersButton,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 export function ContractorList() {
   const [contractors, setContractors] = React.useState<Contractor[]>([]);
@@ -48,6 +55,16 @@ export function ContractorList() {
 
   function handleRetry() {
     setRetryKey((k) => k + 1);
+  }
+
+  const hasActiveFilter =
+    search.trim() !== '' || statusFilter !== '' || scopeFilter.trim() !== '' || eligibleOnly;
+
+  function handleClearFilters() {
+    setSearch('');
+    setStatusFilter('');
+    setScopeFilter('');
+    setEligibleOnly(false);
   }
 
   if (loading) {
@@ -95,41 +112,42 @@ export function ContractorList() {
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="contractor-search">Tìm kiếm</label>
-            <Input
-              id="contractor-search"
-              placeholder="Mã, tên, liên hệ, email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+        <ListToolbar count={`Tổng: ${total} hồ sơ · Hiển thị ${contractors.length}`}>
+          <SearchField
+            id="contractor-search"
+            label="Tìm kiếm"
+            placeholder="Mã, tên, liên hệ, email…"
+            value={search}
+            onChange={setSearch}
+            onSubmit={() => void load()}
+          />
+          <div className="bf-filter">
+            <Select
+              id="contractor-status"
+              label="Trạng thái"
+              hideLabel
+              value={statusFilter}
+              options={[
+                { value: '', label: 'Tất cả trạng thái' },
+                { value: 'ACTIVE', label: 'Hoạt động' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+              ]}
+              onChange={setStatusFilter}
             />
           </div>
-          <div className="bf-field" style={{ minWidth: 160 }}>
-            <label className="bf-label" htmlFor="contractor-status">Trạng thái</label>
-            <select
-              id="contractor-status"
-              className="bf-input"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Ngừng hoạt động</option>
-            </select>
-          </div>
-          <div className="bf-field" style={{ flex: '1 1 160px' }}>
-            <label className="bf-label" htmlFor="contractor-scope">Phạm vi</label>
+          <div className="bf-filter">
+            <label className="bf-sr-only" htmlFor="contractor-scope">Phạm vi</label>
             <Input
               id="contractor-scope"
-              placeholder="Thí dụ: Thi công phần thô"
+              placeholder="Phạm vi: thi công phần thô…"
               value={scopeFilter}
               onChange={(e) => setScopeFilter(e.target.value)}
             />
           </div>
           <Button variant="secondary" onClick={() => void load()}>Tìm</Button>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: '0.75rem', cursor: 'pointer' }}>
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: '0.75rem', cursor: 'pointer', fontSize: '0.88rem', color: 'var(--bf-muted)' }}>
           <input
             type="checkbox"
             checked={eligibleOnly}
@@ -137,15 +155,21 @@ export function ContractorList() {
           />{' '}
           Chỉ hiển thị đủ điều kiện (ACTIVE)
         </label>
-        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} hồ sơ · Hiển thị {contractors.length} · Nhà thầu ngừng hoạt động không chọn
-          được cho phân công mới, lịch sử vẫn xem được.
+        <p className="bf-card-meta" style={{ marginTop: '0.5rem' }}>
+          Nhà thầu ngừng hoạt động không chọn được cho phân công mới, lịch sử vẫn xem được.
         </p>
       </Card>
 
       {contractors.length === 0 ? (
         <Card>
-          <EmptyState title="Chưa có nhà thầu nào phù hợp bộ lọc">
+          <EmptyState
+            title="Chưa có nhà thầu nào phù hợp bộ lọc"
+            action={
+              <a className="bf-btn bf-btn-primary" href="/contractors/new">
+                Thêm nhà thầu
+              </a>
+            }
+          >
             Thử thay đổi từ khóa hoặc tạo hồ sơ mới.
           </EmptyState>
         </Card>
@@ -158,17 +182,21 @@ export function ContractorList() {
                   <th>Tên</th>
                   <th>Mã</th>
                   <th>Trạng thái</th>
-                  <th>Hành động</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
                 {contractors.map((c) => (
                   <tr key={c.id}>
-                    <td>{c.name}</td>
+                    <td style={{ fontWeight: 600 }}>{c.name}</td>
                     <td>{c.code}</td>
                     <td><StatusBadge status={c.status} /></td>
-                    <td>
-                      <a href={`/contractors/${c.id}`}>Xem chi tiết</a>
+                    <td className="bf-cell-actions">
+                      <span className="bf-row-actions">
+                        <Tooltip content="Xem hồ sơ chi tiết">
+                          <a className="bf-detail-link" href={`/contractors/${c.id}`}>Xem chi tiết</a>
+                        </Tooltip>
+                      </span>
                     </td>
                   </tr>
                 ))}

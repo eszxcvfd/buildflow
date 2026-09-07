@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
+import { Dialog } from '@/components/ui/dialog/Dialog';
 import type { ProjectStatusAction } from '@/lib/api/projects';
 
 /**
@@ -115,11 +116,8 @@ export function ProjectStatusDialog({
   const showFieldError = fieldError ?? serverFieldError ?? null;
 
   return (
-    <div style={{ border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>
-      <p style={{ margin: 0, fontWeight: 600, color: '#92400e' }}>
-        Xác nhận {confirmLabel.toLowerCase()} dự án — {projectName}?
-      </p>
-      <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
+    <Dialog title={`Xác nhận ${confirmLabel.toLowerCase()} dự án — ${projectName}?`} onClose={onCancel}>
+      <p style={{ margin: '0', color: '#6b7280', fontSize: '0.85rem' }}>
         Trạng thái hiện tại: <strong>{statusLabel}</strong>.{' '}
         {action === 'CLOSE'
           ? 'Dự án đóng sẽ không nhận Work Order mới (áp dụng từ JOB slices); lịch sử và dữ liệu đã phát sinh được giữ nguyên. Thao tác được ghi nhật ký hệ thống kèm lý do.'
@@ -176,6 +174,6 @@ export function ProjectStatusDialog({
           Xác nhận {confirmLabel.toLowerCase()}
         </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }

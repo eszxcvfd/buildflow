@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CrewForm } from './CrewForm';
 import { createCrew, updateCrew } from '@/lib/api/crews';
 import { listWorkers } from '@/lib/api/workers';
@@ -64,14 +65,23 @@ function initialCrew(overrides = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.useFakeTimers();
   listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 100, offset: 0 });
   listContractorsMock.mockResolvedValue({ data: [], total: 0, limit: 100, offset: 0 });
 });
 
-afterEach(() => {
-  jest.useRealTimers();
-});
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>. Toggle-safe: skips the
+ * trigger click when the listbox is already open (also covers waiting for
+ * async-loaded option lists via findByRole).
+ */
+async function chooseOption(comboboxName: string | RegExp, optionName: string) {
+  const user = userEvent.setup();
+  // Đóng listbox còn sót từ lựa chọn trước (zag đóng async) rồi mới mở mới.
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
 
 describe('CrewForm ORG-SRS-006', () => {
   it('validation: thiếu leader chặn submit với lỗi theo field', async () => {
@@ -89,12 +99,9 @@ describe('CrewForm ORG-SRS-006', () => {
   it('create thành công gửi leaderUserId + contractorId', async () => {
     createCrewMock.mockResolvedValue(initialCrew());
     render(<CrewForm mode="create" />);
-    await screen.findByRole('option', { name: 'Nguyen Van Lead · NV-001' });
     fireEvent.change(screen.getByLabelText('Mã đội *'), { target: { value: 'TEAM-002' } });
     fireEvent.change(screen.getByLabelText('Tên đội *'), { target: { value: 'Doi moi' } });
-    fireEvent.change(screen.getByLabelText('Trưởng nhóm *'), {
-      target: { value: '11111111-1111-4111-8111-111111111111' },
-    });
+    await chooseOption('Trưởng nhóm *', 'Nguyen Van Lead · NV-001');
     fireEvent.click(screen.getByRole('button', { name: 'Tạo đội' }));
     await waitFor(() => expect(createCrewMock).toHaveBeenCalled());
     expect(createCrewMock).toHaveBeenCalledWith(
@@ -110,12 +117,9 @@ describe('CrewForm ORG-SRS-006', () => {
       fieldErrors: { code: ['Mã đội đã tồn tại'] },
     });
     render(<CrewForm mode="create" />);
-    await screen.findByRole('option', { name: 'Nguyen Van Lead · NV-001' });
     fireEvent.change(screen.getByLabelText('Mã đội *'), { target: { value: 'TEAM-001' } });
     fireEvent.change(screen.getByLabelText('Tên đội *'), { target: { value: 'Doi moi' } });
-    fireEvent.change(screen.getByLabelText('Trưởng nhóm *'), {
-      target: { value: '11111111-1111-4111-8111-111111111111' },
-    });
+    await chooseOption('Trưởng nhóm *', 'Nguyen Van Lead · NV-001');
     fireEvent.click(screen.getByRole('button', { name: 'Tạo đội' }));
     await waitFor(() => expect(screen.getAllByText('Mã đội đã tồn tại')).toHaveLength(2));
     // lỗi gắn đúng field code (class bf-field-error), không chỉ banner chung
@@ -127,13 +131,16 @@ describe('CrewForm ORG-SRS-006', () => {
     listWorkersMock.mockResolvedValue({ data: [worker(), other], total: 2, limit: 100, offset: 0 });
     updateCrewMock.mockResolvedValue(initialCrew());
     render(<CrewForm mode="edit" initial={initialCrew()} />);
+    // chờ danh sách nạp xong (mở combobox rồi mới có options trong DOM)
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Trưởng nhóm *' }));
     await screen.findByRole('option', { name: 'Nguyen Van Lead · NV-001' });
-    // default giữ leader hiện tại
-    expect((screen.getByLabelText('Trưởng nhóm *') as HTMLSelectElement).value).toBe(
-      '11111111-1111-4111-8111-111111111111',
+    // default giữ leader hiện tại (trigger hiển thị label đã chọn)
+    expect(screen.getByRole('combobox', { name: 'Trưởng nhóm *' }).textContent).toContain(
+      'Nguyen Van Lead · NV-001',
     );
     // đổi sang người khác → hiện confirm, chưa gọi API
-    fireEvent.change(screen.getByLabelText('Trưởng nhóm *'), { target: { value: 'other-lead-id' } });
+    await chooseOption('Trưởng nhóm *', 'Tran Van Khac · NV-002');
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     await waitFor(() => expect(screen.getByText(/Xác nhận đổi trưởng nhóm của đội?/)).not.toBeNull());
     expect(updateCrewMock).not.toHaveBeenCalled();
@@ -152,6 +159,9 @@ describe('CrewForm ORG-SRS-006', () => {
     const other = worker({ id: 'other-lead-id', fullName: 'Tran Van Khac', employeeCode: 'NV-002' });
     listWorkersMock.mockResolvedValue({ data: [worker(), other], total: 2, limit: 100, offset: 0 });
     render(<CrewForm mode="create" />);
+    // mở combobox trước — options chỉ render khi listbox mở
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Trưởng nhóm *' }));
     await screen.findByRole('option', { name: 'Nguyen Van Lead · NV-001' });
     fireEvent.change(screen.getByLabelText('Tìm trưởng nhóm'), { target: { value: 'Tran Van' } });
     await waitFor(() =>

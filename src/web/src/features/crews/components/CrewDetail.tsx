@@ -19,6 +19,7 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { toast } from '@/components/ui/toast/Toaster';
 
 function statusLabel(status: string): string {
   return status === 'ACTIVE' ? 'Đang hoạt động' : 'Ngừng hoạt động';
@@ -38,6 +39,11 @@ export function CrewDetail({ id }: { id: string }) {
   const [actionLoading, setActionLoading] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = React.useState<string | null>(null);
+  // Thông báo lifecycle thành công hiển thị cả inline (giữ assert hiện có) lẫn
+  // Ark Toast thoáng qua.
+  React.useEffect(() => {
+    if (actionSuccess) toast.success({ title: actionSuccess });
+  }, [actionSuccess]);
   const [confirmAction, setConfirmAction] = React.useState<ResourceAction | null>(null);
   const [openCheck, setOpenCheck] = React.useState<OpenWorkCheck>({ state: 'loading' });
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);

@@ -1,4 +1,5 @@
 export { ProjectsList } from './components/ProjectsList';
+export { ProjectsHeaderActions } from './components/ProjectsHeaderActions';
 export { ProjectForm } from './components/ProjectForm';
 export { ProjectDetail } from './components/ProjectDetail';
 export { ProjectMembers } from './components/ProjectMembers';

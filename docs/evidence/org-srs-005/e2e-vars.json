@@ -13,7 +13,7 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "API asc[0..2]=Lê Văn Hậu / Nguyễn Văn Ba / Nguyễn Văn Thắng; desc đảo đúng; UI khớp cả 2 chiều"
+      "note": "API full n=6 asc[0..2]=Lê Văn Hậu / Nguyễn Văn Ba / Nguyễn Văn Thắng; desc đảo đúng, cùng tập id; UI khớp cả 2 chiều"
     },
     {
       "id": "S4",

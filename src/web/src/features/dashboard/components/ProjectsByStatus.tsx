@@ -15,6 +15,23 @@ const STATUS_LABELS: Record<string, string> = {
   CLOSED: 'Đã đóng',
 };
 
+/**
+ * DashCode stage 3 — fill bar theo palette trạng thái (token, không hard-code):
+ * đang chạy → primary, hoàn thành → success, tạm dừng → warning/busy,
+ * nháp → line-strong, đóng → faint, lạ → muted.
+ */
+const STATUS_FILL: Record<string, string> = {
+  DRAFT: 'var(--bf-line-strong)',
+  ACTIVE: 'var(--bf-accent)',
+  PAUSED: 'var(--bf-busy)',
+  COMPLETED: 'var(--bf-ok)',
+  CLOSED: 'var(--bf-faint)',
+};
+
+export function statusFillVar(status: string): string {
+  return STATUS_FILL[status] ?? 'var(--bf-muted)';
+}
+
 export function statusLabelVi(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
@@ -96,7 +113,6 @@ export function ProjectsByStatus() {
         <div style={{ display: 'grid', gap: 12 }}>
           {state.groups.map((g) => {
             const pct = max > 0 ? Math.round((g.count / max) * 100) : 0;
-            const isTop = g.count === max;
             return (
               <div
                 key={g.status}
@@ -120,7 +136,7 @@ export function ProjectsByStatus() {
                       height: '100%',
                       width: revealed ? `${pct}%` : '0%',
                       borderRadius: 999,
-                      background: isTop ? 'var(--bf-accent)' : 'var(--bf-line-strong)',
+                      background: statusFillVar(g.status),
                       transition: 'width 600ms ease',
                     }}
                   />

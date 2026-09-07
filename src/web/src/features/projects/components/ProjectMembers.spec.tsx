@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ProjectMembers } from './ProjectMembers';
 import { listProjectMembers, addProjectMember, removeProjectMember } from '@/lib/api/projects';
 import { listWorkers } from '@/lib/api/workers';
@@ -67,13 +68,24 @@ beforeEach(() => {
   listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 100, offset: 0 });
 });
 
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>.
+ */
+async function chooseOption(comboboxName: string, optionName: string) {
+  const user = userEvent.setup();
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
 describe('ProjectMembers PRJ-SRS-005 (issue #36)', () => {
   it('add happy path gọi addProjectMember với payload đúng + báo thành công', async () => {
     addMemberMock.mockResolvedValue(member());
     render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Người dùng'), { target: { value: USER_ID } });
-    fireEvent.change(screen.getByLabelText('Vai trò trong dự án'), { target: { value: 'WORKER' } });
+    await chooseOption('Người dùng', 'Tran Thi Moi · NV-009');
+    await chooseOption('Vai trò trong dự án', 'THÀNH VIÊN');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào dự án' }));
     await waitFor(() =>
       expect(addMemberMock).toHaveBeenCalledWith(PROJECT_ID, { userId: USER_ID, projectRole: 'WORKER' }),
@@ -86,8 +98,8 @@ describe('ProjectMembers PRJ-SRS-005 (issue #36)', () => {
     addMemberMock.mockRejectedValue({ status: 409, code: 'MEMBER_DUPLICATE', message: 'Thành viên đã thuộc dự án' });
     render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Người dùng'), { target: { value: USER_ID } });
-    fireEvent.change(screen.getByLabelText('Vai trò trong dự án'), { target: { value: 'QC' } });
+    await chooseOption('Người dùng', 'Tran Thi Moi · NV-009');
+    await chooseOption('Vai trò trong dự án', 'QC');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào dự án' }));
     await waitFor(() => expect(screen.getByText('Thành viên đã trong dự án')).not.toBeNull());
   });
@@ -95,8 +107,10 @@ describe('ProjectMembers PRJ-SRS-005 (issue #36)', () => {
   it('MANAGER bị chặn client-side (không có trong select vai trò)', async () => {
     render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    const roleSelect = screen.getByLabelText('Vai trò trong dự án') as HTMLSelectElement;
-    const values = Array.from(roleSelect.options).map((o) => o.value);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Vai trò trong dự án' }));
+    const options = await screen.findAllByRole('option');
+    const values = options.map((o) => o.getAttribute('data-value') ?? '');
     expect(values).not.toContain('MANAGER');
     expect(values).toEqual(expect.arrayContaining(['COORDINATOR', 'QC', 'WORKER', 'VIEWER']));
     expect(screen.getByText(/Vai trò Quản lý chỉ đặt qua Sửa hồ sơ/)).not.toBeNull();

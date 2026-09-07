@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ProjectForm } from './ProjectForm';
 import { createProject, updateProject } from '@/lib/api/projects';
 import { listWorkers } from '@/lib/api/workers';
@@ -53,15 +54,24 @@ function initialProject(overrides = {}) {
   };
 }
 
-function fillCreateForm() {
+function fillCreateFormFields() {
   fireEvent.change(screen.getByLabelText('Mã dự án *'), { target: { value: 'PRJ-002' } });
   fireEvent.change(screen.getByLabelText('Tên dự án *'), { target: { value: 'Du an 2' } });
   fireEvent.change(screen.getByLabelText('Địa chỉ *'), { target: { value: 'So 2, duong B' } });
   fireEvent.change(screen.getByLabelText('Ngày bắt đầu kế hoạch *'), { target: { value: '2026-02-01' } });
   fireEvent.change(screen.getByLabelText('Ngày kết thúc kế hoạch *'), { target: { value: '2026-11-30' } });
-  fireEvent.change(screen.getByLabelText('Quản lý dự án *'), {
-    target: { value: '11111111-1111-4111-8111-111111111111' },
-  });
+}
+
+/** Ark Select interaction (DashCode stage 2): open + choose the manager. */
+async function pickManager() {
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  await user.click(screen.getByRole('combobox', { name: 'Quản lý dự án *' }));
+  await user.click(await screen.findByRole('option', { name: 'Nguyen Van Quan Ly · NV-001' }));
+}
+
+async function fillCreateForm() {
+  fillCreateFormFields();
+  await pickManager();
 }
 
 beforeEach(() => {
@@ -79,7 +89,7 @@ describe('ProjectForm PRJ-SRS-001 (issue #32)', () => {
     createProjectMock.mockResolvedValue({ id: 'p-2', status: 'DRAFT' });
     render(<ProjectForm mode="create" />);
     await waitFor(() => expect(listWorkersMock).toHaveBeenCalled());
-    fillCreateForm();
+    await fillCreateForm();
     fireEvent.click(screen.getByRole('button', { name: 'Tạo dự án' }));
     await waitFor(() => expect(createProjectMock).toHaveBeenCalled());
     expect(createProjectMock).toHaveBeenCalledWith({
@@ -97,7 +107,7 @@ describe('ProjectForm PRJ-SRS-001 (issue #32)', () => {
   it('create validation: end < start chặn submit ở client', async () => {
     render(<ProjectForm mode="create" />);
     await waitFor(() => expect(listWorkersMock).toHaveBeenCalled());
-    fillCreateForm();
+    await fillCreateForm();
     fireEvent.change(screen.getByLabelText('Ngày kết thúc kế hoạch *'), { target: { value: '2026-01-15' } });
     fireEvent.click(screen.getByRole('button', { name: 'Tạo dự án' }));
     await waitFor(() =>
@@ -115,7 +125,7 @@ describe('ProjectForm PRJ-SRS-001 (issue #32)', () => {
     });
     render(<ProjectForm mode="create" />);
     await waitFor(() => expect(listWorkersMock).toHaveBeenCalled());
-    fillCreateForm();
+    await fillCreateForm();
     fireEvent.click(screen.getByRole('button', { name: 'Tạo dự án' }));
     await waitFor(() => expect(screen.getAllByText('Mã dự án đã tồn tại').length).toBeGreaterThanOrEqual(2));
   });
@@ -124,7 +134,7 @@ describe('ProjectForm PRJ-SRS-001 (issue #32)', () => {
     createProjectMock.mockRejectedValue({ status: 403, message: 'Forbidden' });
     render(<ProjectForm mode="create" />);
     await waitFor(() => expect(listWorkersMock).toHaveBeenCalled());
-    fillCreateForm();
+    await fillCreateForm();
     fireEvent.click(screen.getByRole('button', { name: 'Tạo dự án' }));
     await waitFor(() => expect(screen.getByText('Cần ADMIN hoặc PROJECT_MANAGER')).not.toBeNull());
   });

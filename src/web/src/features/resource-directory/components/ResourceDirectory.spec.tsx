@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ResourceDirectory } from './ResourceDirectory';
 import { listWorkers } from '@/lib/api/workers';
 import { listContractors } from '@/lib/api/contractors';
@@ -33,6 +34,29 @@ const listContractorsMock = listContractors as jest.Mock;
 const listCrewsMock = listCrews as jest.Mock;
 const listTradesMock = listTrades as jest.Mock;
 const canViewMock = useCanViewResourceDirectory as jest.Mock;
+
+/**
+ * Ark Select interaction (DashCode stage 2): open the labelled combobox,
+ * then choose the option. Replaces native fireEvent.change on <select>.
+ */
+async function selectOption(label: string, optionName: string) {
+  const user = userEvent.setup();
+  // Đóng listbox còn sót từ lựa chọn trước (zag đóng async) rồi mới mở mới.
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: label }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
+/** Displayed value of an Ark Select trigger. */
+function selectedText(label: string): string {
+  return screen.getByRole('combobox', { name: label }).textContent ?? '';
+}
+
+/** Ark Tabs interaction: user-click the tab (fireEvent.click does not reach zag). */
+async function switchTab(name: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('tab', { name }));
+}
 
 function worker(overrides = {}) {
   return {
@@ -112,9 +136,9 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     await screen.findByText('Nguyen Van W');
     // Không chờ re-render / không cập nhật mockQuery giữa các lần — mô phỏng
     // router.replace async chưa kịp đổi URL (race S2 gốc).
-    fireEvent.change(screen.getByLabelText('Trạng thái'), { target: { value: 'ACTIVE' } });
-    fireEvent.change(screen.getByLabelText('Ngành nghề'), { target: { value: 't-trade-1' } });
-    fireEvent.change(screen.getByLabelText('Cấp kỹ năng'), { target: { value: '3' } });
+    await selectOption('Trạng thái', 'Hoạt động');
+    await selectOption('Ngành nghề', 'EL — Dien');
+    await selectOption('Cấp kỹ năng', 'Cấp 3');
     expect(mockReplace).toHaveBeenCalledTimes(3);
     const lastUrl = mockReplace.mock.calls[mockReplace.mock.calls.length - 1][0] as string;
     expect(lastUrl).toContain('status=ACTIVE');
@@ -126,7 +150,7 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     mockQuery = 'tab=workers&status=ACTIVE&page=2';
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    fireEvent.click(screen.getByRole('tab', { name: 'Nhà thầu' }));
+    await switchTab('Nhà thầu');
     const url = mockReplace.mock.calls[mockReplace.mock.calls.length - 1][0] as string;
     expect(url).toContain('tab=contractors');
     expect(url).not.toContain('page=');
@@ -135,8 +159,8 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
   it('không loop: apply cùng giá trị liên tiếp không gọi replace thừa', async () => {
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    fireEvent.change(screen.getByLabelText('Trạng thái'), { target: { value: 'ACTIVE' } });
-    fireEvent.change(screen.getByLabelText('Trạng thái'), { target: { value: 'ACTIVE' } });
+    await selectOption('Trạng thái', 'Hoạt động');
+    await selectOption('Trạng thái', 'Hoạt động');
     expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 
@@ -145,7 +169,7 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
     expect(listWorkersMock).toHaveBeenCalledWith(expect.objectContaining({ sort: 'name', order: 'asc' }));
-    fireEvent.change(screen.getByLabelText('Sắp xếp'), { target: { value: 'createdAt' } });
+    await selectOption('Sắp xếp', 'Mới nhất');
     expect(mockReplace).toHaveBeenLastCalledWith(expect.stringContaining('sort=createdAt'), expect.anything());
   });
 
@@ -177,12 +201,12 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     mockQuery = 'status=INACTIVE&sort=name&order=asc';
     const { unmount } = render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('INACTIVE');
-    expect((screen.getByLabelText('Sắp xếp') as HTMLSelectElement).value).toBe('name');
+    expect(selectedText('Trạng thái')).toContain('Ngừng hoạt động');
+    expect(selectedText('Sắp xếp')).toContain('Tên');
     unmount();
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('INACTIVE');
+    expect(selectedText('Trạng thái')).toContain('Ngừng hoạt động');
   });
 
   it('role không phép → 403 card, không gọi API', async () => {
@@ -209,14 +233,14 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     });
     render(<ResourceDirectory />);
     expect((await screen.findByRole('alert')).textContent).toContain('Skill level phải là 1-5');
-    expect((screen.getByLabelText('Trạng thái') as HTMLSelectElement).value).toBe('ACTIVE');
-    expect((screen.getByLabelText('Cấp kỹ năng') as HTMLSelectElement).value).toBe('3');
+    expect(selectedText('Trạng thái')).toContain('Hoạt động');
+    expect(selectedText('Cấp kỹ năng')).toContain('Cấp 3');
   });
 
   it('tab Nhà thầu: chuyển tab qua URL, gọi listContractors, row đủ contact/status/scope', async () => {
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    fireEvent.click(screen.getByRole('tab', { name: 'Nhà thầu' }));
+    await switchTab('Nhà thầu');
     expect(mockReplace).toHaveBeenLastCalledWith(expect.stringContaining('tab=contractors'), expect.anything());
     mockQuery = 'tab=contractors';
     render(<ResourceDirectory />);
@@ -232,7 +256,7 @@ describe('ResourceDirectory ORG-SRS-005 (issue #28)', () => {
     await screen.findByText('Nguyen Van W');
     const teamTab = screen.getByRole('tab', { name: 'Đội' });
     expect((teamTab as HTMLButtonElement).disabled).toBe(false);
-    fireEvent.click(teamTab);
+    await switchTab('Đội');
     const url = mockReplace.mock.calls[mockReplace.mock.calls.length - 1][0] as string;
     expect(url).toContain('tab=crews');
   });

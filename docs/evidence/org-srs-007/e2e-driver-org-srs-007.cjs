@@ -113,6 +113,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
@@ -146,13 +182,12 @@ function preCleanup007() {
   try { prev = JSON.parse(fs.readFileSync(path.join(__dirname, 'e2e-vars.json'), 'utf8')); } catch {}
   cleanup007(prev ? [prev.crewA, prev.crewB].filter(Boolean) : []);
 }
-// Đợi select thêm-thành-viên load xong options worker rồi chọn.
+// Đợi select thêm-thành-viên load xong options worker rồi chọn (Ark: đợi
+// options của chính trigger qua aria-controls, không cần mở).
 async function selectWorkerToAdd(page, userId) {
-  await page.waitForFunction(() => {
-    const s = document.querySelector('#member-add-user');
-    return s && s.tagName === 'SELECT' && s.options.length > 1;
-  }, { timeout: 20000 });
-  await page.selectOption('#member-add-user', userId);
+  await page.waitForSelector('#member-add-user:not([disabled])', { timeout: 20000 });
+  await arkWaitOptions(page, 'member-add-user', 2);
+  await arkSelectOption(page, 'member-add-user', userId);
 }
 
 (async () => {
@@ -380,11 +415,7 @@ async function selectWorkerToAdd(page, userId) {
       await login(page, ADMIN_EMAIL, ADMIN_PASS);
       await page.goto(`${WEB}/resources?tab=workers`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#directory-crew', { timeout: 20000 });
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#directory-crew');
-        return s && s.options.length > 1;
-      }, { timeout: 20000 });
-      await page.selectOption('#directory-crew', crewA);
+      await arkSelectOption(page, 'directory-crew', crewA);
       await page.waitForFunction(() => window.location.search.includes('crew='), { timeout: 15000 });
       await page.waitForTimeout(2000);
       const t = await bodyText(page);

@@ -110,6 +110,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 
 (async () => {
   let browser;
@@ -162,9 +198,9 @@ async function bodyText(page) {
     await step('S2', 'Workers: filter kết hợp status=ACTIVE+trade+skill → đúng 1; đối chiếu SQL COUNT; search text cập nhật', async (id) => {
       await page.goto(`${WEB}/resources?tab=workers`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#directory-trade', { timeout: 15000 });
-      await page.selectOption('#directory-status', 'ACTIVE');
-      await page.selectOption('#directory-trade', TRADE_SONNUOC);
-      await page.selectOption('#directory-skill', '3');
+      await arkSelectOption(page, 'directory-status', 'ACTIVE');
+      await arkSelectOption(page, 'directory-trade', TRADE_SONNUOC);
+      await arkSelectOption(page, 'directory-skill', '3');
       await page.waitForFunction(() => (document.body.textContent || '').includes('Tổng:'), { timeout: 15000 });
       await page.waitForTimeout(2000);
       let t = await bodyText(page);
@@ -196,14 +232,26 @@ async function bodyText(page) {
     })();
 
     // ============ S3 ============
+    // NOTE 2026-09-07: dataset có thể > PAGE_SIZE (seed pagination TX-8% → 26 workers)
+    // nên limit=20 cắt trang làm reverse(page1-asc)==page1-desc bất khả thi về mặt toán học.
+    // Fix: lấy total trước rồi fetch FULL sorted lists (limit=total+10, không truncation),
+    // giữ nguyên ý đồ assert (sort correctness) ở mức names (miễn nhiễm tie-break id).
     await step('S3', 'Sort Tên/Mới nhất × asc/desc → thứ tự đổi đúng', async (id) => {
-      const asc = await api('GET', '/api/v1/workers?sort=name&order=asc&limit=20', pmToken);
-      const desc = await api('GET', '/api/v1/workers?sort=name&order=desc&limit=20', pmToken);
+      const probe = await api('GET', '/api/v1/workers?limit=1&sort=name&order=asc', pmToken);
+      if (probe.status !== 200) return fail(id, `sort probe HTTP ${probe.status}`);
+      const total = probe.body.total;
+      const big = total + 10;
+      const asc = await api('GET', `/api/v1/workers?sort=name&order=asc&limit=${big}`, pmToken);
+      const desc = await api('GET', `/api/v1/workers?sort=name&order=desc&limit=${big}`, pmToken);
       if (asc.status !== 200 || desc.status !== 200) return fail(id, `sort API HTTP asc=${asc.status} desc=${desc.status}`);
+      if (asc.body.data.length !== total || desc.body.data.length !== total) {
+        return fail(id, `API truncation: total=${total} nhưng asc.len=${asc.body.data.length} desc.len=${desc.body.data.length} (limit=${big})`);
+      }
       const namesAsc = asc.body.data.map((w) => w.fullName);
       const namesDesc = desc.body.data.map((w) => w.fullName);
       const reversed = [...namesAsc].reverse().join('|') === namesDesc.join('|');
-      // UI: chọn sort Tên + Tăng dần, đọc 2 card đầu
+      const sameIds = asc.body.data.map((w) => w.id).sort().join('|') === desc.body.data.map((w) => w.id).sort().join('|');
+      // UI: chọn sort Tên + Tăng dần, đọc 2 card đầu (trang 1 PAGE_SIZE=20 — cặp so sánh phải nằm trong trang 1)
       await page.goto(`${WEB}/resources?tab=workers&sort=name&order=asc`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(2000);
       const tAsc = await bodyText(page);
@@ -213,11 +261,14 @@ async function bodyText(page) {
       await snap(page, id + '-desc', 'Sort Tên Giảm dần');
       const uiFirstAsc = namesAsc.slice(0, 2).every((n) => tAsc.includes(n));
       const uiFirstDesc = namesDesc.slice(0, 2).every((n) => tDesc.includes(n));
-      const orderFlipped = tAsc.indexOf(namesAsc[0]) < tAsc.indexOf(namesAsc[namesAsc.length - 1]);
-      if (!reversed) return fail(id, `API asc/desc không đảo nhau: ${namesAsc.slice(0, 3)} vs ${namesDesc.slice(0, 3)}`);
+      const page1Last = namesAsc[Math.min(namesAsc.length - 1, 19)];
+      const orderFlipped = tAsc.indexOf(namesAsc[0]) !== -1 && tAsc.indexOf(page1Last) !== -1 &&
+        tAsc.indexOf(namesAsc[0]) < tAsc.indexOf(page1Last);
+      if (!reversed) return fail(id, `API asc/desc không đảo nhau (full n=${total}): ${namesAsc.slice(0, 3)} vs ${namesDesc.slice(0, 3)}`);
+      if (!sameIds) return fail(id, `API asc/desc lệch tập id (full n=${total})`);
       if (!uiFirstAsc || !uiFirstDesc) return fail(id, `UI không khớp API (asc2=${namesAsc.slice(0, 2)} desc2=${namesDesc.slice(0, 2)})`);
       if (!orderFlipped) return fail(id, 'UI asc không tăng dần');
-      return ok(id, `API asc[0..2]=${namesAsc.slice(0, 3).join(' / ')}; desc đảo đúng; UI khớp cả 2 chiều`);
+      return ok(id, `API full n=${total} asc[0..2]=${namesAsc.slice(0, 3).join(' / ')}; desc đảo đúng, cùng tập id; UI khớp cả 2 chiều`);
     })();
 
     // ============ S4 ============
@@ -281,7 +332,7 @@ async function bodyText(page) {
       if (apiAll.status !== 200) return fail(id, `contractors API HTTP ${apiAll.status}`);
       if (!m || String(m[1]) !== String(apiAll.body.total)) return fail(id, `UI Tổng=${m && m[1]} khác API=${apiAll.body.total}`);
       // filter status INACTIVE → 0 (DB hiện không có INACTIVE) + search
-      await page.selectOption('#directory-status', 'INACTIVE');
+      await arkSelectOption(page, 'directory-status', 'INACTIVE');
       await page.waitForTimeout(2000);
       t = await bodyText(page);
       const emptyInactive = t.includes('Chưa có nhà thầu nào phù hợp bộ lọc');

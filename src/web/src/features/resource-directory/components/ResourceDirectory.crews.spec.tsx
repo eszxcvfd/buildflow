@@ -69,9 +69,9 @@ describe('ResourceDirectory crews tab ORG-SRS-006', () => {
     expect((crewsTab as HTMLButtonElement).disabled).toBe(false);
     await waitFor(() => expect(listCrewsMock).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText('Doi ket cau')).not.toBeNull());
-    expect(screen.getByText('· TEAM-001')).not.toBeNull();
+    expect(screen.getByText('TEAM-001')).not.toBeNull();
     expect(screen.getByText('Đủ điều kiện phân công')).not.toBeNull();
-    expect(screen.getByText(/Trưởng nhóm:/)).not.toBeNull();
+    expect(screen.getByText('Trưởng nhóm')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Chi tiết' }).getAttribute('href')).toBe(
       '/crews/33333333-3333-4333-8333-333333333333',
     );

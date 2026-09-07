@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -151,10 +153,12 @@ export function CrewForm({ mode, initial }: Props) {
           description: description.trim() || null,
         });
         setGlobalSuccess('Tạo đội thi công thành công');
+        toast.success({ title: 'Tạo đội thi công thành công' });
         setTimeout(() => router.push('/crews'), 800);
       } else if (initial) {
         await updateCrew(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật đội thi công thành công');
+        toast.success({ title: 'Cập nhật đội thi công thành công' });
         setTimeout(() => router.push(`/crews/${initial.id}`), 800);
       }
     } catch (e) {
@@ -190,7 +194,7 @@ export function CrewForm({ mode, initial }: Props) {
       {globalSuccess ? <Alert tone="success">{globalSuccess}</Alert> : null}
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="crew-code">Mã đội *</label>
             <Input
@@ -242,26 +246,22 @@ export function CrewForm({ mode, initial }: Props) {
         </div>
 
         <div className="bf-field">
-          <label className="bf-label" htmlFor="crew-leader">Trưởng nhóm *</label>
           {leadersLoading ? (
             <p style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }} aria-busy="true">
               Đang tải danh sách công nhân đang hoạt động…
             </p>
           ) : (
-            <select
+            <Select
               id="crew-leader"
-              className="bf-input"
+              label="Trưởng nhóm *"
               value={leaderUserId}
-              onChange={(e) => { setLeaderUserId(e.target.value); setConfirmLeadChange(false); }}
+              options={[
+                { value: '', label: '— Chọn trưởng nhóm (công nhân ACTIVE) —' },
+                ...filteredLeaders.map((w) => ({ value: w.id, label: workerLabel(w) })),
+              ]}
+              onChange={(v) => { setLeaderUserId(v); setConfirmLeadChange(false); }}
               aria-invalid={fieldErrors.leaderUserId ? true : undefined}
-            >
-              <option value="">— Chọn trưởng nhóm (công nhân ACTIVE) —</option>
-              {filteredLeaders.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {workerLabel(w)}
-                </option>
-              ))}
-            </select>
+            />
           )}
           {fieldErrors.leaderUserId ? <p className="bf-field-error" role="alert">{fieldErrors.leaderUserId.join(' ')}</p> : null}
           {mode === 'edit' && initial?.leaderUserId && !initialLeaderInList && !leadersLoading ? (
@@ -273,21 +273,17 @@ export function CrewForm({ mode, initial }: Props) {
         </div>
 
         <div className="bf-field">
-          <label className="bf-label" htmlFor="crew-contractor">Nhà thầu (tùy chọn)</label>
-          <select
+          <Select
             id="crew-contractor"
-            className="bf-input"
+            label="Nhà thầu (tùy chọn)"
             value={contractorId}
-            onChange={(e) => setContractorId(e.target.value)}
+            options={[
+              { value: '', label: '— Không thuộc nhà thầu —' },
+              ...contractors.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` })),
+            ]}
+            onChange={setContractorId}
             aria-invalid={fieldErrors.contractorId ? true : undefined}
-          >
-            <option value="">— Không thuộc nhà thầu —</option>
-            {contractors.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} — {c.name}
-              </option>
-            ))}
-          </select>
+          />
           {fieldErrors.contractorId ? <p className="bf-field-error" role="alert">{fieldErrors.contractorId.join(' ')}</p> : null}
         </div>
 
@@ -304,7 +300,7 @@ export function CrewForm({ mode, initial }: Props) {
           </Alert>
         ) : null}
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="bf-form-actions">
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo đội' : 'Lưu thay đổi'}
           </Button>

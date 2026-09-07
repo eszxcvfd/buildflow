@@ -19,6 +19,7 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { toast } from '@/components/ui/toast/Toaster';
 
 function statusLabel(status: string): string {
   switch (status) {
@@ -58,6 +59,14 @@ export function ProjectDetail({ id }: { id: string }) {
   const [confirmAction, setConfirmAction] = React.useState<ProjectStatusAction | null>(null);
   const [actionLoading, setActionLoading] = React.useState(false);
   const [actionNotice, setActionNotice] = React.useState<{ tone: 'success' | 'info'; text: string } | null>(null);
+  // Thông báo chuyển trạng thái hiển thị cả inline (giữ assert hiện có) lẫn
+  // Ark Toast thoáng qua.
+  React.useEffect(() => {
+    if (actionNotice) {
+      if (actionNotice.tone === 'success') toast.success({ title: actionNotice.text });
+      else toast.info({ title: actionNotice.text });
+    }
+  }, [actionNotice]);
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);

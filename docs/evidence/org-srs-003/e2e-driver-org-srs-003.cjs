@@ -127,6 +127,42 @@ async function getToken(email, password) {
   const r = await api('POST', '/api/v1/auth/login', null, { email, password });
   return r.body && r.body.accessToken ? r.body.accessToken : null;
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 
 async function findBtn(page, texts) {
   const loc = page.locator('button, a, [role="button"]');
@@ -265,19 +301,14 @@ async function waitText(page, text, ms = 15000) {
     // ============ B7: gán trade cho worker mới (qua /workers/new, select mới) ============
     await step('B7', 'tạo worker gán trade qua select', async (id) => {
       await page.goto(`${BASE}/workers/new`, { waitUntil: 'networkidle' });
-      // <option> không bao giờ "visible" với Playwright — chờ select enabled + đã có options
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#tradeId');
-        return s && !s.disabled && s.options.length >= 2;
-      }, { timeout: 20000 });
-      const optionTexts = [];
-      const opts = page.locator('#tradeId option');
-      const n = await opts.count();
-      for (let i = 0; i < n; i++) optionTexts.push(((await opts.nth(i).textContent()) || '').trim());
+      // Ark Select: options của chính trigger (aria-controls) — đợi rồi đọc text
+      await page.waitForSelector('#tradeId:not([disabled])', { timeout: 20000 });
+      const cidB7 = await arkWaitOptions(page, 'tradeId', 2);
+      const optionTexts = await page.locator(`[id="${cidB7}"] [role="option"]`).allTextContents();
       const hasSeed = optionTexts.some((t) => t.includes('THO-CAT'));
       const hasMyTrade = optionTexts.some((t) => t.includes(TRADE_CODE));
-      await page.selectOption('#tradeId', tradeId);
-      await page.selectOption('#skillLevel', '3');
+      await arkSelectOption(page, 'tradeId', tradeId);
+      await arkSelectOption(page, 'skillLevel', '3');
       await page.fill('#email', WORKER_EMAIL);
       await page.fill('#password', WORKER_PASS);
       await page.fill('#fullName', WORKER_NAME);
@@ -330,17 +361,17 @@ async function waitText(page, text, ms = 15000) {
     // ============ B9: sau deactivate, select WorkerForm chỉ giữ trade đó ở option '(hiện tại)' ============
     await step('B9', 'WorkerForm edit: trade INACTIVE chỉ còn option (hiện tại) + banner', async (id) => {
       await page.goto(`${BASE}/workers/${workerId}/edit`, { waitUntil: 'networkidle' });
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#tradeId');
-        return s && !s.disabled;
-      }, { timeout: 20000 });
+      await page.waitForSelector('#tradeId:not([disabled])', { timeout: 20000 });
       await page.waitForTimeout(1200);
-      const opts = page.locator('#tradeId option');
+      // Ark: đọc options của chính trigger (aria-controls), không cần mở
+      const cidB9 = await arkWaitOptions(page, 'tradeId', 1);
+      const opts = page.locator(`[id="${cidB9}"] [role="option"]`);
       const texts = [];
       for (let i = 0; i < (await opts.count()); i++) {
         const t = ((await opts.nth(i).textContent()) || '').trim();
         if (t) texts.push(t);
       }
+      await page.keyboard.press('Escape');
       // trade INACTIVE chỉ được giữ làm giá trị hiện tại (đánh dấu '(hiện tại)'), không còn là lựa chọn mới
       const withCode = texts.filter((t) => t.includes(TRADE_CODE));
       const banner = await page.locator('body').textContent();

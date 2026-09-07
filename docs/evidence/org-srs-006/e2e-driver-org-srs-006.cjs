@@ -115,6 +115,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
@@ -187,13 +223,11 @@ function preCleanup006() {
       await snap(page, id + '-empty', 'Danh sách đội trước khi tạo');
       await page.goto(`${WEB}/crews/new`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#crew-code', { timeout: 15000 });
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#crew-leader');
-        return s && s.tagName === 'SELECT' && s.options.length > 1;
-      }, { timeout: 20000 });
+      await page.waitForSelector('#crew-leader:not([disabled])', { timeout: 20000 });
+      await arkWaitOptions(page, 'crew-leader', 2);
       await page.fill('#crew-code', CREW_CODE);
       await page.fill('#crew-name', CREW_NAME);
-      await page.selectOption('#crew-leader', WORKER1_ID);
+      await arkSelectOption(page, 'crew-leader', WORKER1_ID);
       await snap(page, id + '-form', 'Form tạo đội đã điền (code + tên + leader worker1)');
       await page.locator('button', { hasText: 'Tạo đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Tạo đội thi công thành công'), { timeout: 20000 });
@@ -254,12 +288,10 @@ function preCleanup006() {
       const auditBefore = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_type='CREW' AND entity_id='${crewId}' AND action='ORG_CREW_LEAD_CHANGED'`);
       await page.goto(`${WEB}/crews/${crewId}/edit`, { waitUntil: 'networkidle' });
       await page.waitForSelector('#crew-name', { timeout: 15000 });
-      await page.waitForFunction(() => {
-        const s = document.querySelector('#crew-leader');
-        return s && s.tagName === 'SELECT' && s.options.length > 1;
-      }, { timeout: 20000 });
+      await page.waitForSelector('#crew-leader:not([disabled])', { timeout: 20000 });
+      await arkWaitOptions(page, 'crew-leader', 2);
       await page.fill('#crew-name', CREW_NAME2);
-      await page.selectOption('#crew-leader', WORKER2_ID);
+      await arkSelectOption(page, 'crew-leader', WORKER2_ID);
       await page.locator('button', { hasText: 'Lưu thay đổi' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Xác nhận đổi trưởng nhóm'), { timeout: 10000 });
       await snap(page, id + '-confirm', 'Confirm inline đổi trưởng nhóm');

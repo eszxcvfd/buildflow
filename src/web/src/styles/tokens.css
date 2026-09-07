@@ -1,61 +1,100 @@
 /* ==========================================================================
-   Buildflow design tokens — "Blueprint & Site"
-   Ngôn ngữ thị giác: bản vẽ kỹ thuật (navy mực) + công trường (cam an toàn).
-   Cam chỉ dùng cho hành động và điểm nhấn dữ liệu; màu status chỉ trong badge.
+   Buildflow design tokens — DashCode port (stage 1 foundation).
+   Canonical palette source: theme/dashcode `tailwind.config.cjs`
+   (primary #4669FA scale, danger #F1595C, warning #FA916B, info #0CE7FA,
+   success #50C793, gray slate-like ramp). Every pre-existing `--bf-*` NAME
+   is preserved (E2E drivers + tests depend on them); only VALUES changed.
+
+   Old ("Blueprint & Site") → new (DashCode) mapping:
+   --------------------------------------------------------------------------
+   --bf-ink            #14243D → #0F172A  (gray-900)
+   --bf-ink-soft       #1D3152 → #1E293B  (gray-800)
+   --bf-paper          #F2F4F7 → #F4F5F7  (gray-100, page bg)
+   --bf-surface        #FFFFFF → #FFFFFF  (unchanged, cards)
+   --bf-surface-2      #F7F9FB → #F9FAFB  (gray-50, zebra rows)
+   --bf-text           #1C2B42 → #1E293B  (gray-800)
+   --bf-muted          #5C6B82 → #475569  (gray-600)
+   --bf-faint          #8A97AB → #9FA6B2  (gray-400)
+   --bf-text-on-ink    #E8EDF5 → #FFFFFF  (for primary/dark surfaces)
+   --bf-muted-on-ink   #97A7C1 → #CBD5E1  (slate-300, meta on dark)
+   --bf-line           #DCE1E8 → #E5E7EB  (gray-200)
+   --bf-line-strong    #C4CCD8 → #D2D6DC  (gray-300)
+   --bf-accent         #E8590C → #4669FA  (primary-500)
+   --bf-accent-hover   #CF4D09 → #3F5EDF  (primary-600)
+   --bf-accent-soft    #FDEEE4 → #EDF0FF  (primary-100)
+   --bf-ok             #0E7C4A → #50C793  (success-500)
+   --bf-ok-bg          #E2F4EA → #E7FDF1  (success-100)
+   --bf-busy           #925E00 → #FA916B  (warning-500)
+   --bf-busy-bg        #FBF0D9 → #FFF4F1  (warning-100)
+   --bf-risk           #C0331B → #F1595C  (danger-500)
+   --bf-risk-bg        #FBE9E5 → #FEEFEF  (danger-100)
+   --bf-idle           #5C6B82 → #68768A  (gray-500)
+   --bf-idle-bg        #EBF0F5 → #F4F5F7  (gray-100)
+   --bf-info           #1D5BBF → #0CE7FA  (info-500)
+   --bf-info-bg        #E7EFFB → #E7FEFF  (info-100)
+   --bf-focus          #1D5BBF → #4669FA  (primary-500)
+   --bf-r-card         10px    → 6px      (rounded-md, DashCode cards)
+   --bf-r-control      6px     → 6px      (unchanged step)
+   --bf-r-pill         999px   → 999px    (unchanged)
+   --bf-shadow-card    navy 2-layer → dashcode `base`
+   --bf-shadow-pop     navy 28px    → dashcode `dropdown`
+   --bf-sidebar-w / --bf-shell-max / --bf-gutter unchanged (layout steps)
+   --bf-font           Be Vietnam Pro first → Inter first, Be Vietnam Pro kept
+                       as fallback in the chain.
    ========================================================================== */
 
 :root {
   /* Nền & bề mặt */
-  --bf-ink: #14243d;          /* navy bản vẽ: sidebar, tiêu đề */
-  --bf-ink-soft: #1d3152;     /* hover/gradient trên navy */
-  --bf-paper: #f2f4f7;        /* nền app — bê tông nhạt */
+  --bf-ink: #0f172a;          /* gray-900: tiêu đề */
+  --bf-ink-soft: #1e293b;     /* gray-800 */
+  --bf-paper: #f4f5f7;        /* gray-100: nền app */
   --bf-surface: #ffffff;      /* thẻ */
-  --bf-surface-2: #f7f9fb;    /* thẻ phụ / dòng bảng xen kẽ */
+  --bf-surface-2: #f9fafb;    /* gray-50: thẻ phụ / dòng bảng xen kẽ */
 
   /* Chữ */
-  --bf-text: #1c2b42;
-  --bf-muted: #5c6b82;        /* xám xanh: phụ đề, meta */
-  --bf-faint: #8a97ab;        /* placeholder, meta yếu hơn */
-  --bf-text-on-ink: #e8edf5;
-  --bf-muted-on-ink: #97a7c1;
+  --bf-text: #1e293b;
+  --bf-muted: #475569;        /* gray-600: phụ đề, meta */
+  --bf-faint: #9fa6b2;        /* gray-400: placeholder, meta yếu hơn */
+  --bf-text-on-ink: #ffffff;
+  --bf-muted-on-ink: #cbd5e1; /* slate-300 */
 
-  /* Vạch kẻ — như đường chỉ trên bản vẽ */
-  --bf-line: #dce1e8;
-  --bf-line-strong: #c4ccd8;
+  /* Vạch kẻ */
+  --bf-line: #e5e7eb;         /* gray-200 */
+  --bf-line-strong: #d2d6dc;  /* gray-300 */
 
-  /* Cam an toàn — hành động + điểm nhấn dữ liệu, KHÔNG sơn nền section */
-  --bf-accent: #e8590c;
-  --bf-accent-hover: #cf4d09;
-  --bf-accent-soft: #fdeee4;  /* tint nền khi cần nhấn nhẹ */
+  /* Primary — hành động + điểm nhấn dữ liệu */
+  --bf-accent: #4669fa;       /* primary-500 */
+  --bf-accent-hover: #3f5edf; /* primary-600 */
+  --bf-accent-soft: #edf0ff;  /* primary-100 */
 
   /* Trạng thái (chỉ dùng trong badge/indicator) */
-  --bf-ok: #0e7c4a;
-  --bf-ok-bg: #e2f4ea;
-  --bf-busy: #925e00;
-  --bf-busy-bg: #fbf0d9;
-  --bf-risk: #c0331b;
-  --bf-risk-bg: #fbe9e5;
-  --bf-idle: #5c6b82;
-  --bf-idle-bg: #ebf0f5;
-  --bf-info: #1d5bbf;
-  --bf-info-bg: #e7effb;
+  --bf-ok: #50c793;
+  --bf-ok-bg: #e7fdf1;
+  --bf-busy: #fa916b;
+  --bf-busy-bg: #fff4f1;
+  --bf-risk: #f1595c;
+  --bf-risk-bg: #feefef;
+  --bf-idle: #68768a;
+  --bf-idle-bg: #f4f5f7;
+  --bf-info: #0ce7fa;
+  --bf-info-bg: #e7feff;
 
   /* Focus */
-  --bf-focus: #1d5bbf;
+  --bf-focus: #4669fa;
 
-  /* Hình học — bán kính phân tầng theo cấp bậc (sắc, kỹ thuật như bản vẽ) */
-  --bf-r-card: 10px;
+  /* Hình học */
+  --bf-r-card: 6px;
   --bf-r-control: 6px;
   --bf-r-pill: 999px;
 
-  /* Bóng — đúng 1 cấp, thẻ nổi mới có */
-  --bf-shadow-card: 0 1px 2px rgba(20, 36, 61, 0.05), 0 4px 14px rgba(20, 36, 61, 0.05);
-  --bf-shadow-pop: 0 8px 28px rgba(20, 36, 61, 0.16);
+  /* Bóng — DashCode base / dropdown */
+  --bf-shadow-card: 0px 0px 1px rgba(40, 41, 61, 0.08), 0px 0.5px 2px rgba(96, 97, 112, 0.16);
+  --bf-shadow-pop: 0px 4px 8px rgba(0, 0, 0, 0.08);
 
   /* Kích thước bố cục */
   --bf-sidebar-w: 248px;
   --bf-shell-max: 1280px;
   --bf-gutter: 24px;
 
-  --bf-font: var(--font-be-vietnam-pro, 'Be Vietnam Pro'), system-ui, sans-serif;
+  --bf-font: var(--font-inter, var(--font-be-vietnam-pro, 'Be Vietnam Pro')), system-ui, sans-serif;
 }

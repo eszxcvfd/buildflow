@@ -15,6 +15,16 @@ import {
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
+import { EmptyState } from '@/components/ui/empty-state/EmptyState';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ActiveChips,
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 export function shortUuid(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
@@ -32,6 +42,8 @@ function statusTone(status: string): { label: string; color: string } {
       return { label: status, color: '#374151' };
   }
 }
+
+const PAGE_SIZE = 20;
 
 /**
  * ORG-SRS-004 (issue #27) — lifecycle status worker:
@@ -52,6 +64,7 @@ export function WorkerList() {
   const [error, setError] = React.useState<ApiError | null>(null);
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState('');
+  const [offset, setOffset] = React.useState(0);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [actionInfo, setActionInfo] = React.useState<string | null>(null);
@@ -67,8 +80,8 @@ export function WorkerList() {
       const res = await listWorkers({
         search: search.trim() || undefined,
         status: statusFilter || undefined,
-        limit: 20,
-        offset: 0,
+        limit: PAGE_SIZE,
+        offset,
       });
       setWorkers(res.data);
       setTotal(res.total);
@@ -77,7 +90,7 @@ export function WorkerList() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [search, statusFilter, offset]);
 
   React.useEffect(() => {
     void load();
@@ -161,6 +174,14 @@ export function WorkerList() {
     setConfirmTarget(null);
   }
 
+  const hasActiveFilter = search.trim() !== '' || statusFilter !== '';
+
+  function handleClearFilters() {
+    setSearch('');
+    setStatusFilter('');
+    setOffset(0);
+  }
+
   if (loading) {
     return (
       <Card>
@@ -209,47 +230,61 @@ export function WorkerList() {
     );
   }
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div style={{ flex: '1 1 220px' }}>
-            <label htmlFor="worker-search" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>
-              Tìm kiếm
-            </label>
-            <input
-              id="worker-search"
-              placeholder="Tên, email, mã nhân viên…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem' }}
+        <ListToolbar count={`Tổng: ${total} hồ sơ · Hiển thị ${workers.length}`}>
+          <SearchField
+            id="worker-search"
+            label="Tìm kiếm"
+            placeholder="Tên, email, mã nhân viên…"
+            value={search}
+            onChange={(v) => { setSearch(v); setOffset(0); }}
+            onSubmit={() => { setOffset(0); void load(); }}
+          />
+          <div className="bf-filter">
+            <Select
+              id="worker-status"
+              label="Trạng thái"
+              hideLabel
+              value={statusFilter}
+              options={[
+                { value: '', label: 'Tất cả trạng thái' },
+                { value: 'ACTIVE', label: 'Hoạt động' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+                { value: 'LOCKED', label: 'Bị khóa' },
+              ]}
+              onChange={(v) => { setStatusFilter(v); setOffset(0); }}
             />
           </div>
-          <div style={{ minWidth: 160 }}>
-            <label htmlFor="worker-status" style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: 4 }}>
-              Trạng thái
-            </label>
-            <select
-              id="worker-status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ width: '100%', border: '1px solid #d1d5db', borderRadius: 8, padding: '0.55rem 0.75rem', background: '#fff' }}
-            >
-              <option value="">Tất cả</option>
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Ngừng hoạt động</option>
-              <option value="LOCKED">Bị khóa</option>
-            </select>
-          </div>
-          <Button variant="secondary" onClick={() => void load()}>
+          <Button variant="secondary" onClick={() => { setOffset(0); void load(); }}>
             Tìm
           </Button>
-          <a className="bf-btn bf-btn-primary" href="/workers/new" style={{ marginLeft: 'auto', alignSelf: 'center' }}>
-            Thêm công nhân
-          </a>
-        </div>
-        <p style={{ margin: '0.75rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
-          Tổng: {total} hồ sơ · Hiển thị {workers.length} · Worker ngừng hoạt động được giữ lịch sử, không cho phân công mới.
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
+        <ActiveChips
+          chips={[
+            ...(statusFilter
+              ? [{
+                  key: 'status',
+                  label: `Trạng thái: ${statusFilter === 'ACTIVE' ? 'Hoạt động' : statusFilter === 'INACTIVE' ? 'Ngừng hoạt động' : 'Bị khóa'}`,
+                  onRemove: () => { setStatusFilter(''); setOffset(0); },
+                }]
+              : []),
+            ...(search.trim()
+              ? [{
+                  key: 'q',
+                  label: `Tìm: “${search.trim()}”`,
+                  onRemove: () => { setSearch(''); setOffset(0); },
+                }]
+              : []),
+          ]}
+        />
+        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
+          Worker ngừng hoạt động được giữ lịch sử, không cho phân công mới.
         </p>
       </Card>
 
@@ -273,77 +308,110 @@ export function WorkerList() {
 
       {workers.length === 0 ? (
         <Card>
-          <p style={{ margin: 0, color: '#6b7280' }}>Chưa có worker nào phù hợp bộ lọc.</p>
-          <p style={{ margin: '0.5rem 0 0', color: '#6b7280', fontSize: '0.9rem' }}>
+          <EmptyState
+            title="Chưa có worker nào phù hợp bộ lọc"
+            action={
+              <a className="bf-btn bf-btn-primary" href="/workers/new">
+                Thêm công nhân
+              </a>
+            }
+          >
             Thử thay đổi từ khóa hoặc tạo hồ sơ mới.
-          </p>
+          </EmptyState>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {workers.map((w) => {
-            const s = statusTone(w.status);
-            const rowBusy = busyId === w.id;
-            return (
-              <Card key={w.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>
-                      <a href={`/workers/${w.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
-                        {w.fullName}
-                      </a>{' '}
-                      <span style={{ fontWeight: 400, color: '#6b7280', fontSize: '0.9rem' }}>· {w.email}</span>
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: '0.88rem', color: '#374151' }}>
-                      Mã: <strong>{w.employeeCode ?? '—'}</strong> · SĐT: {w.phone ?? '—'} ·{' '}
-                      <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span> ·{' '}
-                      <span style={{ color: w.eligible ? '#065f46' : '#991b1b' }}>{w.eligible ? 'Đang hoạt động' : 'Không hoạt động (không nhận việc mới)'}</span>
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: '0.85rem', color: '#6b7280' }}>
-                      Ngành nghề: {w.trades.length
-                        ? w.trades
-                            .map((t) => {
-                              const label = tradeNames.names.get(t.tradeId);
-                              return label ? `${label} · Lv${t.skillLevel}` : `${shortUuid(t.tradeId)} Lv${t.skillLevel}`;
-                            })
-                            .join(', ')
-                        : '—'} · Tạo: {new Date(w.createdAt).toLocaleDateString('vi-VN')}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {!w.eligible ? <span style={{ fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 6, padding: '0.2rem 0.5rem' }}>Không nhận việc mới</span> : null}
-                    {w.status === 'ACTIVE' ? (
-                      <>
-                        <Button
-                          variant="secondary"
-                          onClick={() => openDialog(w, 'SUSPEND')}
-                          disabled={rowBusy}
-                          title="Tạm ngừng — lý do bắt buộc, có cảnh báo công việc mở"
-                        >
-                          Tạm ngừng
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => openDialog(w, 'TERMINATE')}
-                          disabled={rowBusy}
-                          title="Chấm dứt — lý do bắt buộc, lịch sử vẫn giữ"
-                        >
-                          Chấm dứt
-                        </Button>
-                      </>
-                    ) : w.status === 'INACTIVE' ? (
-                      <Button variant="secondary" onClick={() => openDialog(w, 'ACTIVATE')} disabled={rowBusy}>
-                        Kích hoạt lại
-                      </Button>
-                    ) : null}
-                    <a href={`/workers/${w.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                      Chi tiết
-                    </a>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <Card>
+          <div className="bf-table-wrap">
+            <table className="bf-table">
+              <thead>
+                <tr>
+                  <th>Tên</th>
+                  <th>Mã NV</th>
+                  <th>Trạng thái</th>
+                  <th>Điều kiện phân công</th>
+                  <th>Ngành nghề</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workers.map((w) => {
+                  const s = statusTone(w.status);
+                  const rowBusy = busyId === w.id;
+                  return (
+                    <tr key={w.id}>
+                      <td>
+                        <a href={`/workers/${w.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
+                          {w.fullName}
+                        </a>
+                        <div className="bf-card-meta">{w.email}</div>
+                      </td>
+                      <td>{w.employeeCode ?? '—'}</td>
+                      <td>
+                        <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
+                      </td>
+                      <td>
+                        {w.eligible ? (
+                          <span style={{ color: '#065f46' }}>Đang hoạt động</span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ color: '#991b1b' }}>Không hoạt động (không nhận việc mới)</span>
+                            <span className="bf-badge bf-badge-risk">Không nhận việc mới</span>
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ color: '#6b7280', maxWidth: 260 }}>
+                        {w.trades.length
+                          ? w.trades
+                              .map((t) => {
+                                const label = tradeNames.names.get(t.tradeId);
+                                return label ? `${label} · Lv${t.skillLevel}` : `${shortUuid(t.tradeId)} Lv${t.skillLevel}`;
+                              })
+                              .join(', ')
+                          : '—'}
+                      </td>
+                      <td className="bf-cell-actions">
+                        <span className="bf-row-actions">
+                          {w.status === 'ACTIVE' ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openDialog(w, 'SUSPEND')}
+                                disabled={rowBusy}
+                                title="Tạm ngừng — lý do bắt buộc, có cảnh báo công việc mở"
+                              >
+                                Tạm ngừng
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openDialog(w, 'TERMINATE')}
+                                disabled={rowBusy}
+                                title="Chấm dứt — lý do bắt buộc, lịch sử vẫn giữ"
+                              >
+                                Chấm dứt
+                              </Button>
+                            </>
+                          ) : w.status === 'INACTIVE' ? (
+                            <Button variant="secondary" size="sm" onClick={() => openDialog(w, 'ACTIVATE')} disabled={rowBusy}>
+                              Kích hoạt lại
+                            </Button>
+                          ) : null}
+                          <Tooltip content="Xem hồ sơ chi tiết">
+                            <a className="bf-detail-link" href={`/workers/${w.id}`}>
+                              Chi tiết
+                            </a>
+                          </Tooltip>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <ListPagination page={page} totalPages={totalPages} onPage={(p) => setOffset((p - 1) * PAGE_SIZE)} prevLabel="Trước" nextLabel="Sau" />
+        </Card>
       )}
 
       {confirmTarget ? (

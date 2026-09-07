@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { cn } from '@/lib/cn';
 
 export function Card({
   children,
@@ -10,7 +11,10 @@ export function Card({
   style?: React.CSSProperties;
 }) {
   return (
-    <div className={['bf-card', className].filter(Boolean).join(' ')} style={style}>
+    <div
+      className={cn('bf-card', 'rounded-md border border-slate-200/60 bg-white shadow-base', className)}
+      style={style}
+    >
       {children}
     </div>
   );

@@ -13,6 +13,8 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 const EMPTY: AdminUserFormValues = {
   email: '',
@@ -52,6 +54,7 @@ export function AdminUserCreateForm() {
         userType: values.userType as 'STAFF' | 'WORKER',
       });
       setSuccess(created);
+      toast.success({ title: `Đã tạo tài khoản ${created.email}` });
       setValues(EMPTY);
       setFieldErrors({});
     } catch (err) {
@@ -88,7 +91,7 @@ export function AdminUserCreateForm() {
           <Input id="au-fullname" value={values.fullName} onChange={(ev) => set('fullName', ev.target.value)} hasError={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'au-fullname-err' : undefined} />
           {fieldErrors.fullName ? <p id="au-fullname-err" className="bf-field-error" role="alert">{fieldErrors.fullName.join(' ')}</p> : null}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="au-phone">Số điện thoại</label>
             <Input id="au-phone" value={values.phone} onChange={(ev) => set('phone', ev.target.value)} hasError={Boolean(fieldErrors.phone)} aria-describedby={fieldErrors.phone ? 'au-phone-err' : undefined} />
@@ -101,14 +104,19 @@ export function AdminUserCreateForm() {
           </div>
         </div>
         <div className="bf-field">
-          <label className="bf-label" htmlFor="au-user-type">Loại tài khoản *</label>
-          <select id="au-user-type" className="bf-input" value={values.userType} onChange={(ev) => set('userType', ev.target.value)}>
-            <option value="STAFF">STAFF — Nhân viên</option>
-            <option value="WORKER">WORKER — Công nhân</option>
-          </select>
+          <Select
+            id="au-user-type"
+            label="Loại tài khoản *"
+            value={values.userType}
+            options={[
+              { value: 'STAFF', label: 'STAFF — Nhân viên' },
+              { value: 'WORKER', label: 'WORKER — Công nhân' },
+            ]}
+            onChange={(v) => set('userType', v as AdminUserFormValues['userType'])}
+          />
           {fieldErrors.userType ? <p className="bf-field-error" role="alert">{fieldErrors.userType.join(' ')}</p> : null}
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <div className="bf-form-actions">
           <Button type="submit" loading={saving} aria-busy={saving}>Tạo tài khoản</Button>
           <a href="/admin/users">Hủy</a>
         </div>
@@ -171,6 +179,7 @@ export function AdminUserEditForm({ userId }: { userId: string }) {
         userType: values.userType as 'STAFF' | 'WORKER',
       });
       setSuccess(true);
+      toast.success({ title: 'Đã cập nhật tài khoản' });
     } catch (err) {
       const e2 = err as AdminUserError;
       if (e2.fieldErrors) setFieldErrors(e2.fieldErrors);
@@ -215,7 +224,7 @@ export function AdminUserEditForm({ userId }: { userId: string }) {
           <Input id="aue-fullname" value={values.fullName} onChange={(ev) => set('fullName', ev.target.value)} hasError={Boolean(fieldErrors.fullName)} aria-describedby={fieldErrors.fullName ? 'aue-fullname-err' : undefined} />
           {fieldErrors.fullName ? <p id="aue-fullname-err" className="bf-field-error" role="alert">{fieldErrors.fullName.join(' ')}</p> : null}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="aue-phone">Số điện thoại</label>
             <Input id="aue-phone" value={values.phone} onChange={(ev) => set('phone', ev.target.value)} hasError={Boolean(fieldErrors.phone)} />
@@ -228,14 +237,19 @@ export function AdminUserEditForm({ userId }: { userId: string }) {
           </div>
         </div>
         <div className="bf-field">
-          <label className="bf-label" htmlFor="aue-user-type">Loại tài khoản *</label>
-          <select id="aue-user-type" className="bf-input" value={values.userType} onChange={(ev) => set('userType', ev.target.value)}>
-            <option value="STAFF">STAFF — Nhân viên</option>
-            <option value="WORKER">WORKER — Công nhân</option>
-          </select>
+          <Select
+            id="aue-user-type"
+            label="Loại tài khoản *"
+            value={values.userType}
+            options={[
+              { value: 'STAFF', label: 'STAFF — Nhân viên' },
+              { value: 'WORKER', label: 'WORKER — Công nhân' },
+            ]}
+            onChange={(v) => set('userType', v as AdminUserFormValues['userType'])}
+          />
           {fieldErrors.userType ? <p className="bf-field-error" role="alert">{fieldErrors.userType.join(' ')}</p> : null}
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <div className="bf-form-actions">
           <Button type="submit" loading={saving} aria-busy={saving}>Lưu thay đổi</Button>
           <a href="/admin/users">Hủy</a>
         </div>

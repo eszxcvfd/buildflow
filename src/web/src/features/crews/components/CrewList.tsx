@@ -7,8 +7,16 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
-import { Input } from '@/components/ui/input/Input';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ActiveChips,
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 const PAGE_SIZE = 20;
 
@@ -113,79 +121,116 @@ export function CrewList() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const hasActiveFilter =
+    search.trim() !== '' || statusFilter !== '' || eligibleOnly || sort !== 'createdAt' || order !== 'desc';
+
+  function handleClearFilters() {
+    setSearch('');
+    setStatusFilter('');
+    setEligibleOnly(false);
+    setSort('createdAt');
+    setOrder('desc');
+    setOffset(0);
+  }
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="crew-search">Tìm kiếm</label>
-            <Input
-              id="crew-search"
-              placeholder="Mã, tên hoặc mô tả đội…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="bf-field" style={{ minWidth: 180 }}>
-            <label className="bf-label" htmlFor="crew-status">Trạng thái</label>
-            <select
+        <ListToolbar count={`Tổng: ${total} đội · Hiển thị ${crews.length}`}>
+          <SearchField
+            id="crew-search"
+            label="Tìm kiếm"
+            placeholder="Mã, tên hoặc mô tả đội…"
+            value={search}
+            onChange={(v) => { setSearch(v); setOffset(0); }}
+            onSubmit={() => { setOffset(0); void load(); }}
+          />
+          <div className="bf-filter">
+            <Select
               id="crew-status"
-              className="bf-input"
+              label="Trạng thái"
+              hideLabel
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setOffset(0); }}
-            >
-              <option value="">Tất cả</option>
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Ngừng hoạt động</option>
-            </select>
-          </div>
-          <div className="bf-field" style={{ minWidth: 140 }}>
-            <label className="bf-label" htmlFor="crew-sort">Sắp xếp</label>
-            <select
-              id="crew-sort"
-              className="bf-input"
-              value={sort}
-              onChange={(e) => { setSort(e.target.value); setOffset(0); }}
-            >
-              {SORTS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="bf-field" style={{ minWidth: 130 }}>
-            <label className="bf-label" htmlFor="crew-order">Thứ tự</label>
-            <select
-              id="crew-order"
-              className="bf-input"
-              value={order}
-              onChange={(e) => { setOrder(e.target.value); setOffset(0); }}
-            >
-              {ORDERS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.9rem' }}>
-            <input
-              type="checkbox"
-              id="crew-eligible-only"
-              checked={eligibleOnly}
-              onChange={(e) => { setEligibleOnly(e.target.checked); setOffset(0); }}
+              options={[
+                { value: '', label: 'Tất cả trạng thái' },
+                { value: 'ACTIVE', label: 'Hoạt động' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+              ]}
+              onChange={(v) => { setStatusFilter(v); setOffset(0); }}
             />
-            Chỉ đội đủ điều kiện
-          </label>
+          </div>
+          <div className="bf-filter">
+            <Select
+              id="crew-sort"
+              label="Sắp xếp"
+              hideLabel
+              value={sort}
+              options={SORTS}
+              onChange={(v) => { setSort(v); setOffset(0); }}
+            />
+          </div>
+          <div className="bf-filter">
+            <Select
+              id="crew-order"
+              label="Thứ tự"
+              hideLabel
+              value={order}
+              options={ORDERS}
+              onChange={(v) => { setOrder(v); setOffset(0); }}
+            />
+          </div>
           <Button variant="secondary" onClick={() => { setOffset(0); void load(); }}>Tìm</Button>
-        </div>
-        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} đội · Hiển thị {crews.length} · Đội ngừng hoạt động không nhận phân công mới
-          nhưng lịch sử công việc đã hoàn tất vẫn giữ nguyên.
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
+        <ActiveChips
+          chips={[
+            ...(statusFilter
+              ? [{
+                  key: 'status',
+                  label: `Trạng thái: ${statusFilter === 'ACTIVE' ? 'Hoạt động' : 'Ngừng hoạt động'}`,
+                  onRemove: () => { setStatusFilter(''); setOffset(0); },
+                }]
+              : []),
+            ...(eligibleOnly
+              ? [{
+                  key: 'eligible',
+                  label: 'Chỉ đội đủ điều kiện',
+                  onRemove: () => { setEligibleOnly(false); setOffset(0); },
+                }]
+              : []),
+            ...(search.trim()
+              ? [{
+                  key: 'q',
+                  label: `Tìm: “${search.trim()}”`,
+                  onRemove: () => { setSearch(''); setOffset(0); },
+                }]
+              : []),
+          ]}
+        />
+        <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.88rem', color: 'var(--bf-muted)', marginTop: '0.75rem', cursor: 'pointer', width: 'fit-content' }}>
+          <input
+            type="checkbox"
+            id="crew-eligible-only"
+            checked={eligibleOnly}
+            onChange={(e) => { setEligibleOnly(e.target.checked); setOffset(0); }}
+          />
+          Chỉ đội đủ điều kiện
+        </label>
+        <p className="bf-card-meta" style={{ marginTop: '0.5rem' }}>
+          Đội ngừng hoạt động không nhận phân công mới nhưng lịch sử công việc đã hoàn tất vẫn giữ nguyên.
         </p>
       </Card>
 
       {crews.length === 0 ? (
         <Card>
-          <EmptyState title="Chưa có đội thi công nào phù hợp bộ lọc">
+          <EmptyState
+            title="Chưa có đội thi công nào phù hợp bộ lọc"
+            action={
+              <a className="bf-btn bf-btn-primary" href="/crews/new">
+                Tạo đội
+              </a>
+            }
+          >
             Thử thay đổi từ khóa hoặc tạo đội mới.
           </EmptyState>
         </Card>
@@ -199,14 +244,14 @@ export function CrewList() {
                   <th>Mã</th>
                   <th>Trạng thái</th>
                   <th>Điều kiện phân công</th>
-                  <th>Hành động</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
                 {crews.map((c) => (
                   <tr key={c.id}>
                     <td>
-                      <a href={`/crews/${c.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+                      <a href={`/crews/${c.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                         {c.name}
                       </a>
                     </td>
@@ -219,35 +264,21 @@ export function CrewList() {
                         {c.eligible ? 'Đủ điều kiện phân công' : 'Không nhận việc mới'}
                       </span>
                     </td>
-                    <td>
-                      <a href={`/crews/${c.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                        Chi tiết
-                      </a>
+                    <td className="bf-cell-actions">
+                      <span className="bf-row-actions">
+                        <Tooltip content="Xem chi tiết đội">
+                          <a className="bf-detail-link" href={`/crews/${c.id}`}>
+                            Chi tiết
+                          </a>
+                        </Tooltip>
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {totalPages > 1 ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '0.85rem', flexWrap: 'wrap' }}>
-              <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                Trang {page}/{totalPages}
-              </span>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <Button variant="secondary" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}>
-                  Trước
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={offset + PAGE_SIZE >= total}
-                  onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                >
-                  Sau
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <ListPagination page={page} totalPages={totalPages} onPage={(p) => setOffset((p - 1) * PAGE_SIZE)} prevLabel="Trước" nextLabel="Sau" />
         </Card>
       )}
     </div>

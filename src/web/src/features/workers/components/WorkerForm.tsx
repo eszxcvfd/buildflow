@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -133,6 +135,7 @@ export function WorkerForm({ mode, initial }: Props) {
           ...(tradesPayload ? { trades: tradesPayload } : {}),
         });
         setGlobalSuccess('Tạo worker thành công');
+        toast.success({ title: 'Tạo worker thành công' });
         setTimeout(() => router.push('/workers'), 800);
       } else if (initial) {
         await updateWorker(initial.id, {
@@ -142,6 +145,7 @@ export function WorkerForm({ mode, initial }: Props) {
           ...(tradesPayload ? { trades: tradesPayload } : {}),
         });
         setGlobalSuccess('Cập nhật worker thành công');
+        toast.success({ title: 'Cập nhật worker thành công' });
         setTimeout(() => router.push('/workers'), 800);
       }
     } catch (err) {
@@ -216,7 +220,7 @@ export function WorkerForm({ mode, initial }: Props) {
           {fieldErrors.fullName ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.fullName.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div>
             <label htmlFor="phone" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>
               SĐT
@@ -235,9 +239,6 @@ export function WorkerForm({ mode, initial }: Props) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '0.75rem' }}>
           <div>
-            <label htmlFor="tradeId" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>
-              Ngành nghề {mode === 'create' ? '' : '(đang hoạt động)'}
-            </label>
             {tradesLoadFailed ? (
               <>
                 <Input id="tradeId" placeholder="11111111-1111-4111-8111-111111111111" value={tradeId} onChange={(e) => setTradeId(e.target.value)} hasError={Boolean(fieldErrors.tradeId || fieldErrors.trades)} />
@@ -246,58 +247,54 @@ export function WorkerForm({ mode, initial }: Props) {
               </>
             ) : (
               <>
-                <select
+                <Select
                   id="tradeId"
+                  label={mode === 'create' ? 'Ngành nghề ' : 'Ngành nghề (đang hoạt động)'}
                   value={tradesLoading && !currentTradeActive && !tradeId ? '' : tradeId}
-                  onChange={(e) => {
-                    setTradeId(e.target.value);
-                    if (!e.target.value) setSkillLevel('');
+                  options={[
+                    ...(mode === 'edit' && initialTradeId
+                      ? [{ value: initialTradeId, label: currentTradeLabel }]
+                      : [{ value: '', label: tradesLoading ? 'Đang tải danh mục…' : '— Không gán ngành nghề —' }]),
+                    ...trades
+                      .filter((t) => !(mode === 'edit' && t.id === initialTradeId))
+                      .map((t) => ({ value: t.id, label: `${t.code} — ${t.name}` })),
+                  ]}
+                  onChange={(v) => {
+                    setTradeId(v);
+                    if (!v) setSkillLevel('');
                   }}
-                  aria-busy={tradesLoading || undefined}
                   disabled={tradesLoading}
-                  style={{ width: '100%', border: `1px solid ${fieldErrors.tradeId || fieldErrors.trades ? '#ef4444' : '#d1d5db'}`, borderRadius: 8, padding: '0.6rem 0.75rem', background: '#fff' }}
-                >
-                  {mode === 'edit' && initialTradeId ? (
-                    <option value={initialTradeId}>{currentTradeLabel}</option>
-                  ) : (
-                    <option value="">{tradesLoading ? 'Đang tải danh mục…' : '— Không gán ngành nghề —'}</option>
-                  )}
-                  {trades
-                    .filter((t) => !(mode === 'edit' && t.id === initialTradeId))
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.code} — {t.name}
-                      </option>
-                    ))}
-                </select>
+                  placeholder={tradesLoading ? 'Đang tải danh mục…' : '— Không gán ngành nghề —'}
+                  aria-invalid={fieldErrors.tradeId || fieldErrors.trades ? true : undefined}
+                />
                 {fieldErrors.tradeId ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.tradeId.join(' ')}</p> : null}
                 {fieldErrors.trades ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.trades.join(' ')}</p> : null}
               </>
             )}
           </div>
           <div>
-            <label htmlFor="skillLevel" style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.9rem' }}>
-              Skill Lv
-            </label>
-            <select
+            <Select
               id="skillLevel"
+              label="Skill Lv"
               value={skillLevel}
-              onChange={(e) => setSkillLevel(e.target.value)}
+              options={[
+                { value: '', label: '—' },
+                { value: '1', label: '1' },
+                { value: '2', label: '2' },
+                { value: '3', label: '3' },
+                { value: '4', label: '4' },
+                { value: '5', label: '5' },
+              ]}
+              onChange={setSkillLevel}
               disabled={!selectedTrade}
-              style={{ width: '100%', border: `1px solid ${fieldErrors.skillLevel ? '#ef4444' : '#d1d5db'}`, borderRadius: 8, padding: '0.6rem 0.75rem', background: selectedTrade ? '#fff' : '#f3f4f6' }}
-            >
-              <option value="">—</option>
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-            </select>
+              placeholder="—"
+              aria-invalid={fieldErrors.skillLevel ? true : undefined}
+            />
             {fieldErrors.skillLevel ? <p role="alert" style={{ color: '#ef4444', fontSize: '0.85rem', margin: '0.35rem 0 0' }}>{fieldErrors.skillLevel.join(' ')}</p> : null}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+        <div className="bf-form-actions">
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo worker' : 'Lưu thay đổi'}
           </Button>

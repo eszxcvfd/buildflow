@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
-import { ProjectsList } from '@/features/projects';
+import { ProjectsHeaderActions, ProjectsList } from '@/features/projects';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +9,7 @@ export default function ProjectsPage() {
       <PageHeader
         title="Dự án"
         subtitle="Các dự án bạn là thành viên — server lọc theo quyền"
+        actions={<ProjectsHeaderActions />}
       />
       <ProjectsList />
     </>

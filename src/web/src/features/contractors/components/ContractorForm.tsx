@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -82,10 +84,12 @@ export function ContractorForm({ mode, initial }: Props) {
           status: status as 'ACTIVE' | 'INACTIVE',
         });
         setGlobalSuccess('Tạo nhà thầu thành công');
+        toast.success({ title: 'Tạo nhà thầu thành công' });
         setTimeout(() => router.push('/contractors'), 800);
       } else if (initial) {
         await updateContractor(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật nhà thầu thành công');
+        toast.success({ title: 'Cập nhật nhà thầu thành công' });
         setTimeout(() => router.push(`/contractors/${initial.id}`), 800);
       }
     } catch (e) {
@@ -144,18 +148,24 @@ export function ContractorForm({ mode, initial }: Props) {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="code">Mã nhà thầu *</label>
             <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} hasError={Boolean(fieldErrors.code)} placeholder="CTR-001" />
             {fieldErrors.code ? <p className="bf-field-error" role="alert">{fieldErrors.code.join(' ')}</p> : null}
           </div>
           <div className="bf-field">
-            <label className="bf-label" htmlFor="status">Trạng thái</label>
-            <select id="status" className="bf-input" value={status} onChange={(e) => handleStatusChange(e.target.value)} style={fieldErrors.status ? { borderColor: 'var(--bf-risk)' } : undefined}>
-              <option value="ACTIVE">Hoạt động (đủ điều kiện)</option>
-              <option value="INACTIVE">Ngừng hoạt động (chặn phân công mới)</option>
-            </select>
+            <Select
+              id="status"
+              label="Trạng thái"
+              value={status}
+              options={[
+                { value: 'ACTIVE', label: 'Hoạt động (đủ điều kiện)' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động (chặn phân công mới)' },
+              ]}
+              onChange={handleStatusChange}
+              aria-invalid={fieldErrors.status ? true : undefined}
+            />
             {fieldErrors.status ? <p className="bf-field-error" role="alert">{fieldErrors.status.join(' ')}</p> : null}
           </div>
         </div>
@@ -172,7 +182,7 @@ export function ContractorForm({ mode, initial }: Props) {
           {fieldErrors.contactName ? <p className="bf-field-error" role="alert">{fieldErrors.contactName.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="phone">SĐT</label>
             <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} hasError={Boolean(fieldErrors.phone)} />
@@ -199,7 +209,7 @@ export function ContractorForm({ mode, initial }: Props) {
           {fieldErrors.scope ? <p className="bf-field-error" role="alert">{fieldErrors.scope.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+        <div className="bf-form-actions">
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>Tải lại</Button>
           <Button type="button" variant="secondary" onClick={() => router.push('/contractors')}>Hủy</Button>
           <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo nhà thầu' : 'Lưu thay đổi'}</Button>

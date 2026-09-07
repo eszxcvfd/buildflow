@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -144,10 +146,12 @@ export function ProjectForm({ mode, initial }: Props) {
           timezone: timezone.trim() || null,
         });
         setGlobalSuccess('Tạo dự án thành công');
+        toast.success({ title: 'Tạo dự án thành công' });
         setTimeout(() => router.push('/projects'), 800);
       } else if (initial) {
         await updateProject(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật dự án thành công');
+        toast.success({ title: 'Cập nhật dự án thành công' });
         setTimeout(() => router.push(`/projects/${initial.id}`), 800);
       }
     } catch (e) {
@@ -213,7 +217,7 @@ export function ProjectForm({ mode, initial }: Props) {
       {globalSuccess ? <Alert tone="success">{globalSuccess}</Alert> : null}
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="project-code">Mã dự án *</label>
             <Input
@@ -261,7 +265,7 @@ export function ProjectForm({ mode, initial }: Props) {
           {fieldErrors.address ? <p className="bf-field-error" role="alert">{fieldErrors.address.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="project-start">Ngày bắt đầu kế hoạch *</label>
             <Input
@@ -288,21 +292,17 @@ export function ProjectForm({ mode, initial }: Props) {
         </div>
 
         <div className="bf-field">
-          <label className="bf-label" htmlFor="project-timezone">Múi giờ</label>
-          <select
+          <Select
             id="project-timezone"
-            className="bf-input"
+            label="Múi giờ"
             value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            options={[
+              ...(mode === 'edit' ? [{ value: '', label: '— Giữ nguyên —' }] : []),
+              ...TIMEZONES.map((tz) => ({ value: tz, label: tz })),
+            ]}
+            onChange={setTimezone}
             aria-invalid={fieldErrors.timezone ? true : undefined}
-          >
-            {mode === 'edit' ? <option value="">— Giữ nguyên —</option> : null}
-            {TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
+          />
           {fieldErrors.timezone ? <p className="bf-field-error" role="alert">{fieldErrors.timezone.join(' ')}</p> : null}
         </div>
 
@@ -317,31 +317,25 @@ export function ProjectForm({ mode, initial }: Props) {
         </div>
 
         <div className="bf-field">
-          <label className="bf-label" htmlFor="project-manager">Quản lý dự án *</label>
           {managersLoading ? (
             <p style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }} aria-busy="true">
               Đang tải danh sách công nhân đang hoạt động…
             </p>
           ) : (
-            <select
+            <Select
               id="project-manager"
-              className="bf-input"
+              label="Quản lý dự án *"
               value={managerId}
-              onChange={(e) => setManagerId(e.target.value)}
+              options={[
+                { value: '', label: '— Chọn quản lý dự án (hồ sơ công nhân ACTIVE) —' },
+                ...(initial?.managerId && !initialManagerInList
+                  ? [{ value: initial.managerId, label: `${initial.managerId.slice(0, 8)}… — ngoài danh sách công nhân ACTIVE` }]
+                  : []),
+                ...filteredManagers.map((w) => ({ value: w.id, label: workerLabel(w) })),
+              ]}
+              onChange={setManagerId}
               aria-invalid={fieldErrors.managerId ? true : undefined}
-            >
-              <option value="">— Chọn quản lý dự án (hồ sơ công nhân ACTIVE) —</option>
-              {initial?.managerId && !initialManagerInList ? (
-                <option value={initial.managerId}>
-                  {`${initial.managerId.slice(0, 8)}… — ngoài danh sách công nhân ACTIVE`}
-                </option>
-              ) : null}
-              {filteredManagers.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {workerLabel(w)}
-                </option>
-              ))}
-            </select>
+            />
           )}
           <p style={{ color: 'var(--bf-muted)', fontSize: '0.8rem', margin: '0.25rem 0 0' }}>
             Slice này chọn quản lý từ hồ sơ công nhân đang hoạt động.
@@ -370,7 +364,7 @@ export function ProjectForm({ mode, initial }: Props) {
           {fieldErrors.description ? <p className="bf-field-error" role="alert">{fieldErrors.description.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="bf-form-actions">
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo dự án' : 'Lưu thay đổi'}
           </Button>

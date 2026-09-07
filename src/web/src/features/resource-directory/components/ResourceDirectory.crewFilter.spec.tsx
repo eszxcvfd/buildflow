@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ResourceDirectory } from './ResourceDirectory';
 import { listWorkers } from '@/lib/api/workers';
 import { listContractors } from '@/lib/api/contractors';
@@ -33,6 +34,13 @@ const listContractorsMock = listContractors as jest.Mock;
 const listCrewsMock = listCrews as jest.Mock;
 const listTradesMock = listTrades as jest.Mock;
 const canViewMock = useCanViewResourceDirectory as jest.Mock;
+
+/** Ark Select interaction (DashCode stage 2): open + choose by visible label. */
+async function selectOption(label: string, optionName: string) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('combobox', { name: label }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
 
 const CREW_ID = '33333333-3333-4333-8333-333333333333';
 
@@ -88,11 +96,12 @@ beforeEach(() => {
 
 describe('ResourceDirectory team filter ORG-SRS-007 (issue #30, D9)', () => {
   it('tab workers có select Đội thi công với options crews ACTIVE', async () => {
+    const user = userEvent.setup();
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    const select = screen.getByLabelText('Đội thi công') as HTMLSelectElement;
-    expect(select).not.toBeNull();
-    expect(screen.getByRole('option', { name: 'Doi ket cau · TEAM-001' })).not.toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Đội thi công' })).not.toBeNull();
+    await user.click(screen.getByRole('combobox', { name: 'Đội thi công' }));
+    expect(await screen.findByRole('option', { name: 'Doi ket cau · TEAM-001' })).not.toBeNull();
     expect(listCrewsMock).toHaveBeenCalledWith({ status: 'ACTIVE', limit: 100 });
   });
 
@@ -100,7 +109,7 @@ describe('ResourceDirectory team filter ORG-SRS-007 (issue #30, D9)', () => {
     mockQuery = 'tab=workers&page=2';
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
-    fireEvent.change(screen.getByLabelText('Đội thi công'), { target: { value: CREW_ID } });
+    await selectOption('Đội thi công', 'Doi ket cau · TEAM-001');
     const url = mockReplace.mock.calls[mockReplace.mock.calls.length - 1][0] as string;
     expect(url).toContain(`crew=${CREW_ID}`);
     expect(url).not.toContain('page=');
@@ -111,7 +120,9 @@ describe('ResourceDirectory team filter ORG-SRS-007 (issue #30, D9)', () => {
     render(<ResourceDirectory />);
     await screen.findByText('Nguyen Van W');
     expect(listWorkersMock).toHaveBeenCalledWith(expect.objectContaining({ crewId: CREW_ID }));
-    expect((screen.getByLabelText('Đội thi công') as HTMLSelectElement).value).toBe(CREW_ID);
+    expect(screen.getByRole('combobox', { name: 'Đội thi công' }).textContent).toContain(
+      'Doi ket cau · TEAM-001',
+    );
   });
 
   it('xóa bộ lọc gỡ ?crew=', async () => {
@@ -127,6 +138,6 @@ describe('ResourceDirectory team filter ORG-SRS-007 (issue #30, D9)', () => {
     mockQuery = 'tab=crews';
     render(<ResourceDirectory />);
     await waitFor(() => expect(listCrewsMock).toHaveBeenCalled());
-    expect(screen.queryByLabelText('Đội thi công')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Đội thi công' })).toBeNull();
   });
 });

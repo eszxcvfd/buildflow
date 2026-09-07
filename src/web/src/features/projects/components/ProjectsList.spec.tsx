@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ProjectsList } from './ProjectsList';
+import { ProjectsHeaderActions } from './ProjectsHeaderActions';
 import { listProjects } from '@/lib/api/projects';
 
 jest.mock('@/lib/api/projects', () => ({
@@ -55,7 +57,10 @@ describe('ProjectsList PRJ-SRS-001 upgrade (issue #32)', () => {
     listProjectsMock.mockResolvedValue([project(1), project(2)]);
     render(<ProjectsList />);
     await waitFor(() => expect(screen.getByText('Du an 1')).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Trạng thái'), { target: { value: 'ACTIVE' } });
+    // Ark Select: mở combobox rồi chọn option (thay fireEvent.change native).
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('combobox', { name: 'Trạng thái' }));
+    await user.click(await screen.findByRole('option', { name: 'Đang hoạt động' }));
     await waitFor(() => expect(screen.queryByText('Du an 1')).toBeNull());
     expect(screen.getByText('Du an 2')).not.toBeNull();
   });
@@ -74,10 +79,8 @@ describe('ProjectsList PRJ-SRS-001 upgrade (issue #32)', () => {
     await waitFor(() => expect(screen.getByText('Du an 1')).not.toBeNull());
   });
 
-  it('CTA Tạo dự án dẫn tới /projects/new', async () => {
-    listProjectsMock.mockResolvedValue([project(1)]);
-    render(<ProjectsList />);
-    await waitFor(() => expect(screen.getByText('Du an 1')).not.toBeNull());
+  it('CTA Tạo dự án nằm ở PageHeader actions, dẫn tới /projects/new', async () => {
+    render(<ProjectsHeaderActions />);
     const cta = screen.getByRole('link', { name: 'Tạo dự án' });
     expect(cta.getAttribute('href')).toBe('/projects/new');
   });

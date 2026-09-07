@@ -6,6 +6,7 @@
  */
 import * as React from 'react';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ContractorForm } from '@/features/contractors/components/ContractorForm';
 
 const routerMock = { replace: jest.fn(), push: jest.fn(), refresh: jest.fn() };
@@ -49,6 +50,17 @@ describe('ContractorForm (ORG-SRS-002 #25)', () => {
 
   afterEach(cleanup);
 
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>.
+ */
+async function chooseOption(comboboxName: RegExp, optionName: string) {
+  const user = userEvent.setup();
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
   it('edit giữ nguyên status: PATCH payload KHÔNG chứa status, vẫn đổi contact/scope', async () => {
     updateMock.mockResolvedValueOnce({ ...makeContractor(), contactName: 'Nguyen Van B', scope: 'Hoan thien' });
     render(<ContractorForm mode="edit" initial={makeContractor()} />);
@@ -82,7 +94,7 @@ describe('ContractorForm (ORG-SRS-002 #25)', () => {
     updateMock.mockResolvedValueOnce(makeContractor());
     render(<ContractorForm mode="edit" initial={makeContractor()} />);
 
-    fireEvent.change(screen.getByLabelText(/trạng thái/i), { target: { value: 'INACTIVE' } });
+    await chooseOption(/trạng thái/i, 'Ngừng hoạt động (chặn phân công mới)');
     // không còn dialog confirm cũ — thay bằng ghi chú hướng dẫn dùng lifecycle ở chi tiết
     expect(screen.queryByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeNull();
     expect(screen.getByText(/không thực hiện ở form hồ sơ/i)).toBeTruthy();
@@ -100,7 +112,7 @@ describe('ContractorForm (ORG-SRS-002 #25)', () => {
     updateMock.mockResolvedValueOnce(makeContractor());
     render(<ContractorForm mode="edit" initial={makeContractor({ status: 'INACTIVE', eligible: false })} />);
 
-    fireEvent.change(screen.getByLabelText(/trạng thái/i), { target: { value: 'ACTIVE' } });
+    await chooseOption(/trạng thái/i, 'Hoạt động (đủ điều kiện)');
     expect(screen.queryByText(/Xác nhận đổi trạng thái sang INACTIVE/)).toBeNull();
     expect(screen.getByText(/không thực hiện ở form hồ sơ/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /lưu thay đổi/i }));

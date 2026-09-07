@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Card } from '@/components/ui/card/Card';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -67,10 +68,12 @@ export function TradeForm({ mode, initial }: Props) {
           status: 'ACTIVE',
         });
         setGlobalSuccess('Tạo ngành nghề thành công');
+        toast.success({ title: 'Tạo ngành nghề thành công' });
         setTimeout(() => router.push('/trades'), 800);
       } else if (initial) {
         await updateTrade(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật ngành nghề thành công');
+        toast.success({ title: 'Cập nhật ngành nghề thành công' });
         setTimeout(() => router.push(`/trades/${initial.id}`), 800);
       }
     } catch (e) {
@@ -113,7 +116,7 @@ export function TradeForm({ mode, initial }: Props) {
       ) : null}
 
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="bf-form-grid">
           <div className="bf-field">
             <label className="bf-label" htmlFor="code">Mã ngành nghề *</label>
             <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} hasError={Boolean(fieldErrors.code)} placeholder="TR-001" />
@@ -140,7 +143,7 @@ export function TradeForm({ mode, initial }: Props) {
           {fieldErrors.description ? <p className="bf-field-error" role="alert">{fieldErrors.description.join(' ')}</p> : null}
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+        <div className="bf-form-actions">
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>Tải lại</Button>
           <Button type="button" variant="secondary" onClick={() => router.push('/trades')}>Hủy</Button>
           <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo ngành nghề' : 'Lưu thay đổi'}</Button>

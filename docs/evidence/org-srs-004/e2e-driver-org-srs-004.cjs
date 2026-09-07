@@ -95,6 +95,42 @@ async function getToken(email, password) {
   const r = await api('POST', '/api/v1/auth/login', null, { email, password });
   return r.body && r.body.accessToken ? r.body.accessToken : null;
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 
 function auditCount(action, entityId) {
   return psqlT(`SELECT count(*) FROM audit_logs WHERE action='${action}' AND entity_id='${entityId}'`);
@@ -271,11 +307,11 @@ function contractorStatus() {
       const ow = await api('GET', `/api/v1/workers/${WORKER_ID}/open-work`, adminToken);
       if (ow.body && ow.body.openAssignments !== 1) return fail(id, `openAssignments=${ow.body && ow.body.openAssignments} (mong đợi 1)`);
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
-      await page.selectOption('#worker-status', 'INACTIVE');
+      await arkSelectOption(page, 'worker-status', 'INACTIVE');
       await page.locator('button', { hasText: 'Tìm' }).first().click();
       await page.waitForSelector(`a[href="/workers/${WORKER_ID}"]`, { timeout: 20000 });
       await snap(page, id + '-inactive', 'WorkerList filter INACTIVE: worker hiện đúng');
-      await page.selectOption('#worker-status', 'ACTIVE');
+      await arkSelectOption(page, 'worker-status', 'ACTIVE');
       await page.locator('button', { hasText: 'Tìm' }).first().click();
       await page.waitForFunction((wid) => !Array.from(document.querySelectorAll('a')).some((x) => x.getAttribute('href') === `/workers/${wid}`), WORKER_ID, { timeout: 20000 });
       await snap(page, id + '-active', 'WorkerList filter ACTIVE: worker vắng mặt');
@@ -345,6 +381,9 @@ function contractorStatus() {
       if (anonOpen.status !== 401) return fail(id, `anon=${anonOpen.status} (mong đợi 401)`);
       await login(page, PM_EMAIL, PM_PASS);
       await page.goto(`${BASE}/workers`, { waitUntil: 'networkidle' });
+      // Dataset có thể >1 trang (seed pagination TX-8%) — search email để link worker lên trang 1.
+      await page.fill('#worker-search', 'cuong.do@vinacons.vn');
+      await page.locator('button', { hasText: 'Tìm' }).first().click();
       await page.waitForSelector(`a[href="/workers/${WORKER_ID}"]`, { timeout: 20000 });
       const navText = await page.locator('.bf-nav').textContent().catch(() => '');
       const noNavWorkers = !(navText || '').includes('Công nhân');

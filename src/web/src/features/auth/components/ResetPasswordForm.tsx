@@ -6,6 +6,7 @@ import { confirmPasswordReset, type PasswordActionError } from '@/lib/api/passwo
 import { Card } from '@/components/ui/card/Card';
 import { Input } from '@/components/ui/input/Input';
 import { Alert } from '@/components/ui/alert/Alert';
+import { Button } from '@/components/ui/button/Button';
 
 export const POLICY_HINT = 'Mật khẩu mới tối thiểu 8 ký tự, chứa ít nhất một chữ cái và một chữ số.';
 
@@ -109,15 +110,14 @@ export function ResetPasswordForm() {
             />
             {fieldError('confirmPassword', 'rp-confirm-error')}
           </div>
-          <button
+          <Button
             type="submit"
-            className="bf-btn bf-btn-primary"
             disabled={submitting || !token}
-            aria-busy={submitting || undefined}
+            loading={submitting}
             style={{ width: '100%' }}
           >
-            {submitting ? 'Đang đặt lại…' : 'Đặt lại mật khẩu'}
-          </button>
+            Đặt lại mật khẩu
+          </Button>
           <p className="bf-card-meta" style={{ margin: 0 }}>
             <a href="/login">Quay lại đăng nhập</a>
           </p>

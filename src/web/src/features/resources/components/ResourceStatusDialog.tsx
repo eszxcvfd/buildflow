@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
+import { Dialog } from '@/components/ui/dialog/Dialog';
 
 /**
  * ORG-SRS-004 (issue #27) — confirm dialog lifecycle dùng chung cho worker và
@@ -117,11 +118,8 @@ export function ResourceStatusDialog({
   const openDone = openCheck.state === 'done' ? openCheck.openAssignments : null;
 
   return (
-    <div style={{ border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>
-      <p style={{ margin: 0, fontWeight: 600, color: '#92400e' }}>
-        {title} — {resourceName}?
-      </p>
-      <p style={{ margin: '0.35rem 0 0', color: '#6b7280', fontSize: '0.85rem' }}>
+    <Dialog title={`${title} — ${resourceName}?`} onClose={onCancel}>
+      <p style={{ margin: '0', color: '#6b7280', fontSize: '0.85rem' }}>
         Trạng thái hiện tại: <strong>{currentStatus}</strong>.{' '}
         {deactivating
           ? 'Nguồn lực sẽ không nhận phân công mới; lịch sử và dữ liệu đã phát sinh được giữ nguyên. Thao tác được ghi nhật ký hệ thống kèm lý do.'
@@ -207,6 +205,6 @@ export function ResourceStatusDialog({
           Xác nhận {confirmLabel.toLowerCase()}
         </Button>
       </div>
-    </div>
+    </Dialog>
   );
 }

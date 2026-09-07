@@ -111,6 +111,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
@@ -152,13 +188,15 @@ async function gotoDetail(page, id) {
     () => (document.body.textContent || '').includes('Thành viên dự án'),
     { timeout: 25000 });
   // Đợi options user load xong (worker2 xuất hiện trong select).
-  // Lưu ý: <option> luôn 'hidden' với Playwright → đợi state attached.
-  await page.waitForSelector(`#member-add-user option[value="${W2_ID}"]`, { state: 'attached', timeout: 25000 });
+  // Ark: options luôn trong DOM — mở trigger, đợi option VISIBLE của chính nó.
+  const cidUser = await arkOpen(page, 'member-add-user');
+  await page.waitForSelector(`[id="${cidUser}"] [role="option"][data-value="${W2_ID}"]`, { timeout: 25000 });
+  await page.keyboard.press('Escape');
 }
 /** Chọn user+role trong form thêm rồi submit, đợi text mong đợi. */
 async function uiAddMember(page, userId, role) {
-  await page.selectOption('#member-add-user', userId);
-  await page.selectOption('#member-add-role', role);
+  await arkSelectOption(page, 'member-add-user', userId);
+  await arkSelectOption(page, 'member-add-role', role);
   await page.getByRole('button', { name: 'Thêm vào dự án', exact: true }).click();
 }
 
@@ -377,8 +415,12 @@ async function uiAddMember(page, userId, role) {
         return fail(id, `mong 400 fieldErrors.projectRole, được ${r.status} ${JSON.stringify(r.body).slice(0, 300)}`);
       }
       await gotoDetail(adminPage, idA);
-      const opts = await adminPage.locator('#member-add-role option').allTextContents();
-      const vals = await adminPage.locator('#member-add-role option').evaluateAll((els) => els.map((e) => e.value));
+      // Ark: đọc options của chính trigger vai trò (aria-controls).
+      const cidRole = await arkOpen(adminPage, 'member-add-role');
+      const roleBox = `[id="${cidRole}"] [role="option"]`;
+      const opts = await adminPage.locator(roleBox).allTextContents();
+      const vals = await adminPage.locator(roleBox).evaluateAll((els) => els.map((e) => e.getAttribute('data-value') || ''));
+      await adminPage.keyboard.press('Escape');
       const real = vals.filter((v) => v !== '');
       const want = ['COORDINATOR', 'QC', 'WORKER', 'VIEWER'];
       if (real.length !== 4 || !want.every((v) => real.includes(v)) || real.includes('MANAGER')) {
@@ -392,8 +434,11 @@ async function uiAddMember(page, userId, role) {
     await step('S9', 'PATCH managerId→worker3 (edit form) → MANAGER membership auto', async (id) => {
       const mgrBefore = psqlT(`SELECT user_id||'|'||project_role||'|'||is_active::text FROM project_members WHERE project_id='${idC}' AND is_active ORDER BY joined_at`);
       await adminPage.goto(`${WEB}/projects/${idC}/edit`, { waitUntil: 'networkidle' });
-      await adminPage.waitForSelector(`#project-manager option[value="${W3_ID}"]`, { state: 'attached', timeout: 25000 });
-      await adminPage.selectOption('#project-manager', W3_ID);
+      // Ark: mở trigger, đợi option manager mới VISIBLE (pool load async), đóng, rồi chọn.
+      const cidMgr = await arkOpen(adminPage, 'project-manager');
+      await adminPage.waitForSelector(`[id="${cidMgr}"] [role="option"][data-value="${W3_ID}"]`, { timeout: 25000 });
+      await adminPage.keyboard.press('Escape');
+      await arkSelectOption(adminPage, 'project-manager', W3_ID);
       await adminPage.getByRole('button', { name: 'Lưu thay đổi', exact: true }).click();
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Cập nhật dự án thành công'),

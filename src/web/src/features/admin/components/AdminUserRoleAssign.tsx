@@ -11,6 +11,7 @@ import { listAdminUsers, type AdminUser } from '@/lib/api/admin-users';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
+import { toast } from '@/components/ui/toast/Toaster';
 
 // Approved role catalog per SRS. Server re-validates; client shows only known roles.
 const APPROVED_ROLE_CODES = ['ADMIN', 'WORKER'];
@@ -24,6 +25,10 @@ export function AdminUserRoleAssign({ userId }: { userId: string }) {
   const [loadError, setLoadError] = React.useState<AdminRolesError | null>(null);
   const [globalError, setGlobalError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<{ before: string[]; after: string[] } | null>(null);
+  // Thông báo gán vai trò hiển thị cả inline (giữ assert hiện có) lẫn Ark Toast.
+  React.useEffect(() => {
+    if (success) toast.success({ title: `Đã cập nhật vai trò (${success.before.length} → ${success.after.length} role)` });
+  }, [success]);
   const [saving, setSaving] = React.useState(false);
   const [reason, setReason] = React.useState('');
 

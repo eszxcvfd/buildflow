@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
+import { toast } from '@/components/ui/toast/Toaster';
 
 interface Props {
   projectId: string;
@@ -176,6 +178,7 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
       const res = await addProjectMember(projectId, { userId, projectRole });
       const name = memberDisplayName(res, workerNames);
       setAddSuccess(`Đã thêm ${name} vào dự án với vai trò ${roleLabel(res.projectRole)}.`);
+      toast.success({ title: `Đã thêm ${name} vào dự án.` });
       setUserId('');
       setUserSearch('');
       setProjectRole('');
@@ -431,25 +434,19 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
           />
         </div>
         <div className="bf-field">
-          <label className="bf-label" htmlFor="member-add-user">
-            Người dùng
-          </label>
-          <select
+          <Select
             id="member-add-user"
-            className="bf-input"
+            label="Người dùng"
             value={userId}
-            onChange={(e) => setUserId(e.target.value)}
+            options={[
+              { value: '', label: '— Chọn người dùng đang hoạt động —' },
+              ...filteredWorkers.map((w) => ({ value: w.id, label: workerLabel(w) })),
+            ]}
+            onChange={setUserId}
             disabled={addPending}
             aria-invalid={addFieldErrors.userId ? true : undefined}
             aria-describedby={addFieldErrors.userId ? 'member-add-user-error' : undefined}
-          >
-            <option value="">— Chọn người dùng đang hoạt động —</option>
-            {filteredWorkers.map((w) => (
-              <option key={w.id} value={w.id}>
-                {workerLabel(w)}
-              </option>
-            ))}
-          </select>
+          />
           {addFieldErrors.userId ? (
             <p id="member-add-user-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
               {addFieldErrors.userId.join(' ')}
@@ -457,25 +454,19 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
           ) : null}
         </div>
         <div className="bf-field">
-          <label className="bf-label" htmlFor="member-add-role">
-            Vai trò trong dự án
-          </label>
-          <select
+          <Select
             id="member-add-role"
-            className="bf-input"
+            label="Vai trò trong dự án"
             value={projectRole}
-            onChange={(e) => setProjectRole(e.target.value)}
+            options={[
+              { value: '', label: '— Chọn vai trò —' },
+              ...ADDABLE_PROJECT_MEMBER_ROLES.map((r) => ({ value: r, label: roleLabel(r) })),
+            ]}
+            onChange={setProjectRole}
             disabled={addPending}
             aria-invalid={addFieldErrors.projectRole ? true : undefined}
             aria-describedby={addFieldErrors.projectRole ? 'member-add-role-error' : undefined}
-          >
-            <option value="">— Chọn vai trò —</option>
-            {ADDABLE_PROJECT_MEMBER_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {roleLabel(r)}
-              </option>
-            ))}
-          </select>
+          />
           {addFieldErrors.projectRole ? (
             <p id="member-add-role-error" role="alert" style={{ color: 'var(--bf-risk)', fontSize: '0.85rem', margin: '0.25rem 0 0' }}>
               {addFieldErrors.projectRole.join(' ')}

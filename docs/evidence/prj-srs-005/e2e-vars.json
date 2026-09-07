@@ -12,15 +12,15 @@
     "D": "VDA5-D"
   },
   "projectIds": {
-    "A": "09c73a8a-9664-4cc8-90b8-bebf8e579ad2",
-    "B": "096a092d-7f57-4d2a-b1d8-4dd3db82a18a",
-    "C": "9bf9607b-227d-46d7-9081-32e5433f344f",
-    "D": "a0b9e3f9-a281-4c6c-9cdc-ce7ca7abf153"
+    "A": "572298c9-ab14-4614-a4c8-8bf07610e172",
+    "B": "2a52c768-a707-40ce-893b-e051e56917da",
+    "C": "cb4c9649-3bd7-4c34-968c-65e639219ce6",
+    "D": "9df24da5-a7d4-4736-a0eb-c1f420310d4e"
   },
-  "memberIdA": "4ee01d07-49ff-4b0c-8c14-3288960fe8fe",
+  "memberIdA": "9faa8177-bfcb-4554-a26e-5b66ff8e78d5",
   "w2GetBefore": 200,
-  "auditBaseline": "1115",
-  "auditFinal": "1139",
+  "auditBaseline": "1377",
+  "auditFinal": "1401",
   "rest": "0",
   "results": [
     {
@@ -61,7 +61,7 @@
     {
       "id": "S8",
       "ok": true,
-      "note": "API 400 projectRole→PATCH; UI roles [— Chọn vai trò —/ĐIỀU PHỐI/QC/THÀNH VIÊN/XEM]"
+      "note": "API 400 projectRole→PATCH; UI roles [— Chọn vai trò —✓/ĐIỀU PHỐI✓/QC✓/THÀNH VIÊN✓/XEM✓]"
     },
     {
       "id": "S9",

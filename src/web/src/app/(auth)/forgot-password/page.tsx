@@ -5,6 +5,7 @@ import { requestPasswordReset } from '@/lib/api/password';
 import { Card } from '@/components/ui/card/Card';
 import { Input } from '@/components/ui/input/Input';
 import { Alert } from '@/components/ui/alert/Alert';
+import { Button } from '@/components/ui/button/Button';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState('');
@@ -67,15 +68,14 @@ export default function ForgotPasswordPage() {
               hasError={error === 'Email không được để trống'}
             />
           </div>
-          <button
+          <Button
             type="submit"
-            className="bf-btn bf-btn-primary"
             disabled={submitting}
-            aria-busy={submitting || undefined}
+            loading={submitting}
             style={{ width: '100%' }}
           >
-            {submitting ? 'Đang gửi…' : 'Gửi hướng dẫn đặt lại'}
-          </button>
+            Gửi hướng dẫn đặt lại
+          </Button>
           <p className="bf-card-meta" style={{ margin: 0 }}>
             <a href="/login">Quay lại đăng nhập</a>
           </p>

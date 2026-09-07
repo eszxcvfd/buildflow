@@ -17,6 +17,13 @@ import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { Select } from '@/components/ui/select/Select';
+import {
+  ActiveChips,
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+} from '@/components/ui/list/ListKit';
 
 const PAGE_SIZE = 20;
 
@@ -164,16 +171,45 @@ export function AuditLogList() {
     setOffset(0);
   }
 
+  function handleClearFilters() {
+    setActionInput('');
+    setResultInput('');
+    setCorrelationIdInput('');
+    setEntityTypeInput('');
+    setEntityIdInput('');
+    setFromInput('');
+    setToInput('');
+    setAction('');
+    setResult('');
+    setCorrelationId('');
+    setEntityType('');
+    setEntityId('');
+    setFrom('');
+    setTo('');
+    setOffset(0);
+  }
+
+  const hasActiveFilter = Boolean(
+    action || result || correlationId || entityType || entityId || from || to,
+  );
+
+  function removeAppliedFilter(key: 'action' | 'result' | 'correlationId' | 'entityType' | 'entityId' | 'from' | 'to') {
+    const setters = {
+      action: [setAction, setActionInput],
+      result: [setResult, setResultInput],
+      correlationId: [setCorrelationId, setCorrelationIdInput],
+      entityType: [setEntityType, setEntityTypeInput],
+      entityId: [setEntityId, setEntityIdInput],
+      from: [setFrom, setFromInput],
+      to: [setTo, setToInput],
+    } as const;
+    setters[key][0]('');
+    setters[key][1]('');
+    setOffset(0);
+  }
+
   function handleRetry() {
     void load();
-  }
-
-  function handlePrevPage() {
-    setOffset(Math.max(0, offset - pageLimit));
-  }
-
-  function handleNextPage() {
-    setOffset(offset + pageLimit);
   }
 
   if (loading) {
@@ -227,8 +263,6 @@ export function AuditLogList() {
 
   const page = Math.floor(offset / pageLimit) + 1;
   const pageCount = Math.max(1, Math.ceil(total / pageLimit));
-  const hasPrev = offset > 0;
-  const hasNext = offset + logs.length < total;
   // Deep-link/filter action ngoài KNOWN_ACTIONS → prepend option để select hiển thị đúng
   // giá trị thay vì rơi về rỗng (Finding 5).
   const extraAction = actionInput && !KNOWN_ACTION_SET.has(actionInput) ? actionInput : null;
@@ -241,100 +275,113 @@ export function AuditLogList() {
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="audit-action">Hành động</label>
-            <select
+        <ListToolbar count={`Tổng: ${total} bản ghi`}>
+          <div className="bf-filter bf-filter-wide">
+            <Select
               id="audit-action"
-              className="bf-input"
+              label="Hành động"
+              hideLabel
               value={actionInput}
-              onChange={(e) => setActionInput(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              {extraAction ? <option value={extraAction}>{extraAction}</option> : null}
-              {KNOWN_ACTIONS.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'Mọi hành động' },
+                ...(extraAction ? [{ value: extraAction, label: extraAction }] : []),
+                ...KNOWN_ACTIONS.map((a) => ({ value: a, label: a })),
+              ]}
+              onChange={setActionInput}
+            />
             <FieldError messages={fieldErrors?.action} />
           </div>
-          <div className="bf-field" style={{ minWidth: 150 }}>
-            <label className="bf-label" htmlFor="audit-result">Kết quả</label>
-            <select
+          <div className="bf-filter">
+            <Select
               id="audit-result"
-              className="bf-input"
+              label="Kết quả"
+              hideLabel
               value={resultInput}
-              onChange={(e) => setResultInput(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="SUCCESS">SUCCESS</option>
-              <option value="FAILED">FAILED</option>
-            </select>
+              options={[
+                { value: '', label: 'Mọi kết quả' },
+                { value: 'SUCCESS', label: 'SUCCESS' },
+                { value: 'FAILED', label: 'FAILED' },
+              ]}
+              onChange={setResultInput}
+            />
             <FieldError messages={fieldErrors?.result} />
           </div>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="audit-correlation">Correlation ID</label>
+          <div className="bf-filter">
+            <label className="bf-sr-only" htmlFor="audit-correlation">Correlation ID</label>
             <Input
               id="audit-correlation"
-              placeholder="uuid tương quan…"
+              placeholder="UUID tương quan…"
               value={correlationIdInput}
               onChange={(e) => setCorrelationIdInput(e.target.value)}
             />
             <FieldError messages={fieldErrors?.correlationId} />
           </div>
-          <div className="bf-field" style={{ minWidth: 150 }}>
-            <label className="bf-label" htmlFor="audit-entity-type">Loại đối tượng</label>
-            <select
+          <div className="bf-filter">
+            <Select
               id="audit-entity-type"
-              className="bf-input"
+              label="Loại đối tượng"
+              hideLabel
               value={entityTypeInput}
-              onChange={(e) => setEntityTypeInput(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              {extraEntityType ? <option value={extraEntityType}>{extraEntityType}</option> : null}
-              {KNOWN_ENTITY_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'Mọi loại đối tượng' },
+                ...(extraEntityType ? [{ value: extraEntityType, label: extraEntityType }] : []),
+                ...KNOWN_ENTITY_TYPES.map((t) => ({ value: t, label: t })),
+              ]}
+              onChange={setEntityTypeInput}
+            />
             <FieldError messages={fieldErrors?.entityType} />
           </div>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="audit-entity-id">ID đối tượng</label>
+          <div className="bf-filter">
+            <label className="bf-sr-only" htmlFor="audit-entity-id">ID đối tượng</label>
             <Input
               id="audit-entity-id"
-              placeholder="uuid đối tượng…"
+              placeholder="UUID đối tượng…"
               value={entityIdInput}
               onChange={(e) => setEntityIdInput(e.target.value)}
             />
             <FieldError messages={fieldErrors?.entityId} />
           </div>
-          <div className="bf-field" style={{ minWidth: 150 }}>
-            <label className="bf-label" htmlFor="audit-from">Từ ngày</label>
+          <div className="bf-filter">
+            <label className="bf-sr-only" htmlFor="audit-from">Từ ngày</label>
             <Input
               id="audit-from"
               type="date"
+              aria-label="Từ ngày"
               value={fromInput}
               onChange={(e) => setFromInput(e.target.value)}
             />
             <FieldError messages={fieldErrors?.from} />
           </div>
-          <div className="bf-field" style={{ minWidth: 150 }}>
-            <label className="bf-label" htmlFor="audit-to">Đến ngày</label>
+          <div className="bf-filter">
+            <label className="bf-sr-only" htmlFor="audit-to">Đến ngày</label>
             <Input
               id="audit-to"
               type="date"
+              aria-label="Đến ngày"
               value={toInput}
               onChange={(e) => setToInput(e.target.value)}
             />
             <FieldError messages={fieldErrors?.to} />
           </div>
           <Button variant="secondary" onClick={handleApplyFilters}>Lọc</Button>
-        </div>
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
+        <ActiveChips
+          chips={[
+            ...(action ? [{ key: 'action', label: `Hành động: ${action}`, onRemove: () => removeAppliedFilter('action') }] : []),
+            ...(result ? [{ key: 'result', label: `Kết quả: ${result}`, onRemove: () => removeAppliedFilter('result') }] : []),
+            ...(correlationId ? [{ key: 'correlationId', label: 'Correlation ID', onRemove: () => removeAppliedFilter('correlationId') }] : []),
+            ...(entityType ? [{ key: 'entityType', label: `Đối tượng: ${entityType}`, onRemove: () => removeAppliedFilter('entityType') }] : []),
+            ...(entityId ? [{ key: 'entityId', label: 'ID đối tượng', onRemove: () => removeAppliedFilter('entityId') }] : []),
+            ...(from ? [{ key: 'from', label: `Từ ${from}`, onRemove: () => removeAppliedFilter('from') }] : []),
+            ...(to ? [{ key: 'to', label: `Đến ${to}`, onRemove: () => removeAppliedFilter('to') }] : []),
+          ]}
+        />
         {hasFieldErrors && fieldErrors?._global?.length ? (
           <p className="bf-field-error" style={{ marginTop: '0.5rem' }}>{fieldErrors._global.join(' ')}</p>
         ) : null}
         <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} bản ghi · Dữ liệu trước/sau thay đổi có thể chứa thông tin nhạy cảm nên không hiển thị.
+          Dữ liệu trước/sau thay đổi có thể chứa thông tin nhạy cảm nên không hiển thị.
         </p>
       </Card>
 
@@ -387,13 +434,13 @@ export function AuditLogList() {
               </tbody>
             </table>
           </div>
-          <div className="bf-pagination">
-            <Button variant="secondary" disabled={!hasPrev} onClick={handlePrevPage}>Trang trước</Button>
-            <span className="bf-card-meta">
-              Trang {page} / {pageCount} (tổng {total})
-            </span>
-            <Button variant="secondary" disabled={!hasNext} onClick={handleNextPage}>Trang sau</Button>
-          </div>
+          <ListPagination
+            page={page}
+            totalPages={pageCount}
+            onPage={(next) => setOffset((next - 1) * pageLimit)}
+            prevLabel="Trang trước"
+            nextLabel="Trang sau"
+          />
         </Card>
       )}
     </div>

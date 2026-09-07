@@ -6,8 +6,14 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
-import { Input } from '@/components/ui/input/Input';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ClearFiltersButton,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 export function AdminUserList() {
   const [users, setUsers] = React.useState<AdminUser[]>([]);
@@ -47,6 +53,14 @@ export function AdminUserList() {
 
   function handleRetry() {
     void load();
+  }
+
+  const hasActiveFilter = searchInput.trim() !== '' || search.trim() !== '' || statusFilter !== '';
+
+  function handleClearFilters() {
+    setSearchInput('');
+    setSearch('');
+    setStatusFilter('');
   }
 
   async function handleStatusChange(user: AdminUser, next: 'ACTIVE' | 'LOCKED' | 'INACTIVE') {
@@ -109,34 +123,35 @@ export function AdminUserList() {
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="admin-user-search">Tìm kiếm</label>
-            <Input
-              id="admin-user-search"
-              placeholder="Email hoặc họ tên…"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+        <ListToolbar count={`Tổng: ${users.length} tài khoản`}>
+          <SearchField
+            id="admin-user-search"
+            label="Tìm kiếm"
+            placeholder="Email hoặc họ tên…"
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={() => setSearch(searchInput)}
+          />
+          <div className="bf-filter">
+            <Select
+              id="admin-user-status"
+              label="Trạng thái"
+              hideLabel
+              value={statusFilter}
+              options={[
+                { value: '', label: 'Tất cả trạng thái' },
+                { value: 'ACTIVE', label: 'Hoạt động' },
+                { value: 'LOCKED', label: 'Bị khóa' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+              ]}
+              onChange={setStatusFilter}
             />
           </div>
-          <div className="bf-field" style={{ minWidth: 180 }}>
-            <label className="bf-label" htmlFor="admin-user-status">Trạng thái</label>
-            <select
-              id="admin-user-status"
-              className="bf-input"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">Tất cả</option>
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="LOCKED">Bị khóa</option>
-              <option value="INACTIVE">Ngừng hoạt động</option>
-            </select>
-          </div>
           <Button variant="secondary" onClick={() => setSearch(searchInput)}>Tìm</Button>
-        </div>
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
         <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {users.length} tài khoản · Tài khoản LOCKED/INACTIVE không thể đăng nhập hay nhận phân công mới · Không có xóa cứng — dùng ngừng hoạt động.
+          Tài khoản LOCKED/INACTIVE không thể đăng nhập hay nhận phân công mới · Không có xóa cứng — dùng ngừng hoạt động.
         </p>
       </Card>
 
@@ -178,22 +193,23 @@ export function AdminUserList() {
                   <th>Họ tên</th>
                   <th>Email</th>
                   <th>Trạng thái</th>
-                  <th>Hành động</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
                     <td>
-                      <a href={`/admin/users/${u.id}`} style={{ fontWeight: 600 }}>{u.fullName}</a>
+                      <a href={`/admin/users/${u.id}`} style={{ fontWeight: 600, color: '#111827', textDecoration: 'none' }}>{u.fullName}</a>
                     </td>
                     <td>{u.email}</td>
                     <td><StatusBadge status={u.status} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <td className="bf-cell-actions">
+                      <span className="bf-row-actions">
                         {u.status !== 'LOCKED' ? (
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => setConfirmTarget({ user: u, next: 'LOCKED' })}
                             disabled={busyId === u.id}
                           >
@@ -202,6 +218,7 @@ export function AdminUserList() {
                         ) : (
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => setConfirmTarget({ user: u, next: 'ACTIVE' })}
                             disabled={busyId === u.id}
                           >
@@ -211,15 +228,20 @@ export function AdminUserList() {
                         {u.status !== 'INACTIVE' ? (
                           <Button
                             variant="secondary"
+                            size="sm"
                             onClick={() => setConfirmTarget({ user: u, next: 'INACTIVE' })}
                             disabled={busyId === u.id}
                           >
                             Ngừng hoạt động
                           </Button>
                         ) : null}
-                        <a href={`/admin/users/${u.id}/edit`}>Sửa</a>
-                        <a href={`/admin/users/${u.id}/roles`}>Vai trò</a>
-                      </div>
+                        <Tooltip content="Sửa hồ sơ tài khoản">
+                          <a className="bf-detail-link" href={`/admin/users/${u.id}/edit`}>Sửa</a>
+                        </Tooltip>
+                        <Tooltip content="Gán vai trò">
+                          <a className="bf-detail-link" href={`/admin/users/${u.id}/roles`}>Vai trò</a>
+                        </Tooltip>
+                      </span>
                     </td>
                   </tr>
                 ))}

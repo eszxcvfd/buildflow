@@ -7,7 +7,14 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
-import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 export const TRADE_IN_USE_WARNING =
   'Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực';
@@ -123,39 +130,46 @@ export function TradeList() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const hasActiveFilter = search.trim() !== '' || statusFilter !== 'ALL';
+
+  function handleClearFilters() {
+    setSearch('');
+    setStatusFilter('ALL');
+    setOffset(0);
+  }
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
       <Card>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="bf-field" style={{ flex: '1 1 220px' }}>
-            <label className="bf-label" htmlFor="trade-search">Tìm kiếm</label>
-            <Input
-              id="trade-search"
-              placeholder="Mã hoặc tên ngành nghề…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+        <ListToolbar count={`Tổng: ${total} danh mục · Hiển thị ${trades.length}`}>
+          <SearchField
+            id="trade-search"
+            label="Tìm kiếm"
+            placeholder="Mã hoặc tên ngành nghề…"
+            value={search}
+            onChange={(v) => { setSearch(v); setOffset(0); }}
+            onSubmit={() => { setOffset(0); void load(); }}
+          />
+          <div className="bf-filter">
+            <Select
+              id="trade-status"
+              label="Trạng thái"
+              hideLabel
+              value={statusFilter}
+              options={[
+                { value: 'ALL', label: 'Tất cả trạng thái' },
+                { value: 'ACTIVE', label: 'Hoạt động' },
+                { value: 'INACTIVE', label: 'Ngừng hoạt động' },
+              ]}
+              onChange={(v) => { setStatusFilter(v as 'ACTIVE' | 'INACTIVE' | 'ALL'); setOffset(0); }}
             />
           </div>
-          <div className="bf-field" style={{ minWidth: 180 }}>
-            <label className="bf-label" htmlFor="trade-status">Trạng thái</label>
-            <select
-              id="trade-status"
-              className="bf-input"
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as 'ACTIVE' | 'INACTIVE' | 'ALL'); setOffset(0); }}
-            >
-              <option value="ALL">Tất cả</option>
-              <option value="ACTIVE">Hoạt động</option>
-              <option value="INACTIVE">Ngừng hoạt động</option>
-            </select>
-          </div>
           <Button variant="secondary" onClick={() => { setOffset(0); void load(); }}>Tìm</Button>
-        </div>
+          {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
+        </ListToolbar>
         <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
-          Tổng: {total} danh mục · Hiển thị {trades.length} · Danh mục ngừng hoạt động không chọn
-          được cho phân công mới nhưng lịch sử vẫn xem được; danh mục đã dùng chỉ được ngừng hoạt
-          động, không xóa.
+          Danh mục ngừng hoạt động không chọn được cho phân công mới nhưng lịch sử vẫn xem được;
+          danh mục đã dùng chỉ được ngừng hoạt động, không xóa.
         </p>
       </Card>
 
@@ -195,7 +209,14 @@ export function TradeList() {
 
       {trades.length === 0 ? (
         <Card>
-          <EmptyState title="Chưa có ngành nghề nào phù hợp bộ lọc">
+          <EmptyState
+            title="Chưa có ngành nghề nào phù hợp bộ lọc"
+            action={
+              <a className="bf-btn bf-btn-primary" href="/trades/new">
+                Tạo ngành nghề
+              </a>
+            }
+          >
             Thử thay đổi từ khóa hoặc tạo danh mục mới.
           </EmptyState>
         </Card>
@@ -209,7 +230,7 @@ export function TradeList() {
                   <th>Mã</th>
                   <th>Mô tả</th>
                   <th>Trạng thái</th>
-                  <th>Hành động</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,7 +239,7 @@ export function TradeList() {
                   return (
                     <tr key={t.id}>
                       <td>
-                        <a href={`/trades/${t.id}`} style={{ color: '#111827', textDecoration: 'underline' }}>
+                        <a href={`/trades/${t.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                           {t.name}
                         </a>
                       </td>
@@ -231,11 +252,12 @@ export function TradeList() {
                           {active ? 'ACTIVE' : 'INACTIVE'}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <td className="bf-cell-actions">
+                        <span className="bf-row-actions">
                           {active ? (
                             <Button
                               variant="secondary"
+                              size="sm"
                               onClick={() => setConfirmTarget({ trade: t, next: 'INACTIVE' })}
                               disabled={busyId === t.id}
                             >
@@ -244,16 +266,19 @@ export function TradeList() {
                           ) : (
                             <Button
                               variant="secondary"
+                              size="sm"
                               onClick={() => setConfirmTarget({ trade: t, next: 'ACTIVE' })}
                               disabled={busyId === t.id}
                             >
                               Kích hoạt lại
                             </Button>
                           )}
-                          <a href={`/trades/${t.id}`} style={{ fontSize: '0.9rem', color: '#1d4ed8', textDecoration: 'underline' }}>
-                            Chi tiết
-                          </a>
-                        </div>
+                          <Tooltip content="Xem chi tiết danh mục">
+                            <a className="bf-detail-link" href={`/trades/${t.id}`}>
+                              Chi tiết
+                            </a>
+                          </Tooltip>
+                        </span>
                       </td>
                     </tr>
                   );
@@ -261,25 +286,7 @@ export function TradeList() {
               </tbody>
             </table>
           </div>
-          {totalPages > 1 ? (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginTop: '0.85rem', flexWrap: 'wrap' }}>
-              <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
-                Trang {page}/{totalPages}
-              </span>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <Button variant="secondary" disabled={offset === 0} onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}>
-                  Trước
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={offset + PAGE_SIZE >= total}
-                  onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                >
-                  Sau
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <ListPagination page={page} totalPages={totalPages} onPage={(p) => setOffset((p - 1) * PAGE_SIZE)} prevLabel="Trước" nextLabel="Sau" />
         </Card>
       )}
     </div>

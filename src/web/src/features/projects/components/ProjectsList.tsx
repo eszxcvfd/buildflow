@@ -2,13 +2,19 @@
 
 import * as React from 'react';
 import { listProjects, type Project, type ProjectsError } from '@/lib/api/projects';
-import { useCanManageProjects } from '@/lib/auth/roles';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
-import { Input } from '@/components/ui/input/Input';
+import { Select } from '@/components/ui/select/Select';
+import { Tooltip } from '@/components/ui/tooltip/Tooltip';
+import {
+  ClearFiltersButton,
+  ListPagination,
+  ListToolbar,
+  SearchField,
+} from '@/components/ui/list/ListKit';
 
 const PAGE_SIZE = 20;
 
@@ -39,7 +45,6 @@ export function ProjectsList() {
   const [search, setSearch] = React.useState('');
   const [status, setStatus] = React.useState<(typeof STATUS_OPTIONS)[number]>('ALL');
   const [page, setPage] = React.useState(0);
-  const canManage = useCanManageProjects();
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -123,88 +128,83 @@ export function ProjectsList() {
 
   return (
     <Card>
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'end', marginBottom: '1rem' }}>
-        <div className="bf-field" style={{ flex: '1 1 220px' }}>
-          <label className="bf-label" htmlFor="projects-search">Tìm kiếm</label>
-          <Input
-            id="projects-search"
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Nhập tên hoặc mã dự án…"
+      <ListToolbar count={`Tổng ${total} dự án`}>
+        <SearchField
+          id="projects-search"
+          label="Tìm kiếm"
+          placeholder="Nhập tên hoặc mã dự án…"
+          value={search}
+          onChange={handleSearchChange}
+        />
+        <div className="bf-filter">
+          <Select
+            id="projects-status"
+            label="Trạng thái"
+            hideLabel
+            value={status}
+            options={STATUS_OPTIONS.map((s) => ({ value: s, label: STATUS_OPTION_LABEL[s] }))}
+            onChange={handleStatusChange}
           />
         </div>
-        <div className="bf-field" style={{ flex: '0 1 200px' }}>
-          <label className="bf-label" htmlFor="projects-status">Trạng thái</label>
-          <select
-            id="projects-status"
-            className="bf-input"
-            value={status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_OPTION_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        {canManage ? (
-          <a className="bf-btn bf-btn-primary" href="/projects/new">
-            Tạo dự án
-          </a>
+        {hasFilter ? (
+          <ClearFiltersButton
+            onClear={() => { setSearch(''); setStatus('ALL'); setPage(0); }}
+          />
         ) : null}
-      </div>
+      </ListToolbar>
 
       {pageRows.length === 0 ? (
-        <EmptyState title={hasFilter ? 'Không có dự án nào phù hợp bộ lọc' : 'Bạn chưa là thành viên dự án nào'}>
+        <div style={{ marginTop: '1rem' }}>
+        <EmptyState
+          title={hasFilter ? 'Không có dự án nào phù hợp bộ lọc' : 'Bạn chưa là thành viên dự án nào'}
+        >
           {hasFilter ? 'Thử đổi từ khóa hoặc trạng thái.' : 'Liên hệ quản trị viên để được thêm vào dự án.'}
         </EmptyState>
+        </div>
       ) : (
         <>
-          <div className="bf-table-wrap">
+          <div className="bf-table-wrap" style={{ marginTop: '1rem' }}>
             <table className="bf-table">
               <thead>
                 <tr>
                   <th>Tên</th>
                   <th>Trạng thái</th>
                   <th>Ngày tạo</th>
+                  <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <a href={`/projects/${p.id}`}>
-                        <strong>{p.name}</strong>
+                      <a href={`/projects/${p.id}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
+                        {p.name}
                       </a>{' '}
                       <span style={{ color: 'var(--bf-faint)' }}>{p.code}</span>
                     </td>
                     <td><StatusBadge status={p.status} /></td>
                     <td>{new Date(p.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td className="bf-cell-actions">
+                      <span className="bf-row-actions">
+                        <Tooltip content="Xem chi tiết dự án">
+                          <a className="bf-detail-link" href={`/projects/${p.id}`}>
+                            Chi tiết
+                          </a>
+                        </Tooltip>
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
-            <Button
-              variant="secondary"
-              onClick={() => setPage((v) => Math.max(0, v - 1))}
-              disabled={safePage === 0}
-            >
-              Trước
-            </Button>
-            <span style={{ color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
-              {`Trang ${safePage + 1}/${totalPages} · Tổng ${total} dự án`}
-            </span>
-            <Button
-              variant="secondary"
-              onClick={() => setPage((v) => Math.min(totalPages - 1, v + 1))}
-              disabled={safePage >= totalPages - 1}
-            >
-              Sau
-            </Button>
-          </div>
+          <ListPagination
+            page={safePage + 1}
+            totalPages={totalPages}
+            onPage={(next) => setPage(next - 1)}
+            prevLabel="Trước"
+            nextLabel="Sau"
+          />
         </>
       )}
     </Card>

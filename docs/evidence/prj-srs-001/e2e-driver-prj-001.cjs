@@ -130,6 +130,42 @@ async function getToken(email, password) {
 async function bodyText(page) {
   return (await page.locator('body').textContent()) || '';
 }
+/**
+ * DashCode stage 3 — Ark UI Select: trigger là button[role=combobox] giữ id
+ * cũ; options LUÔN ở trong DOM (portal), listbox đóng mang `hidden`.
+ * Mọi tương tác đi qua content của chính trigger (aria-controls) + kiểm tra
+ * aria-expanded để không toggle nhầm — miễn nhiễm với các select khác.
+ */
+async function arkContentId(page, triggerId) {
+  await page.waitForSelector(`#${triggerId}`, { timeout: 20000 });
+  return page.getAttribute(`#${triggerId}`, 'aria-controls');
+}
+async function arkOpen(page, triggerId) {
+  const cid = await arkContentId(page, triggerId);
+  if ((await page.getAttribute(`#${triggerId}`, 'aria-expanded')) !== 'true') {
+    await page.click(`#${triggerId}`);
+  }
+  return cid;
+}
+async function arkSelectOption(page, triggerId, value) {
+  const cid = await arkOpen(page, triggerId);
+  await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
+}
+async function arkOptionCount(page, triggerId) {
+  const cid = await arkOpen(page, triggerId);
+  const n = await page.locator(`[id="${cid}"] [role="option"]`).count();
+  await page.keyboard.press('Escape');
+  return n;
+}
+async function arkWaitOptions(page, triggerId, min) {
+  const cid = await arkContentId(page, triggerId);
+  await page.waitForFunction(
+    (a) => document.querySelectorAll(`[id="${a.cid}"] [role="option"]`).length >= a.min,
+    { cid, min },
+    { timeout: 20000 },
+  );
+  return cid;
+}
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
     Math.floor(Math.random() * 16).toString(16));
@@ -166,19 +202,20 @@ function runCleanup() {
 }
 
 /**
- * Điền form tạo dự án. Đợi select manager render (worker bị 403 pool →
- * select chỉ còn placeholder — trả về optionCount để caller phân nhánh).
+ * Điền form tạo dự án. Đợi trigger manager render (worker bị 403 pool →
+ * không có option nào — trả về optionCount để caller phân nhánh).
+ * Ark UI: đếm options trong content của chính trigger (aria-controls).
  */
 async function fillCreateForm(page, { code, name, address, start, end, managerId, description }) {
   await page.goto(`${WEB}/projects/new`, { waitUntil: 'networkidle' });
   await page.waitForSelector('#project-manager', { timeout: 20000 });
-  const optionCount = await page.evaluate(() => document.querySelectorAll('#project-manager option').length);
+  const optionCount = await arkOptionCount(page, 'project-manager');
   if (code !== undefined) await page.fill('#project-code', code);
   if (name !== undefined) await page.fill('#project-name', name);
   if (address !== undefined) await page.fill('#project-address', address);
   if (start !== undefined) await page.fill('#project-start', start);
   if (end !== undefined) await page.fill('#project-end', end);
-  if (managerId !== undefined && optionCount > 1) await page.selectOption('#project-manager', managerId);
+  if (managerId !== undefined && optionCount > 1) await arkSelectOption(page, 'project-manager', managerId);
   if (description !== undefined) await page.fill('#project-description', description);
   return optionCount;
 }
@@ -335,7 +372,7 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await adminPage.fill('#project-address', 'Số 5, đường Kiểm Định, Hà Nội');
       await adminPage.fill('#project-start', '2027-06-01');
       await adminPage.fill('#project-end', '2026-06-01');
-      await adminPage.selectOption('#project-manager', W1_ID);
+      await arkSelectOption(adminPage, 'project-manager', W1_ID);
       await adminPage.click('button[type="submit"]');
       await adminPage.waitForFunction(
         () => (document.body.textContent || '').includes('Ngày kết thúc kế hoạch phải từ ngày bắt đầu trở đi'),
@@ -465,7 +502,7 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await adminPage.fill('#project-address', 'Số 3, KCN Tân Bình, TP.HCM');
       await adminPage.fill('#project-start', START);
       await adminPage.fill('#project-end', END);
-      await adminPage.selectOption('#project-manager', W1_ID);
+      await arkSelectOption(adminPage, 'project-manager', W1_ID);
       const clickP = adminPage.click('button[type="submit"]');
       await new Promise((res) => setTimeout(res, 700));
       const btnState = await adminPage.evaluate(() => {
@@ -515,11 +552,11 @@ async function fillCreateForm(page, { code, name, address, start, end, managerId
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trang 2/2'), { timeout: 20000 });
       await adminPage.locator('button', { hasText: 'Trước' }).click();
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trang 1/2'), { timeout: 20000 });
-      await adminPage.selectOption('#projects-status', 'ACTIVE');
+      await arkSelectOption(adminPage, 'projects-status', 'ACTIVE');
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Không có dự án nào phù hợp'), { timeout: 20000 });
-      await adminPage.selectOption('#projects-status', 'DRAFT');
+      await arkSelectOption(adminPage, 'projects-status', 'DRAFT');
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Tổng 21 dự án'), { timeout: 20000 });
-      await adminPage.selectOption('#projects-status', 'ALL');
+      await arkSelectOption(adminPage, 'projects-status', 'ALL');
       await adminPage.fill('#projects-search', CODE_A);
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Trung tâm hội nghị Sông Hồng'), { timeout: 20000 });
       await snap(adminPage, `${id}-filter`, 'Search VDA1-A + filter ALL');

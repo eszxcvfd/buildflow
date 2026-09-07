@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CrewMembers } from './CrewMembers';
 import { listCrewMembers, addCrewMember, removeCrewMember } from '@/lib/api/crews';
 import { listWorkers } from '@/lib/api/workers';
@@ -66,6 +67,17 @@ beforeEach(() => {
   listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 100, offset: 0 });
 });
 
+/**
+ * Ark Select interaction: open the labelled combobox, then choose the option.
+ * Replaces native fireEvent.change on <select>.
+ */
+async function chooseOption(comboboxName: string, optionName: string) {
+  const user = userEvent.setup();
+  if (screen.queryByRole('listbox')) await user.keyboard('{Escape}');
+  await user.click(await screen.findByRole('combobox', { name: comboboxName }));
+  await user.click(await screen.findByRole('option', { name: optionName }));
+}
+
 describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
   it('hiển thị loading rồi danh sách active kèm role badge + hiệu lực', async () => {
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
@@ -99,7 +111,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     addMemberMock.mockResolvedValue({ ...member(), warning: null });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Công nhân'), { target: { value: USER_ID } });
+    await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(() =>
       expect(addMemberMock).toHaveBeenCalledWith(CREW_ID, { userId: USER_ID, effectiveFrom: null }),
@@ -112,7 +124,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     addMemberMock.mockRejectedValue({ status: 409, code: 'MEMBER_DUPLICATE', message: 'Thành viên đã thuộc đội' });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Công nhân'), { target: { value: USER_ID } });
+    await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(() => expect(screen.getByText('Thành viên đã trong đội')).not.toBeNull());
   });
@@ -127,7 +139,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
-    fireEvent.change(screen.getByLabelText('Công nhân'), { target: { value: USER_ID } });
+    await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(
       () => expect(screen.getByText(/Thành viên đang thuộc đội khác: Doi hoan thien \(TEAM-002\)/)).not.toBeNull(),
@@ -168,7 +180,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
     expect(screen.getByText('Đội đang không hoạt động nên không thể thêm thành viên.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Thêm vào đội' }).hasAttribute('disabled')).toBe(true);
-    expect((screen.getByLabelText('Công nhân') as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'Công nhân' }).hasAttribute('disabled')).toBe(true);
   });
 
   it('lịch sử: toggle includeInactive + mốc at gọi API đúng param', async () => {

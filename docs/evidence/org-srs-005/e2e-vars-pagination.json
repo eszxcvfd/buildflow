@@ -1,26 +1,26 @@
 {
   "seedCodePattern": "TX-8%",
   "seedIds": [
-    "70af4392-e891-4fb1-a41d-7be8374563ff",
-    "de096445-7f9e-4303-8b1b-3e47bb6012ce",
-    "3d13516f-2fbe-4419-b13c-bed0fb91824a",
-    "a8646122-4e33-4dba-ab06-1b65d7012ceb",
-    "9cd84efa-f002-4113-8948-18ec06e5e902",
-    "d50088a9-615a-4ae5-a152-e0824ee3c35c",
-    "5632dc8d-cea6-43bd-a5b7-316afca8f936",
-    "73902e8d-bf98-4062-961a-5864cd8b694c",
-    "95562dc7-73ee-4d0f-be0a-1c7894cd5c4f",
-    "e33d6ac0-f58d-49a0-8384-92cf79e8eec3",
-    "b02bd70a-a138-43d9-832a-325ae63b3146",
-    "e02f610e-9b67-4dc5-91d3-dc624e91965d",
-    "f4b2e4c5-c66a-45fb-9561-b414375d098d",
-    "89dd7c8a-f2fe-4582-9efb-c9cfb401c4fa",
-    "e62fa0c2-0935-4efd-a419-2f03eeed7d31",
-    "6c8a2e26-0aa9-40af-ab7e-117626ae08f1",
-    "4e58f783-24f6-4114-b83e-accfb4a5cee8",
-    "e2951bb5-e45a-40e0-88c4-64a098e43518",
-    "e892907d-4485-4f4e-99a7-87b26975c568",
-    "f7285949-b1d5-4ac4-bb18-b78024fbb2e6"
+    "2d54563f-0ddf-46e2-befe-f587ec14932e",
+    "c2d861f8-63e8-46bb-867d-841d495bf09e",
+    "13f6561c-b8e2-4830-b53a-1724246ae44d",
+    "84abfdfa-66c3-48dd-8684-b146df0070be",
+    "ba0ede86-3fa7-4eff-868b-0d2f84db5c2c",
+    "fb04dd48-c1b2-4c85-b41d-21a403031ea6",
+    "c39ef922-a90a-4dce-a592-dbd5c418efff",
+    "ad1ef258-bff8-43f8-955f-efc62e9b0290",
+    "bd84ad31-dd26-4695-aa5e-6b841d05a52c",
+    "9541d0db-4366-42b0-8b6d-c1b2851e8c96",
+    "17ef51e3-75f6-466d-b0e3-5d589010eea5",
+    "2a4647ff-31e3-4a28-a7f4-d6b47c997896",
+    "38154607-e101-4d92-9ca8-2de968c3a285",
+    "49048087-f297-458e-af77-77189b552d3a",
+    "5448c980-6625-4830-bd39-98ce8f43a15b",
+    "704f5784-6273-4dbb-81ad-911843863a07",
+    "8f0d8498-b83d-47b3-a0d2-6a878e09a0c1",
+    "779a90f3-eb3e-4d85-a034-a0b28851fafb",
+    "80b32da0-41ce-4d9d-bdbf-6417b79e3191",
+    "32da6d81-5641-4e7f-a8af-f2f2f857f0f9"
   ],
   "results": [
     {
@@ -33,7 +33,7 @@
       "id": "P2",
       "name": "Trang sau → ?page=2, rows khác + khớp OFFSET 20",
       "ok": true,
-      "note": "URL=http://localhost:3001/resources?tab=workers&sort=createdAt&order=desc&page=2; UI Tổng=26 Trang 2/2 rows=6; API p1=[Hoàng Văn An|Vũ Văn Bình|Đặng Văn Chiến…] p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; UI p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; overlap p1∩p2=0; nav={\"visible\":true,\"prevDisabled\":false,\"nextDisabled\":true,\"label\":\"Trang trướcTrang 2/2Trang sau\"}"
+      "note": "URL=http://localhost:3001/resources?tab=workers&sort=createdAt&order=desc&page=2; UI Tổng=26 Trang 2/2 rows=6; API p1=[Đinh Văn Công|Trần Văn Sơn|Phạm Văn Tài…] p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; UI p2=[Nguyễn Văn Ba|Đỗ Văn Cường|Trịnh Văn Đông|Phạm Văn Tuấn|Nguyễn Văn Thắng|Lê Văn Hậu]; overlap p1∩p2=0; nav={\"visible\":true,\"prevDisabled\":false,\"nextDisabled\":true,\"label\":\"Trang trướcTrang 2/2Trang sau\"}"
     },
     {
       "id": "P3",
@@ -57,7 +57,7 @@
       "id": "P6",
       "name": "Contractors ≤20 → không hiện pagination",
       "ok": true,
-      "note": "UI Tổng=3 API total=3 rows=3 names=[Công ty CP Xây dựng Vinacons|Công ty TNHH Xây dựng Nam Tiến|Công ty CP Hạ tầng Bình Minh] navVisible=false"
+      "note": "UI Tổng=4 API total=4 rows=4 names=[Công ty TNHH Xây dựng An Khang 1643|Công ty CP Xây dựng Vinacons|Công ty TNHH Xây dựng Nam Tiến|Công ty CP Hạ tầng Bình Minh] navVisible=false"
     },
     {
       "id": "P7",
