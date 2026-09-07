@@ -514,3 +514,195 @@ export async function changeProjectStatus(
     alreadyInState: alreadyInState === true,
   };
 }
+
+/**
+ * PRJ-SRS-003 (issue #34) — khu vực/hạng mục của dự án (một cấp, không
+ * hard delete — ngừng sử dụng qua `isActive: false`).
+ *
+ * Contract: GET /api/v1/projects/:projectId/areas (`?activeOnly=true` chỉ
+ * active — future Work Order picker; default kèm inactive, sắp
+ * `is_active DESC, name ASC`) → `{ data, total }`; POST `:projectId/areas`
+ * `{ code?, name }` (`201`); PATCH `:projectId/areas/:areaId`
+ * `{ name?, code? (null = gỡ mã), isActive?, reason? }` (`200` +
+ * `alreadyInactive` khi deactivate lặp — idempotent, không audit).
+ * Reads mở cho mọi ACTIVE member (kể cả WORKER); writes ADMIN +
+ * PROJECT_MANAGER + membership scope (403 ngoài scope). Reads dùng
+ * `cache: 'no-store'`; 400 shape `{ message, fieldErrors }` giữ nguyên
+ * fieldErrors server (pattern parseMemberError).
+ */
+export interface ProjectArea {
+  id: string;
+  projectId: string;
+  /** null = không mã. */
+  code: string | null;
+  name: string;
+  /** false = đã retire (ngừng sử dụng, giữ lịch sử). */
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListProjectAreasParams {
+  /** true → chỉ khu vực đang sử dụng (Work Order picker tương lai). */
+  activeOnly?: boolean;
+}
+
+export interface ListProjectAreasResult {
+  data: ProjectArea[];
+  total: number;
+}
+
+export interface CreateProjectAreaPayload {
+  name: string;
+  code?: string | null;
+}
+
+export interface UpdateProjectAreaPayload {
+  name?: string;
+  /** null = gỡ mã khỏi khu vực. */
+  code?: string | null;
+  /** false = ngừng sử dụng (soft-retire, đường xóa duy nhất). */
+  isActive?: boolean;
+  /** Lý do 1–500, optional — ghi vào audit_logs.reason. */
+  reason?: string | null;
+}
+
+/** PATCH → area; deactivate lặp → alreadyInactive:true, không mutation/audit. */
+export type UpdateProjectAreaResult = ProjectArea & {
+  alreadyInactive: boolean;
+};
+
+function classifyAreaMessage(m: string): { field: string } | null {
+  const lower = m.toLowerCase();
+  if (lower.includes('tên khu vực') || lower.includes('ten khu vuc') || lower.includes('area_duplicate')) return { field: 'name' };
+  if (lower.includes('mã khu vực') || lower.includes('ma khu vuc') || lower.includes('area_code_duplicate')) return { field: 'code' };
+  if (lower.includes('name') && lower.includes('khu vực')) return { field: 'name' };
+  if (lower.includes('code') && lower.includes('khu vực')) return { field: 'code' };
+  if (lower.includes('lý do') || lower.includes('reason')) return { field: 'reason' };
+  if (lower.includes('trạng thái hoạt động') || lower.includes('isactive')) return { field: 'isActive' };
+  return null;
+}
+
+async function parseAreaError(res: Response, fallback: string): Promise<never> {
+  const contentType = res.headers.get('content-type') ?? '';
+  const isJson = contentType.includes('application/json');
+  const body: unknown = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+  if (body && typeof body === 'object') {
+    const b = body as Record<string, unknown>;
+    const msg = typeof b.message === 'string' ? b.message : typeof b.error === 'string' ? b.error : undefined;
+    const code = typeof b.code === 'string' ? b.code : undefined;
+    const traceId = typeof b.traceId === 'string' ? b.traceId : undefined;
+    if (Array.isArray(b.message)) {
+      const fieldErrors: Record<string, string[]> = {};
+      for (const m of b.message as unknown[]) {
+        if (typeof m !== 'string') continue;
+        const hit = classifyAreaMessage(m);
+        const key = hit?.field ?? '_global';
+        fieldErrors[key] = [...(fieldErrors[key] ?? []), m];
+      }
+      throw { status: res.status, message: msg ?? fallback, code, fieldErrors, traceId } satisfies ApiError;
+    }
+    if (msg) {
+      // 409 trùng mã → field `code` (check trước — message mã cũng chứa
+      // cụm 'khu vực đã tồn tại'); 409 trùng tên active cùng project →
+      // map về field `name`. Giữ nguyên `code` để UI hiển thị actionable.
+      if (res.status === 409 && (code === 'AREA_CODE_DUPLICATE' || /(mã khu vực đã tồn tại|area_code_duplicate)/i.test(msg))) {
+        throw { status: res.status, message: msg, code, fieldErrors: { code: [msg] }, traceId } satisfies ApiError;
+      }
+      if (res.status === 409 && (code === 'AREA_DUPLICATE' || /(khu vực đã tồn tại|area_duplicate)/i.test(msg))) {
+        throw { status: res.status, message: msg, code, fieldErrors: { name: [msg] }, traceId } satisfies ApiError;
+      }
+      // 400 single-string từ use case → map vào field tương ứng.
+      if (res.status === 400) {
+        const hit = classifyAreaMessage(msg);
+        if (hit) {
+          throw { status: res.status, message: msg, code, fieldErrors: { [hit.field]: [msg] }, traceId } satisfies ApiError;
+        }
+      }
+      // API 400 shape { message, fieldErrors }: giữ nguyên fieldErrors server.
+      throw { status: res.status, message: msg, code, fieldErrors: toFieldErrors(b.fieldErrors), traceId } satisfies ApiError;
+    }
+  }
+  if (typeof body === 'string' && body.length > 0) {
+    throw { status: res.status, message: body } satisfies ApiError;
+  }
+  throw { status: res.status, message: fallback } satisfies ApiError;
+}
+
+/**
+ * PRJ-SRS-003 — tra cứu khu vực: default kèm inactive,
+ * `activeOnly=true` chỉ khu vực đang sử dụng.
+ */
+export async function listProjectAreas(
+  projectId: string,
+  params: ListProjectAreasParams = {},
+): Promise<ListProjectAreasResult> {
+  const qs = new URLSearchParams();
+  if (params.activeOnly) qs.set('activeOnly', 'true');
+  const query = qs.toString();
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(projectId)}/areas${query ? `?${query}` : ''}`,
+    {
+      headers: authHeaders(),
+      cache: 'no-store',
+    },
+  );
+  if (!res.ok) {
+    await parseAreaError(res, `Tải danh sách khu vực dự án thất bại (${res.status})`);
+  }
+  return (await res.json()) as ListProjectAreasResult;
+}
+
+/**
+ * PRJ-SRS-003 — tạo khu vực (`201`). Lỗi: 400 fieldErrors (name/code),
+ * 404 project, 403 ngoài scope, 409 AREA_DUPLICATE (fieldErrors.name) /
+ * AREA_CODE_DUPLICATE (fieldErrors.code).
+ */
+export async function createProjectArea(
+  projectId: string,
+  payload: CreateProjectAreaPayload,
+): Promise<ProjectArea> {
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(projectId)}/areas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      ...authHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseAreaError(res, `Tạo khu vực dự án thất bại (${res.status})`);
+  }
+  return (await res.json()) as ProjectArea;
+}
+
+/**
+ * PRJ-SRS-003 — sửa khu vực (rename tại chỗ / gỡ mã / toggle isActive).
+ * Deactivate lặp → 200 `{ alreadyInactive: true }`, không audit thêm.
+ */
+export async function updateProjectArea(
+  projectId: string,
+  areaId: string,
+  payload: UpdateProjectAreaPayload,
+): Promise<UpdateProjectAreaResult> {
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/v1/projects/${encodeURIComponent(projectId)}/areas/${encodeURIComponent(areaId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...authHeaders(),
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (!res.ok) {
+    await parseAreaError(res, `Cập nhật khu vực dự án thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as Record<string, unknown>;
+  const { alreadyInactive, ...area } = body;
+  return {
+    ...(area as unknown as ProjectArea),
+    alreadyInactive: alreadyInactive === true,
+  };
+}

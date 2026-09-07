@@ -6,8 +6,11 @@ import { TransitionProjectStatusUseCase } from './application/use-case/transitio
 import { AddProjectMemberUseCase } from './application/use-case/add-project-member.use-case';
 import { RemoveProjectMemberUseCase } from './application/use-case/remove-project-member.use-case';
 import { ListProjectMembersUseCase } from './application/use-case/list-project-members.use-case';
+import { CreateProjectAreaUseCase } from './application/use-case/create-project-area.use-case';
+import { UpdateProjectAreaUseCase } from './application/use-case/update-project-area.use-case';
+import { ListProjectAreasUseCase } from './application/use-case/list-project-areas.use-case';
 import { PgProjectRepository } from './infrastructure/database/pg-project.repository';
-import { PRJ_PROJECT_REPOSITORY } from './domain/repository/project-repository.port';
+import { PRJ_PROJECT_REPOSITORY, PRJ_PROJECT_AREA_REPOSITORY } from './domain/repository/project-repository.port';
 import { PgAuditRepository } from '../iam/infrastructure/database/pg-audit.repository';
 import { PgTransactionManager } from '../iam/infrastructure/database/pg-transaction.manager';
 import { BcryptHasherService } from '../iam/infrastructure/security/bcrypt-hasher.service';
@@ -34,9 +37,13 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     AddProjectMemberUseCase,
     RemoveProjectMemberUseCase,
     ListProjectMembersUseCase,
+    CreateProjectAreaUseCase,
+    UpdateProjectAreaUseCase,
+    ListProjectAreasUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: PRJ_PROJECT_REPOSITORY, useClass: PgProjectRepository },
+    { provide: PRJ_PROJECT_AREA_REPOSITORY, useClass: PgProjectRepository },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: HASHER_PORT, useClass: BcryptHasherService },

@@ -25,10 +25,15 @@ import { TransitionProjectStatusUseCase } from '../../../application/use-case/tr
 import { AddProjectMemberUseCase } from '../../../application/use-case/add-project-member.use-case';
 import { RemoveProjectMemberUseCase } from '../../../application/use-case/remove-project-member.use-case';
 import { ListProjectMembersUseCase } from '../../../application/use-case/list-project-members.use-case';
+import { CreateProjectAreaUseCase } from '../../../application/use-case/create-project-area.use-case';
+import { UpdateProjectAreaUseCase } from '../../../application/use-case/update-project-area.use-case';
+import { ListProjectAreasUseCase } from '../../../application/use-case/list-project-areas.use-case';
 import { CreateProjectDto, UpdateProjectDto, TransitionProjectStatusDto } from '../presentation/dto/project.dto';
 import { AddProjectMemberDto, RemoveProjectMemberDto } from '../presentation/dto/project-member.dto';
+import { CreateProjectAreaDto, UpdateProjectAreaDto } from '../presentation/dto/project-area.dto';
 import { toProjectProfileResponse } from '../presentation/mapper/project.mapper';
 import { toProjectMemberResponse, toProjectMemberListResponse } from '../presentation/mapper/project-member.mapper';
+import { toProjectAreaResponse, toProjectAreaListResponse } from '../presentation/mapper/project-area.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
 /**
@@ -38,9 +43,13 @@ import { TokenPayload } from '../../../../iam/application/port/token.port';
  * PRJ-SRS-002 (issue #33, L1-L6) — thêm `PATCH /api/v1/projects/:id/status`.
  * PRJ-SRS-005 (issue #36, M1-M6) — thêm `GET|POST /api/v1/projects/:id/members`
  * và `DELETE /api/v1/projects/:id/members/:memberId`.
+ * PRJ-SRS-003 (issue #34, A1-A6) — thêm `GET|POST /api/v1/projects/:id/areas`
+ * và `PATCH /api/v1/projects/:id/areas/:areaId`.
  * Write roles = ADMIN + PROJECT_MANAGER (P2, L2); project-scope write checks
- * chi tiết defer sang #37 (PRJ-SRS-006).
- */
+ * chi tiết defer sang #37 (PRJ-SRS-006) — riêng areas enforce membership
+ * ngay từ slice này (A4, xem ENDPOINTS.md §13). Reads areas mở cho mọi
+ * ACTIVE member (WO picker tương lai phục vụ cả worker).
+  */
 const PROJECT_WRITE_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 
 function assertProjectWriteAccess(req: Request): TokenPayload {
@@ -83,6 +92,9 @@ export class PrjProjectsController {
     private readonly addProjectMember: AddProjectMemberUseCase,
     private readonly removeProjectMember: RemoveProjectMemberUseCase,
     private readonly listProjectMembers: ListProjectMembersUseCase,
+    private readonly createProjectArea: CreateProjectAreaUseCase,
+    private readonly updateProjectArea: UpdateProjectAreaUseCase,
+    private readonly listProjectAreas: ListProjectAreasUseCase,
   ) {}
 
   @Post()
@@ -233,5 +245,88 @@ export class PrjProjectsController {
       correlationId: meta.correlationId,
     });
     return { ...toProjectMemberResponse(member), alreadyRemoved };
+  }
+
+  /**
+   * PRJ-SRS-003 (issue #34, A1/A4) — tạo khu vực trong dự án (`201`).
+   * Writes = PROJECT_WRITE_ROLES; scope A4 (ADMIN bypass, PM phải là member)
+   * do use case enforce → non-member PM 403. Strict `X-Correlation-Id`.
+   */
+  @Post(':projectId/areas')
+  @HttpCode(201)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async createArea(
+    @Param('projectId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) projectId: string,
+    @Body() dto: CreateProjectAreaDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertProjectWriteAccess(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { area } = await this.createProjectArea.execute({
+      projectId,
+      code: dto.code ?? null,
+      name: dto.name,
+      actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return toProjectAreaResponse(area);
+  }
+
+  /**
+   * PRJ-SRS-003 (issue #34, A1/A4) — cập nhật khu vực: rename tại chỗ /
+   * đổi mã / toggle active. Deactivate đã inactive → `{alreadyInactive: true}`.
+   */
+  @Patch(':projectId/areas/:areaId')
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async updateArea(
+    @Param('projectId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) projectId: string,
+    @Param('areaId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) areaId: string,
+    @Body() dto: UpdateProjectAreaDto,
+    @Req() req: Request,
+  ) {
+    const actor = assertProjectWriteAccess(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { area, alreadyInactive } = await this.updateProjectArea.execute({
+      projectId,
+      areaId,
+      name: dto.name ?? undefined,
+      code: dto.code ?? undefined,
+      isActive: dto.isActive ?? undefined,
+      reason: dto.reason ?? null,
+      actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return { ...toProjectAreaResponse(area), alreadyInactive };
+  }
+
+  /**
+   * PRJ-SRS-003 (issue #34, A1/A4) — tra cứu khu vực theo dự án.
+   * Default kèm inactive (flag `isActive`); `?activeOnly=true` chỉ active
+   * (future Work Order picker). Mọi ACTIVE member đều đọc được (kể cả
+   * WORKER) — scope A4 do use case enforce; ADMIN bypass. Current data → no-store.
+   */
+  @Get(':projectId/areas')
+  @Header('Cache-Control', 'no-store')
+  async listAreas(
+    @Param('projectId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) projectId: string,
+    @Req() req: Request,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    const user = (req as unknown as { user: TokenPayload }).user;
+    const { areas } = await this.listProjectAreas.execute({
+      projectId,
+      activeOnly: activeOnly === 'true' || activeOnly === '1',
+      actorUserId: user.sub,
+      actorRoles: user.roles ?? [],
+    });
+    return { data: toProjectAreaListResponse(areas), total: areas.length };
   }
 }

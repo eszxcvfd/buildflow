@@ -4,6 +4,9 @@ import { ProjectEntity } from '../../domain/entity/project.entity';
 import {
   ProjectProfile,
   ProjectRepositoryPort,
+  ProjectAreaRow,
+  ProjectAreaFilter,
+  ProjectAreaRepositoryPort,
   ProjectMemberRow,
   ProjectMemberFilter,
   ProjectMemberRole,
@@ -52,7 +55,7 @@ function mapRow(row: Record<string, unknown>): ProjectEntity {
  * `users.full_name` phục vụ ProjectProfileDto. Không migration mới.
  */
 @Injectable()
-export class PgProjectRepository implements ProjectRepositoryPort {
+export class PgProjectRepository implements ProjectRepositoryPort, ProjectAreaRepositoryPort {
   private pool(): Pool { return getPool(); }
 
   async findById(id: string): Promise<ProjectEntity | null> {
@@ -273,5 +276,132 @@ export class PgProjectRepository implements ProjectRepositoryPort {
       row.userCode = (u.rows[0]['employee_code'] as string | null) ?? null;
     }
     return row;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* PRJ-SRS-003 (issue #34) — adapter khu vực dự án (một cấp).          */
+  /* `description`/`display_order` baseline giữ default, slice này      */
+  /* không đọc/ghi (không expose qua API). Không có DELETE/hard-delete. */
+  /* ---------------------------------------------------------------- */
+
+  private mapAreaRow(row: Record<string, unknown>): ProjectAreaRow {
+    return {
+      id: String(row['id']),
+      projectId: String(row['project_id']),
+      code: (row['code'] as string | null) ?? null,
+      name: String(row['name']),
+      isActive: Boolean(row['is_active']),
+      createdAt: row['created_at'] instanceof Date ? row['created_at'] as Date : new Date(String(row['created_at'])),
+      updatedAt: row['updated_at'] instanceof Date ? row['updated_at'] as Date : new Date(String(row['updated_at'])),
+    };
+  }
+
+  private areaColumns(): string {
+    return `id, project_id, code, name, is_active, created_at, updated_at`;
+  }
+
+  async listAreas(filter: ProjectAreaFilter): Promise<ProjectAreaRow[]> {
+    // Default kèm inactive (flag qua isActive); `?activeOnly=true` cho
+    // future Work Order picker. Sắp tên ASC để picker ổn định.
+    const r = filter.activeOnly
+      ? await this.pool().query(
+          `SELECT ${this.areaColumns()} FROM public.project_areas
+           WHERE project_id = $1 AND is_active ORDER BY name ASC`,
+          [filter.projectId],
+        )
+      : await this.pool().query(
+          `SELECT ${this.areaColumns()} FROM public.project_areas
+           WHERE project_id = $1 ORDER BY is_active DESC, name ASC`,
+          [filter.projectId],
+        );
+    return (r.rows as Record<string, unknown>[]).map((row) => this.mapAreaRow(row));
+  }
+
+  async findAreaById(areaId: string): Promise<ProjectAreaRow | null> {
+    const r = await this.pool().query(
+      `SELECT ${this.areaColumns()} FROM public.project_areas WHERE id = $1 LIMIT 1`,
+      [areaId],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findAreaForUpdateWithClient(client: PoolClient, areaId: string): Promise<ProjectAreaRow | null> {
+    const r = await client.query(
+      `SELECT ${this.areaColumns()} FROM public.project_areas WHERE id = $1 FOR UPDATE LIMIT 1`,
+      [areaId],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findActiveAreaByNameWithClient(
+    client: PoolClient,
+    projectId: string,
+    name: string,
+  ): Promise<ProjectAreaRow | null> {
+    // Case-insensitive (mirror DB expression index `ux_project_areas_active_name_ci` — 0006).
+    const r = await client.query(
+      `SELECT ${this.areaColumns()} FROM public.project_areas
+       WHERE project_id = $1 AND is_active AND lower(name) = lower($2) LIMIT 1`,
+      [projectId, name],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async findAreaByCodeWithClient(
+    client: PoolClient,
+    projectId: string,
+    code: string,
+  ): Promise<ProjectAreaRow | null> {
+    const r = await client.query(
+      `SELECT ${this.areaColumns()} FROM public.project_areas
+       WHERE project_id = $1 AND code = $2 LIMIT 1`,
+      [projectId, code],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async insertAreaWithClient(
+    client: PoolClient,
+    input: { projectId: string; code: string | null; name: string },
+  ): Promise<ProjectAreaRow> {
+    // Trùng tên active → 23505 `ux_project_areas_active_name_ci` (0006,
+    // expression index case-insensitive);
+    // trùng mã → 23505 `ux_project_areas_project_code` → use case map 409.
+    const r = await client.query(
+      `INSERT INTO public.project_areas (id, project_id, code, name, is_active)
+       VALUES (gen_random_uuid(), $1, $2, $3, true)
+       RETURNING ${this.areaColumns()}`,
+      [input.projectId, input.code, input.name],
+    );
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async saveAreaWithClient(
+    client: PoolClient,
+    input: { id: string; code: string | null; name: string; isActive: boolean },
+  ): Promise<ProjectAreaRow | null> {
+    // Rename tại chỗ (giữ `area_id` history) + toggle active, cùng statement.
+    const r = await client.query(
+      `UPDATE public.project_areas
+       SET code = $2, name = $3, is_active = $4, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING ${this.areaColumns()}`,
+      [input.id, input.code, input.name, input.isActive],
+    );
+    if (r.rows.length === 0) return null;
+    return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
+  }
+
+  async isActiveProjectMember(projectId: string, userId: string): Promise<boolean> {
+    const r = await this.pool().query(
+      `SELECT 1 FROM public.project_members
+       WHERE project_id = $1 AND user_id = $2 AND is_active LIMIT 1`,
+      [projectId, userId],
+    );
+    return r.rows.length > 0;
   }
 }

@@ -6,6 +6,9 @@ import { TransitionProjectStatusUseCase } from '../../../application/use-case/tr
 import { AddProjectMemberUseCase } from '../../../application/use-case/add-project-member.use-case';
 import { RemoveProjectMemberUseCase } from '../../../application/use-case/remove-project-member.use-case';
 import { ListProjectMembersUseCase } from '../../../application/use-case/list-project-members.use-case';
+import { CreateProjectAreaUseCase } from '../../../application/use-case/create-project-area.use-case';
+import { UpdateProjectAreaUseCase } from '../../../application/use-case/update-project-area.use-case';
+import { ListProjectAreasUseCase } from '../../../application/use-case/list-project-areas.use-case';
 import { ProjectEntity } from '../../../domain/entity/project.entity';
 import { JwtAuthGuard } from '../../../../iam/api/rest/guard/jwt-auth.guard';
 
@@ -59,10 +62,26 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
   let addMemberMock: jest.Mocked<AddProjectMemberUseCase>;
   let removeMemberMock: jest.Mocked<RemoveProjectMemberUseCase>;
   let listMembersMock: jest.Mocked<ListProjectMembersUseCase>;
+  let createAreaMock: jest.Mocked<CreateProjectAreaUseCase>;
+  let updateAreaMock: jest.Mocked<UpdateProjectAreaUseCase>;
+  let listAreasMock: jest.Mocked<ListProjectAreasUseCase>;
   let controller: PrjProjectsController;
 
   const MEMBER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const USER_ID = '55555555-5555-4555-8555-555555555555';
+  const AREA_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  function makeAreaRow(): Record<string, unknown> {
+    const now = new Date('2026-09-07T01:00:00.000Z');
+    return {
+      id: AREA_ID,
+      projectId: PID,
+      code: 'KV-01',
+      name: 'Khu A',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
   function makeMemberRow(): Record<string, unknown> {
     const joinedAt = new Date('2026-09-07T01:00:00.000Z');
     return {
@@ -99,6 +118,15 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
     listMembersMock = {
       execute: jest.fn(async () => ({ members: [makeMemberRow()] })),
     } as unknown as jest.Mocked<ListProjectMembersUseCase>;
+    createAreaMock = {
+      execute: jest.fn(async () => ({ area: makeAreaRow() })),
+    } as unknown as jest.Mocked<CreateProjectAreaUseCase>;
+    updateAreaMock = {
+      execute: jest.fn(async () => ({ area: makeAreaRow(), alreadyInactive: false })),
+    } as unknown as jest.Mocked<UpdateProjectAreaUseCase>;
+    listAreasMock = {
+      execute: jest.fn(async () => ({ areas: [makeAreaRow()] })),
+    } as unknown as jest.Mocked<ListProjectAreasUseCase>;
     controller = new PrjProjectsController(
       createMock,
       updateMock,
@@ -106,6 +134,9 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       addMemberMock,
       removeMemberMock,
       listMembersMock,
+      createAreaMock,
+      updateAreaMock,
+      listAreasMock,
     );
   });
 
@@ -381,6 +412,99 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
         .removeMember(PID, MEMBER_ID, adminReq() as never, undefined as never)
         .catch((e: unknown) => e)) as ConflictException;
       expect(guard.getResponse()).toEqual(expect.objectContaining({ code: 'MANAGER_MEMBER' }));
+    });
+  });
+
+  describe('areas PRJ-SRS-003 (issue #34, A1/A4)', () => {
+    const AREA_BODY = { code: 'KV-01', name: 'Khu A' };
+
+    it('ADMIN + PROJECT_MANAGER create/update ok; response đủ ProjectAreaDto', async () => {
+      const created = await controller.createArea(PID, AREA_BODY as never, adminReq() as never);
+      expect(createAreaMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, code: 'KV-01', name: 'Khu A', actorUserId: 'u-1' }),
+      );
+      expect(created).toEqual(
+        expect.objectContaining({ id: AREA_ID, projectId: PID, code: 'KV-01', name: 'Khu A', isActive: true }),
+      );
+
+      await controller.createArea(PID, { name: 'Khu B' } as never, pmReq() as never);
+      expect(createAreaMock.execute).toHaveBeenCalledWith(expect.objectContaining({ code: null }));
+
+      const updated = await controller.updateArea(PID, AREA_ID, { name: 'Khu B' } as never, pmReq() as never);
+      expect(updateAreaMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, areaId: AREA_ID, name: 'Khu B', actorUserId: 'u-1' }),
+      );
+      expect(updated).toEqual(expect.objectContaining({ id: AREA_ID, alreadyInactive: false }));
+    });
+
+    it('STAFF/WORKER mọi area write → 403, không gọi use case (scope sâu hơn do use case enforce)', async () => {
+      await expect(controller.createArea(PID, AREA_BODY as never, staffReq() as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(controller.createArea(PID, AREA_BODY as never, workerReq() as never)).rejects.toThrow(
+        ForbiddenException,
+      );
+      await expect(
+        controller.updateArea(PID, AREA_ID, { name: 'X' } as never, workerReq() as never),
+      ).rejects.toThrow(ForbiddenException);
+      expect(createAreaMock.execute).not.toHaveBeenCalled();
+      expect(updateAreaMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('GET list mở mọi role (scope membership do use case enforce); activeOnly=true/1 → true', async () => {
+      const listed = await controller.listAreas(PID, workerReq() as never, undefined);
+      expect(listAreasMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, activeOnly: false, actorUserId: 'u-1' }),
+      );
+      expect(listed).toEqual({
+        data: [expect.objectContaining({ id: AREA_ID, name: 'Khu A', isActive: true })],
+        total: 1,
+      });
+      await controller.listAreas(PID, adminReq() as never, 'true');
+      expect(listAreasMock.execute).toHaveBeenCalledWith(expect.objectContaining({ activeOnly: true }));
+      await controller.listAreas(PID, adminReq() as never, '1');
+      expect(listAreasMock.execute).toHaveBeenCalledWith(expect.objectContaining({ activeOnly: true }));
+      await controller.listAreas(PID, adminReq() as never, '0');
+      expect(listAreasMock.execute).toHaveBeenCalledWith(expect.objectContaining({ activeOnly: false }));
+    });
+
+    it('X-Correlation-Id sai UUID trên area writes → 400 strict (GET list miễn)', async () => {
+      const bad = reqWithRoles(['ADMIN'], { 'x-correlation-id': 'not-a-uuid' });
+      await expect(controller.createArea(PID, AREA_BODY as never, bad as never)).rejects.toThrow(BadRequestException);
+      await expect(controller.updateArea(PID, AREA_ID, { name: 'X' } as never, bad as never)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(createAreaMock.execute).not.toHaveBeenCalled();
+      expect(updateAreaMock.execute).not.toHaveBeenCalled();
+      await controller.listAreas(PID, bad as never, undefined);
+      expect(listAreasMock.execute).toHaveBeenCalled();
+    });
+
+    it('alreadyInactive + 409 AREA_DUPLICATE từ use case → truyền nguyên', async () => {
+      updateAreaMock.execute.mockResolvedValue({ area: makeAreaRow() as never, alreadyInactive: true });
+      const out = await controller.updateArea(PID, AREA_ID, { isActive: false } as never, adminReq() as never);
+      expect(out).toEqual(expect.objectContaining({ alreadyInactive: true }));
+
+      createAreaMock.execute.mockRejectedValue(
+        new ConflictException({ statusCode: 409, message: 'Tên khu vực đã tồn tại trong dự án', code: 'AREA_DUPLICATE' }),
+      );
+      const dup = (await controller
+        .createArea(PID, AREA_BODY as never, adminReq() as never)
+        .catch((e: unknown) => e)) as ConflictException;
+      expect(dup.getResponse()).toEqual(expect.objectContaining({ code: 'AREA_DUPLICATE' }));
+    });
+
+    it('contract: :projectId/:areaId validate UUID (400 khi sai)', async () => {
+      const { ROUTE_ARGS_METADATA } = jest.requireActual('@nestjs/common/constants') as {
+        ROUTE_ARGS_METADATA: string;
+      };
+      const args = Reflect.getMetadata(ROUTE_ARGS_METADATA, PrjProjectsController, 'updateArea') as Record<
+        string,
+        { pipes?: Array<{ options?: { errorHttpStatusCode?: number } }> }
+      >;
+      const piped = Object.values(args).filter((a) => (a.pipes ?? []).length > 0);
+      expect(piped).toHaveLength(2);
+      for (const p of piped) expect(p.pipes?.[0]?.options?.errorHttpStatusCode).toBe(400);
     });
   });
 });

@@ -101,3 +101,79 @@ export interface ProjectRepositoryPortMembers {
    */
   deactivateMemberWithClient(client: PoolClient, memberId: string): Promise<ProjectMemberRow | null>;
 }
+
+/* ------------------------------------------------------------------ */
+/* PRJ-SRS-003 (issue #34, A1-A6) — khu vực dự án (một cấp).             */
+/* Bảng `public.project_areas` (baseline 0001 + constraints 0005/0006, KHÔNG */
+/* bảng mới): `code` nullable (optional), expression partial unique       */
+/* `ux_project_areas_active_name_ci (project_id, lower(name))             */
+/* WHERE is_active` (0006, DB-enforced case-insensitive),                */
+/* `project_areas_name_ck (btrim(name) <> '')`, FK                      */
+/* `fk_project_areas_project_id ... ON DELETE RESTRICT`. Không có cột   */
+/* `parent_id` — một cấp enforced by schema. Cột baseline               */
+/* `description`/`display_order` tồn tại nhưng slice này không expose    */
+/* qua API (giữ default); work_orders.area_id tham chiếu area (module    */
+/* JOB chưa tồn tại nên usage count = 0 — xem ENDPOINTS.md §13 A2).      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Một row `project_areas`. `code` null = không mã (optional).
+ * `description`/`display_order` không map ở slice này.
+ */
+export interface ProjectAreaRow {
+  id: string;
+  projectId: string;
+  code: string | null;
+  name: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProjectAreaFilter {
+  projectId: string;
+  /** true → chỉ `is_active`; thiếu/false → toàn bộ (kèm inactive, sắp tên). */
+  activeOnly?: boolean;
+}
+
+export interface ProjectAreaRepositoryPort {
+  /**
+   * Tra cứu thuần SELECT (pool read, không tx) cho GET list —
+   * mirror `listMembers` crews #30 (fix F7).
+   */
+  listAreas(filter: ProjectAreaFilter): Promise<ProjectAreaRow[]>;
+  findAreaById(areaId: string): Promise<ProjectAreaRow | null>;
+  /** Đọc row trong tx (`SELECT ... FOR UPDATE`) trước khi apply PATCH. */
+  findAreaForUpdateWithClient(client: PoolClient, areaId: string): Promise<ProjectAreaRow | null>;
+  /**
+   * Pre-check trùng tên active cùng project, case-insensitive (chặt hơn DB
+   * btree case-sensitive — precedent P4 `#32`). Caller loại `exclSelf`.
+   */
+  findActiveAreaByNameWithClient(
+    client: PoolClient,
+    projectId: string,
+    name: string,
+  ): Promise<ProjectAreaRow | null>;
+  /**
+   * Pre-check trùng mã cùng project (index `ux_project_areas_project_code`
+   * KHÔNG partial — inactive vẫn giữ mã). NULL không bao giờ match.
+   */
+  findAreaByCodeWithClient(
+    client: PoolClient,
+    projectId: string,
+    code: string,
+  ): Promise<ProjectAreaRow | null>;
+  insertAreaWithClient(
+    client: PoolClient,
+    input: { projectId: string; code: string | null; name: string },
+  ): Promise<ProjectAreaRow>;
+  /** Rename tại chỗ + toggle active (update name/code/is_active, updated_at). */
+  saveAreaWithClient(
+    client: PoolClient,
+    input: { id: string; code: string | null; name: string; isActive: boolean },
+  ): Promise<ProjectAreaRow | null>;
+  /** Scope check pool-read: caller có ACTIVE membership trong project không. */
+  isActiveProjectMember(projectId: string, userId: string): Promise<boolean>;
+}
+
+export const PRJ_PROJECT_AREA_REPOSITORY = Symbol('PRJ_PROJECT_AREA_REPOSITORY');

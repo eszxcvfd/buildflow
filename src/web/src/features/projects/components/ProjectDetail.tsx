@@ -12,6 +12,7 @@ import {
   type ProjectStatusAction,
 } from './ProjectStatusDialog';
 import { ProjectMembers } from './ProjectMembers';
+import { ProjectAreas } from './ProjectAreas';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
@@ -340,6 +341,10 @@ export function ProjectDetail({ id }: { id: string }) {
 
       <Card>
         <ProjectMembers projectId={project.id} managerId={project.managerId} />
+      </Card>
+
+      <Card>
+        <ProjectAreas projectId={project.id} />
       </Card>
 
       <Card>

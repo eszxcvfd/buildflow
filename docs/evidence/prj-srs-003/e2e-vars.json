@@ -1,0 +1,60 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "admin@example.com",
+  "pm": "pm@example.com",
+  "worker1": "worker1@example.com",
+  "codes": {
+    "A": "E2E3-A",
+    "B": "E2E3-B"
+  },
+  "projectIds": {
+    "A": "02a7f288-ffbc-4fee-a853-c3e7cbbd8da5",
+    "B": "01f0fc63-08ba-41c5-a83c-5dbe8a9125eb"
+  },
+  "areaId": "f4feb008-2a80-4640-a730-9ba273da2f85",
+  "auditBaseline": "810",
+  "auditFinal": "824",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "UI notice Đã thêm + list Khu E2E3 Alpha; psql Khu E2E3 Alpha|true; audit ADDED admin"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "UI field error per-field + API 409 AREA_DUPLICATE; active rows=1"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "UI Đã đổi tên + list mới; psql name đúng; audit before/after đủ; UPDATED +1"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "UI badge Ngừng sử dụng; psql is_active=false row còn; audit reason đủ"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "API alreadyInactive=true; audit UPDATED 2→2 (không tăng)"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "worker UI 0 nút + API POST/PATCH 403; pm-ngoài-A POST/PATCH 403"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "404 message=\"Không tìm thấy khu vực trong dự án\""
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "default total=2 [Alpha2,Beta]; activeOnly total=1 [Beta]; UI toggle đúng"
+    }
+  ]
+}

@@ -206,6 +206,7 @@ Ví dụ một item trong `data[]`:
     - `POST /api/v1/projects` → `PRJ_PROJECT_CREATED`; `PATCH /api/v1/projects/:id` → `PRJ_PROJECT_UPDATED` (PRJ-SRS-001, issue `#32`; `entityType` `PROJECT`)
     - `PATCH /api/v1/projects/:id/status` → `PRJ_PROJECT_STATUS_CHANGED` (PRJ-SRS-002, issue `#33`; `entityType` `PROJECT`; `alreadyInState` idempotent không audit; `reason` ở cột `audit_logs.reason`)
     - `POST /api/v1/projects/:id/members` → `PRJ_PROJECT_MEMBER_ADDED`; `DELETE /api/v1/projects/:id/members/:memberId` → `PRJ_PROJECT_MEMBER_REMOVED` (PRJ-SRS-005, issue `#36`; `entityType` `PROJECT`; `alreadyRemoved` idempotent không audit; `reason` ở cột `audit_logs.reason`; membership manager → `409 MANAGER_MEMBER`)
+    - `POST /api/v1/projects/:projectId/areas` → `PRJ_PROJECT_AREA_ADDED`; `PATCH /api/v1/projects/:projectId/areas/:areaId` → `PRJ_PROJECT_AREA_UPDATED` (PRJ-SRS-003, issue `#34`; `entityType` `PROJECT`, `entityId`=projectId; double-deactivate idempotent `alreadyInactive` không audit; `reason` ở cột `audit_logs.reason` và trong `afterData` khi gửi; xem `ENDPOINTS.md` §13)
   - **Lenient (public/self-service — header thiếu hoặc không phải UUID → `correlationId: undefined` (audit vẫn ghi với `correlation_id` null, không dedup); header sai không bao giờ block/400):**
     - `POST /api/v1/auth/login` → `AUTH_LOGIN_SUCCESS`/`AUTH_LOGIN_FAILED`
     - `POST /api/v1/auth/logout` (authenticated self-service) → `AUTH_LOGOUT`
@@ -296,6 +297,8 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 | `POST /api/v1/projects`, `PATCH /api/v1/projects/:id` (PRJ-SRS-001, `#32`, module `prj`) | OK | OK (write) | `403` | `401` |
 | `PATCH /api/v1/projects/:id/status` (PRJ-SRS-002, `#33`, module `prj`) | OK | OK (write; per-project scope defer `#37`) | `403` | `401` |
 | `GET`/`POST /api/v1/projects/:id/members`, `DELETE /api/v1/projects/:id/members/:memberId` (PRJ-SRS-005, `#36`, module `prj`) | OK | OK (write; per-project scope defer `#37`) | `403` | `401` |
+| `POST /api/v1/projects/:projectId/areas`, `PATCH /api/v1/projects/:projectId/areas/:areaId` (PRJ-SRS-003, `#34`, module `prj`) | OK | OK (write; + ACTIVE membership scope, xem `ENDPOINTS.md` §13 A4) | `403` | `401` |
+| `GET /api/v1/projects/:projectId/areas` (PRJ-SRS-003, `#34`, module `prj`) | OK (bypass) | OK (member) | OK (**member** — mọi ACTIVE member, kể cả WORKER; non-member → `403`) | `401` |
 
 - **Helper dùng chung:** `requireRoles(req, roles)` trong `modules/iam/api/rest/guard/roles.guard.ts` (RolesGuard đã có logic tương tự nhưng không dùng ở các controller này). Chỉ các GET path widen gọi `requireRoles(req, ['ADMIN', 'PROJECT_MANAGER'])`; write path giữ `assertAdmin` cục bộ.
 - **Ngoại lệ crews (ORG-SRS-006, `#29`):** crews mở `ADMIN` + `PROJECT_MANAGER` trên cả read lẫn write (SRS actor Điều phối viên) — xem `ENDPOINTS.md` §7 bounded decision và §8. Không widen nhầm endpoint workers/contractors/trades.
@@ -308,6 +311,7 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 - **Field-level filter errors:** lỗi validation filter trả `400 { statusCode, message, fieldErrors: { <field>: [msg] } }`, `message` giữ nguyên text cũ (web hiện chỉ đọc `message` nên không break).
 - **Current data:** các GET search + detail trả `Cache-Control: no-store` (qua `@Header`).
 - **Eligibility (ORG-SRS-008, `#31`):** endpoint điều kiện nhận việc thuộc [`ENDPOINTS.md`](ENDPOINTS.md) §9 — read-only, không ghi audit.
+- **Khu vực dự án (PRJ-SRS-003, `#34`, xem `ENDPOINTS.md` §13):** `GET`/`POST /api/v1/projects/:projectId/areas` và `PATCH /api/v1/projects/:projectId/areas/:areaId` trong module `prj` (reads `GET /projects` ở lại iam). Writes = `PROJECT_WRITE_ROLES` + ACTIVE membership scope (ADMIN bypass, non-member PM → `403`); reads mở mọi ACTIVE member (kể cả WORKER — WO picker tương lai). Một cấp (không `parent_id`); trùng tên active → `409 AREA_DUPLICATE`, trùng mã → `409 AREA_CODE_DUPLICATE` (constraint-cụ-thể-trước, bare `23505` rethrow); double-deactivate idempotent `alreadyInactive`; audit `PRJ_PROJECT_AREA_ADDED`/`PRJ_PROJECT_AREA_UPDATED` tx-embedded (`entityType` `PROJECT`).
 - **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29` đã resolved cho crews; team filter workers defer `#30` (D9) đã đóng; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
 
 ## References
