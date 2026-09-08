@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateFilter, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateFilter, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
 
 export interface SearchWorkOrderTemplatesInput {
@@ -13,6 +13,12 @@ export interface SearchWorkOrderTemplatesInput {
 export interface SearchWorkOrderTemplatesOutput {
   entities: WorkOrderTemplateEntity[];
   total: number;
+  /**
+   * Enrichment cho list: ref hiển thị loại công việc theo workTypeId
+   * (batch 1 query, tránh N+1 — mirror crews `enrichments`). Id không có
+   * trong map → mapper mặc định `workType: null`.
+   */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
 }
 
 /**
@@ -33,6 +39,9 @@ export class SearchWorkOrderTemplatesUseCase {
       limit: input.limit,
       offset: input.offset,
     };
-    return this.repo.search(filter);
+    const { entities, total } = await this.repo.search(filter);
+    const ids = [...new Set(entities.map((e) => e.workTypeId).filter((id): id is string => id !== null))];
+    const workTypeRefs = await this.repo.findWorkTypeRefs(ids);
+    return { entities, total, workTypeRefs };
   }
 }

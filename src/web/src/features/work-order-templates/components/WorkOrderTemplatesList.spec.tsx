@@ -27,6 +27,7 @@ function tpl(overrides = {}) {
     name: 'Do be tong chuan',
     description: null,
     workTypeId: '44444444-4444-4444-8444-444444444444',
+    workType: { id: '44444444-4444-4444-8444-444444444444', code: 'WT-001', name: 'Do be tong' },
     requiredTradeId: null,
     defaultDurationMinutes: 120,
     defaultPriority: 'HIGH',
@@ -80,6 +81,40 @@ describe('WorkOrderTemplatesList PRJ-SRS-008', () => {
     render(<WorkOrderTemplatesList />);
     await waitFor(() => expect(screen.getAllByText('Nháp').length).toBeGreaterThanOrEqual(1));
     expect(screen.getByText('—')).not.toBeNull();
+  });
+
+  it('hiển thị tên loại đã ngừng từ workType kèm sẵn (không lookup /active, không fallback id)', async () => {
+    listActiveWorkTypesMock.mockResolvedValue({ data: [], total: 0 });
+    searchMock.mockResolvedValue({
+      data: [
+        tpl({
+          code: 'WOT-BT-SAN',
+          workTypeId: '99999999-9999-4999-8999-999999999999',
+          workType: { id: '99999999-9999-4999-8999-999999999999', code: 'WT-BE-TONG-TC', name: 'Đổ bê tông thủ công' },
+        }),
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    render(<WorkOrderTemplatesList />);
+    await waitFor(() => expect(screen.getByText('WT-BE-TONG-TC — Đổ bê tông thủ công')).not.toBeNull());
+    expect(screen.queryByText('99999999…')).toBeNull();
+  });
+
+  it('workTypeId null → —; workType thiếu → fallback id rút gọn', async () => {
+    searchMock.mockResolvedValue({
+      data: [
+        tpl({ code: 'WOT-NONE', workTypeId: null, workType: null }),
+        tpl({ code: 'WOT-GHOST', workTypeId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', workType: null }),
+      ],
+      total: 2,
+      limit: 20,
+      offset: 0,
+    });
+    render(<WorkOrderTemplatesList />);
+    await waitFor(() => expect(screen.getByText('WOT-NONE')).not.toBeNull());
+    expect(screen.getByText('aaaaaaaa…')).not.toBeNull();
   });
 
   it('empty state khi không có mẫu phù hợp', async () => {

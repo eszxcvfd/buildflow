@@ -1,8 +1,11 @@
 import { WorkOrderTemplateEntity } from '../../../../domain/entity/work-order-template.entity';
+import { TemplateWorkTypeRef } from '../../../../domain/repository/work-order-template-repository.port';
 import { WorkOrderTemplateResponseDto } from '../dto/work-order-template.dto';
 
 export interface WorkOrderTemplateResponseOptions {
   alreadyInState?: boolean;
+  /** Enrichment `workType` từ use-case (thiếu → `workType: null`). */
+  workTypeRefs?: Map<string, TemplateWorkTypeRef>;
 }
 
 /**
@@ -15,12 +18,14 @@ export function toWorkOrderTemplateResponse(
   options?: WorkOrderTemplateResponseOptions,
 ): WorkOrderTemplateResponseDto {
   const pub = entity.toPublic();
+  const ref = pub.workTypeId ? options?.workTypeRefs?.get(pub.workTypeId) ?? null : null;
   const response: WorkOrderTemplateResponseDto = {
     id: pub.id,
     code: pub.code,
     name: pub.name,
     description: pub.description,
     workTypeId: pub.workTypeId,
+    workType: ref ? { id: ref.id, code: ref.code, name: ref.name } : null,
     requiredTradeId: pub.requiredTradeId,
     defaultDurationMinutes: pub.defaultDurationMinutes,
     defaultPriority: pub.defaultPriority,
@@ -46,6 +51,7 @@ export function toWorkOrderTemplateResponse(
 
 export function toWorkOrderTemplateListResponse(
   entities: WorkOrderTemplateEntity[],
+  workTypeRefs?: Map<string, TemplateWorkTypeRef>,
 ): WorkOrderTemplateResponseDto[] {
-  return entities.map((entity) => toWorkOrderTemplateResponse(entity));
+  return entities.map((entity) => toWorkOrderTemplateResponse(entity, { workTypeRefs }));
 }

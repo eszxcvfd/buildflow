@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PoolClient } from 'pg';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
@@ -20,6 +20,8 @@ export interface ChangeWorkOrderTemplateStatusInput {
 
 export interface ChangeWorkOrderTemplateStatusOutput {
   entity: WorkOrderTemplateEntity;
+  /** Enrichment `workType` cho status response. */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
   alreadyInState: boolean;
 }
 
@@ -62,7 +64,8 @@ export class ChangeWorkOrderTemplateStatusUseCase {
 
     const target: WoTemplateStatus = input.action === 'ACTIVATE' ? 'ACTIVE' : 'INACTIVE';
     if (entity.status === target) {
-      return { entity, alreadyInState: true };
+      const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+      return { entity, workTypeRefs, alreadyInState: true };
     }
 
     if (input.action === 'DEACTIVATE' && entity.status === 'DRAFT') {
@@ -113,6 +116,7 @@ export class ChangeWorkOrderTemplateStatusUseCase {
       }
     });
 
-    return { entity, alreadyInState: false };
+    const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+    return { entity, workTypeRefs, alreadyInState: false };
   }
 }

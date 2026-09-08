@@ -1,7 +1,7 @@
 import { Inject, Injectable, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PoolClient } from 'pg';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
@@ -38,6 +38,8 @@ export interface CreateWorkOrderTemplateInput {
 
 export interface CreateWorkOrderTemplateOutput {
   entity: WorkOrderTemplateEntity;
+  /** Enrichment `workType` cho create response (null-map khi `work_type_id` NULL). */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -225,6 +227,7 @@ export class CreateWorkOrderTemplateUseCase {
       }
     });
 
-    return { entity };
+    const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+    return { entity, workTypeRefs };
   }
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
 
 export interface GetWorkOrderTemplateInput {
@@ -8,6 +8,8 @@ export interface GetWorkOrderTemplateInput {
 
 export interface GetWorkOrderTemplateOutput {
   entity: WorkOrderTemplateEntity;
+  /** Enrichment `workType` cho detail (null-map khi `work_type_id` NULL). */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
 }
 
 /**
@@ -24,6 +26,7 @@ export class GetWorkOrderTemplateUseCase {
   async execute(input: GetWorkOrderTemplateInput): Promise<GetWorkOrderTemplateOutput> {
     const entity = await this.repo.findById(input.templateId);
     if (!entity) throw new NotFoundException('Không tìm thấy mẫu công việc');
-    return { entity };
+    const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+    return { entity, workTypeRefs };
   }
 }

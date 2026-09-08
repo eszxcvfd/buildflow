@@ -215,7 +215,6 @@ export function WorkOrderTemplatesList() {
               </thead>
               <tbody>
                 {items.map((t) => {
-                  const wt = t.workTypeId ? workTypeMap[t.workTypeId] : null;
                   return (
                     <tr key={t.id}>
                       <td>
@@ -227,8 +226,8 @@ export function WorkOrderTemplatesList() {
                       <td style={{ color: '#4b5563' }}>
                         {!t.workTypeId
                           ? '—'
-                          : wt
-                            ? <a href={`/work-types/${wt.id}`}>{wt.code} — {wt.name}</a>
+                          : t.workType
+                            ? <a href={`/work-types/${t.workType.id}`}>{t.workType.code} — {t.workType.name}</a>
                             : `${t.workTypeId.slice(0, 8)}…`}
                       </td>
                       <td style={{ color: '#4b5563' }}>{durationLabel(t)}</td>

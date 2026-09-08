@@ -32,6 +32,7 @@ function makeHarness(entity: WorkOrderTemplateEntity | null, overrides?: Record<
     findActiveTradeByCode: jest.fn(async () => null),
     findActiveWorkTypeById: jest.fn(async () => null),
     findChecklistTemplateSnapshot: jest.fn(async () => null),
+    findWorkTypeRefs: jest.fn(async () => new Map()),
     save: jest.fn(async () => {}),
     saveWithClient: jest.fn(async () => {}),
     ...overrides,

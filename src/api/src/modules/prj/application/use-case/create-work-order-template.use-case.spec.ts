@@ -16,6 +16,7 @@ function makeRepo(overrides?: Record<string, jest.Mock>): WorkOrderTemplateRepos
     findActiveTradeByCode: jest.fn(async () => null),
     findActiveWorkTypeById: jest.fn(async () => null),
     findChecklistTemplateSnapshot: jest.fn(async () => null),
+    findWorkTypeRefs: jest.fn(async () => new Map()),
     create: jest.fn(async (e: WorkOrderTemplateEntity) => { store.push(e); }),
     createWithClient: jest.fn(async (_c: unknown, e: WorkOrderTemplateEntity) => { store.push(e); }),
     save: jest.fn(async () => {}),

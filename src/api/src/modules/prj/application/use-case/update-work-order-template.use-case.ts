@@ -1,6 +1,6 @@
 import { Inject, Injectable, ConflictException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PoolClient } from 'pg';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
@@ -48,6 +48,8 @@ export interface UpdateWorkOrderTemplateInput {
 
 export interface UpdateWorkOrderTemplateOutput {
   entity: WorkOrderTemplateEntity;
+  /** Enrichment `workType` cho update response. */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
   /** true khi field nghiệp vụ đổi → `version` đã +1. */
   versionChanged: boolean;
 }
@@ -268,7 +270,8 @@ export class UpdateWorkOrderTemplateUseCase {
       sourceChecklistTemplateId !== undefined &&
       sourceChecklistTemplateId !== before.sourceChecklistTemplateId;
     if (!versionChanged && !provenanceChanged) {
-      return { entity, versionChanged: false };
+      const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+      return { entity, versionChanged: false, workTypeRefs };
     }
 
     await this.tx.withTransaction(async (client: PoolClient) => {
@@ -310,6 +313,7 @@ export class UpdateWorkOrderTemplateUseCase {
       }
     });
 
-    return { entity, versionChanged };
+    const workTypeRefs = await this.repo.findWorkTypeRefs(entity.workTypeId ? [entity.workTypeId] : []);
+    return { entity, versionChanged, workTypeRefs };
   }
 }

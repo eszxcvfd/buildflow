@@ -2,7 +2,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WorkOrderTemplateDetail } from './WorkOrderTemplateDetail';
 import { getWorkOrderTemplate, changeWorkOrderTemplateStatus } from '@/lib/api/work-order-templates';
-import { listActiveWorkTypes } from '@/lib/api/work-types';
 import { listTrades } from '@/lib/api/trades';
 
 jest.mock('@/lib/api/work-order-templates', () => ({
@@ -14,7 +13,6 @@ jest.mock('@/lib/api/work-order-templates', () => ({
   changeWorkOrderTemplateStatus: jest.fn(),
   WORK_ORDER_TEMPLATE_STATUS_LABELS: { DRAFT: 'Nháp', ACTIVE: 'Hoạt động', INACTIVE: 'Ngừng hoạt động' },
 }));
-jest.mock('@/lib/api/work-types', () => ({ listActiveWorkTypes: jest.fn() }));
 jest.mock('@/lib/api/trades', () => ({ listTrades: jest.fn() }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }) }));
 
@@ -28,6 +26,7 @@ function tpl(overrides = {}) {
     name: 'Do be tong chuan',
     description: 'Mo ta mau',
     workTypeId: '44444444-4444-4444-8444-444444444444',
+    workType: { id: '44444444-4444-4444-8444-444444444444', code: 'WT-001', name: 'Do be tong' },
     requiredTradeId: '11111111-1111-4111-8111-111111111111',
     defaultDurationMinutes: 120,
     defaultPriority: 'HIGH',
@@ -48,10 +47,6 @@ function tpl(overrides = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (listActiveWorkTypes as jest.Mock).mockResolvedValue({
-    data: [{ id: '44444444-4444-4444-8444-444444444444', code: 'WT-001', name: 'Do be tong' }],
-    total: 1,
-  });
   (listTrades as jest.Mock).mockResolvedValue({
     data: [
       {
@@ -103,6 +98,16 @@ describe('WorkOrderTemplateDetail PRJ-SRS-008', () => {
       { action: 'ACTIVATE', reason: 'Da ra soat xong' },
     ));
     expect(await screen.findByText(/Đã kích hoạt — có thể dùng cho work order mới/)).not.toBeNull();
+  });
+
+  it('hiển thị tên loại đã ngừng từ workType kèm sẵn, không gọi /active', async () => {
+    getMock.mockResolvedValue(tpl({
+      workTypeId: '99999999-9999-4999-8999-999999999999',
+      workType: { id: '99999999-9999-4999-8999-999999999999', code: 'WT-BE-TONG-TC', name: 'Đổ bê tông thủ công' },
+    }));
+    render(<WorkOrderTemplateDetail id="55555555-5555-4555-8555-555555555555" />);
+    await waitFor(() => expect(screen.getByText('WT-BE-TONG-TC — Đổ bê tông thủ công')).not.toBeNull());
+    expect(screen.queryByText('99999999…')).toBeNull();
   });
 
   it('404 hiển thị không tìm thấy + thử lại', async () => {

@@ -26,7 +26,8 @@ function makeEntity(code = 'A'): WorkOrderTemplateEntity {
 describe('SearchWorkOrderTemplatesUseCase (PRJ-SRS-008)', () => {
   it('forward filter + trim search rỗng → undefined', async () => {
     const search = jest.fn(async (_f: unknown) => ({ entities: [], total: 0 }));
-    const uc = new SearchWorkOrderTemplatesUseCase({ search } as never);
+    const findWorkTypeRefs = jest.fn(async () => new Map());
+    const uc = new SearchWorkOrderTemplatesUseCase({ search, findWorkTypeRefs } as never);
     await uc.execute({ status: 'ACTIVE', workTypeId: '  ', search: '   ', limit: 10, offset: 0 });
     expect(search).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'ACTIVE', limit: 10, offset: 0 }),
@@ -42,9 +43,10 @@ describe('GetWorkOrderTemplateUseCase (PRJ-SRS-008)', () => {
     const entity = makeEntity();
     const ok = new GetWorkOrderTemplateUseCase({
       findById: jest.fn(async () => entity),
+      findWorkTypeRefs: jest.fn(async () => new Map()),
     } as never);
     expect((await ok.execute({ templateId: entity.id })).entity).toBe(entity);
-    const missing = new GetWorkOrderTemplateUseCase({ findById: jest.fn(async () => null) } as never);
+    const missing = new GetWorkOrderTemplateUseCase({ findById: jest.fn(async () => null), findWorkTypeRefs: jest.fn(async () => new Map()) } as never);
     await expect(missing.execute({ templateId: entity.id })).rejects.toMatchObject({ status: 404 });
   });
 });
@@ -53,7 +55,8 @@ describe('ListActiveWorkOrderTemplatesUseCase (PRJ-SRS-008)', () => {
   it('delegate findAllActive (picker chỉ ACTIVE)', async () => {
     const entities = [makeEntity('A'), makeEntity('B')];
     const findAllActive = jest.fn(async () => entities);
-    const uc = new ListActiveWorkOrderTemplatesUseCase({ findAllActive } as never);
+    const findWorkTypeRefs = jest.fn(async () => new Map());
+    const uc = new ListActiveWorkOrderTemplatesUseCase({ findAllActive, findWorkTypeRefs } as never);
     const out = await uc.execute();
     expect(out.entities).toHaveLength(2);
     expect(findAllActive).toHaveBeenCalledTimes(1);

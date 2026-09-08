@@ -26,12 +26,20 @@ export interface ChecklistSnapshotItem {
 
 export type WorkOrderTemplateStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE';
 
+export interface TemplateWorkTypeRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface WorkOrderTemplate {
   id: string;
   code: string;
   name: string;
   description: string | null;
   workTypeId: string | null;
+  /** Ref hiển thị loại công việc do API kèm trong profile — `null` khi `workTypeId` NULL hoặc ref thiếu. */
+  workType: TemplateWorkTypeRef | null;
   requiredTradeId: string | null;
   defaultDurationMinutes: number | null;
   defaultPriority: string;
@@ -219,10 +227,10 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-/** Chuẩn hóa profile API → WorkOrderTemplate web (thêm isActive từ status). */
+/** Chuẩn hóa profile API → WorkOrderTemplate web (thêm isActive từ status; workType mặc định null). */
 export function normalizeWorkOrderTemplate(raw: Record<string, unknown>): WorkOrderTemplate {
   const r = raw as unknown as WorkOrderTemplate;
-  return { ...r, isActive: r.status === 'ACTIVE' };
+  return { ...r, workType: r.workType ?? null, isActive: r.status === 'ACTIVE' };
 }
 
 export async function searchWorkOrderTemplates(

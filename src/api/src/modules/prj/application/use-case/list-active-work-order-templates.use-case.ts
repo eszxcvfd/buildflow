@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
+import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, TemplateWorkTypeRef, WorkOrderTemplateRepositoryPort } from '../../domain/repository/work-order-template-repository.port';
 import { WorkOrderTemplateEntity } from '../../domain/entity/work-order-template.entity';
 
 export interface ListActiveWorkOrderTemplatesOutput {
   entities: WorkOrderTemplateEntity[];
+  /** Enrichment `workType` cho picker (batch 1 query — mirror search use-case). */
+  workTypeRefs: Map<string, TemplateWorkTypeRef>;
 }
 
 /**
@@ -21,6 +23,8 @@ export class ListActiveWorkOrderTemplatesUseCase {
 
   async execute(): Promise<ListActiveWorkOrderTemplatesOutput> {
     const entities = await this.repo.findAllActive();
-    return { entities };
+    const ids = [...new Set(entities.map((e) => e.workTypeId).filter((id): id is string => id !== null))];
+    const workTypeRefs = await this.repo.findWorkTypeRefs(ids);
+    return { entities, workTypeRefs };
   }
 }

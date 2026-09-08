@@ -7,7 +7,6 @@ import {
   type WorkOrderTemplate,
   type ApiError,
 } from '@/lib/api/work-order-templates';
-import { listActiveWorkTypes, type WorkType } from '@/lib/api/work-types';
 import { listTrades, type Trade } from '@/lib/api/trades';
 import {
   CHECKLIST_ANSWER_TYPE_LABELS,
@@ -22,7 +21,6 @@ import { WorkOrderTemplateStatusDialog } from './WorkOrderTemplateStatusDialog';
 
 export function WorkOrderTemplateDetail({ id }: { id: string }) {
   const [template, setTemplate] = React.useState<WorkOrderTemplate | null>(null);
-  const [workType, setWorkType] = React.useState<WorkType | null>(null);
   const [trade, setTrade] = React.useState<Trade | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -39,16 +37,6 @@ export function WorkOrderTemplateDetail({ id }: { id: string }) {
     try {
       const t = await getWorkOrderTemplate(id);
       setTemplate(t);
-      if (t.workTypeId) {
-        try {
-          const wts = await listActiveWorkTypes();
-          setWorkType(wts.data.find((w) => w.id === t.workTypeId) ?? null);
-        } catch {
-          setWorkType(null);
-        }
-      } else {
-        setWorkType(null);
-      }
       if (t.requiredTradeId) {
         try {
           const trades = await listTrades({ status: 'ALL', limit: 100, offset: 0 });
@@ -118,8 +106,8 @@ export function WorkOrderTemplateDetail({ id }: { id: string }) {
             <dd>
               {!template.workTypeId
                 ? '—'
-                : workType
-                  ? <a href={`/work-types/${workType.id}`}>{workType.code} — {workType.name}</a>
+                : template.workType
+                  ? <a href={`/work-types/${template.workType.id}`}>{template.workType.code} — {template.workType.name}</a>
                   : `${template.workTypeId.slice(0, 8)}…`}
             </dd>
           </div>

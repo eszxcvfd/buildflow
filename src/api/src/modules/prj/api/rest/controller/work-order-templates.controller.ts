@@ -92,7 +92,7 @@ export class WorkOrderTemplatesController {
     ) as unknown as TokenPayload;
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
-    const { entity } = await this.createTemplate.execute({
+    const { entity, workTypeRefs } = await this.createTemplate.execute({
       code: dto.code,
       name: dto.name,
       description: dto.description ?? null,
@@ -108,7 +108,7 @@ export class WorkOrderTemplatesController {
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
     });
-    return toWorkOrderTemplateResponse(entity);
+    return toWorkOrderTemplateResponse(entity, { workTypeRefs });
   }
 
   @Get()
@@ -142,14 +142,14 @@ export class WorkOrderTemplatesController {
         filterError('offset', 'Offset không hợp lệ (phải >= 0)');
       }
     }
-    const { entities, total } = await this.searchTemplates.execute({
+    const { entities, total, workTypeRefs } = await this.searchTemplates.execute({
       status: (status || undefined) as 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ALL' | undefined,
       workTypeId: workTypeId || undefined,
       search: search || undefined,
       limit: parsedLimit,
       offset: parsedOffset,
     });
-    return { data: toWorkOrderTemplateListResponse(entities), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
+    return { data: toWorkOrderTemplateListResponse(entities, workTypeRefs), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
   }
 
   /**
@@ -160,16 +160,16 @@ export class WorkOrderTemplatesController {
   @Header('Cache-Control', 'no-store')
   async listActive(@Req() req: Request) {
     requireRoles(req as unknown as { user?: { roles?: string[] } }, WO_TEMPLATE_ROLES);
-    const { entities } = await this.listActiveTemplates.execute();
-    return { data: toWorkOrderTemplateListResponse(entities), total: entities.length };
+    const { entities, workTypeRefs } = await this.listActiveTemplates.execute();
+    return { data: toWorkOrderTemplateListResponse(entities, workTypeRefs), total: entities.length };
   }
 
   @Get(':id')
   @Header('Cache-Control', 'no-store')
   async getOne(@Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string, @Req() req: Request) {
     requireRoles(req as unknown as { user?: { roles?: string[] } }, WO_TEMPLATE_ROLES);
-    const { entity } = await this.getTemplate.execute({ templateId: id });
-    return toWorkOrderTemplateResponse(entity);
+    const { entity, workTypeRefs } = await this.getTemplate.execute({ templateId: id });
+    return toWorkOrderTemplateResponse(entity, { workTypeRefs });
   }
 
   @Patch(':id')
@@ -185,7 +185,7 @@ export class WorkOrderTemplatesController {
     ) as unknown as TokenPayload;
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
-    const { entity, versionChanged } = await this.updateTemplate.execute({
+    const { entity, versionChanged, workTypeRefs } = await this.updateTemplate.execute({
       templateId: id,
       code: dto.code,
       name: dto.name,
@@ -204,7 +204,7 @@ export class WorkOrderTemplatesController {
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
     });
-    return { ...toWorkOrderTemplateResponse(entity), versionChanged };
+    return { ...toWorkOrderTemplateResponse(entity, { workTypeRefs }), versionChanged };
   }
 
   @Post(':id/status')
@@ -221,7 +221,7 @@ export class WorkOrderTemplatesController {
     ) as unknown as TokenPayload;
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
-    const { entity, alreadyInState } = await this.changeTemplateStatus.execute({
+    const { entity, alreadyInState, workTypeRefs } = await this.changeTemplateStatus.execute({
       templateId: id,
       action: dto.action,
       reason: dto.reason ?? null,
@@ -230,6 +230,6 @@ export class WorkOrderTemplatesController {
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
     });
-    return { ...toWorkOrderTemplateResponse(entity), alreadyInState };
+    return { ...toWorkOrderTemplateResponse(entity, { workTypeRefs }), alreadyInState };
   }
 }

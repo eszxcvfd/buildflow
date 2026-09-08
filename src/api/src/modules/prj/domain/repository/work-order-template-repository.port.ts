@@ -25,6 +25,18 @@ export interface ActiveWorkTypeRef {
   isActive: boolean;
 }
 
+/**
+ * Ref hiển thị loại công việc kèm trong template profile (mirror crews
+ * `leaderName`): `{ id, code, name } | null` — đọc mọi work_type (kể cả
+ * INACTIVE) vì mẫu có thể tham chiếu loại đã ngừng mà UI vẫn phải hiện tên
+ * thay vì fallback id rút gọn. `null` khi `work_type_id` NULL hoặc ref thiếu.
+ */
+export interface TemplateWorkTypeRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface ChecklistTemplateSnapshot {
   id: string;
   items: ChecklistSnapshotItem[];
@@ -63,6 +75,12 @@ export interface WorkOrderTemplateRepositoryPort {
    * Trả null khi không tồn tại; caller phân biệt 400 theo `isActive`.
    */
   findActiveWorkTypeById(workTypeId: string): Promise<ActiveWorkTypeRef | null>;
+  /**
+   * Batch refs hiển thị cho template profile: MỘT query cho mọi id
+   * (`= ANY($1::uuid[])`), tránh N+1 — mirror crews `findListEnrichments`.
+   * Không lọc `is_active` (mẫu vẫn giữ tên loại đã ngừng). Ids rỗng → map rỗng.
+   */
+  findWorkTypeRefs(ids: string[]): Promise<Map<string, TemplateWorkTypeRef>>;
   /**
    * Kiểm tra `source_checklist_template_id`: đọc `public.checklist_templates`
    * + items (`checklist_template_items`, sắp `sequence_no`). Trả null khi

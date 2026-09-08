@@ -31,12 +31,20 @@ export interface ChecklistSnapshotDto {
   sequenceNo: number;
 }
 
+export interface TemplateWorkTypeDto {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface WorkOrderTemplateResponseDto {
   id: string;
   code: string;
   name: string;
   description: string | null;
   workTypeId: string | null;
+  /** Ref hiển thị loại công việc (kể cả loại đã ngừng) — `null` khi `workTypeId` NULL hoặc ref thiếu. */
+  workType: TemplateWorkTypeDto | null;
   requiredTradeId: string | null;
   defaultDurationMinutes: number | null;
   defaultPriority: string;

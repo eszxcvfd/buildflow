@@ -49,4 +49,18 @@ describe('work-order-template.mapper (PRJ-SRS-008)', () => {
   it('list map từng entity', () => {
     expect(toWorkOrderTemplateListResponse([makeEntity(), makeEntity()])).toHaveLength(2);
   });
+
+  it('workType null khi thiếu refs; kèm {id,code,name} khi có ref (kể cả loại đã ngừng)', () => {
+    expect(toWorkOrderTemplateResponse(makeEntity()).workType).toBeNull();
+    const refs = new Map([
+      ['22222222-2222-4222-8222-222222222222', { id: '22222222-2222-4222-8222-222222222222', code: 'WT-BE-TONG-TC', name: 'Đổ bê tông thủ công' }],
+    ]);
+    expect(toWorkOrderTemplateResponse(makeEntity(), { workTypeRefs: refs }).workType).toEqual({
+      id: '22222222-2222-4222-8222-222222222222',
+      code: 'WT-BE-TONG-TC',
+      name: 'Đổ bê tông thủ công',
+    });
+    const list = toWorkOrderTemplateListResponse([makeEntity()], refs);
+    expect(list[0].workType?.code).toBe('WT-BE-TONG-TC');
+  });
 });

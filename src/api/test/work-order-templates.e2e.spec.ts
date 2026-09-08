@@ -115,6 +115,14 @@ describe('PRJ-SRS-008 work-order-templates (e2e HTTP contract)', () => {
         return null;
       }),
       findChecklistTemplateSnapshot: jest.fn(async () => null),
+      findWorkTypeRefs: jest.fn(async (ids: string[]) => {
+        const m = new Map<string, { id: string; code: string; name: string }>();
+        for (const id of ids) {
+          if (id === ACTIVE_WORK_TYPE_ID) m.set(id, { id, code: 'WT-ACT', name: 'Loại đang hoạt động' });
+          if (id === INACTIVE_WORK_TYPE_ID) m.set(id, { id, code: 'WT-OLD', name: 'Loại đã ngừng' });
+        }
+        return m;
+      }),
       create: jest.fn(async (e: WorkOrderTemplateEntity) => { store.set(e.id, e); }),
       createWithClient: jest.fn(async (_c: unknown, e: WorkOrderTemplateEntity) => { store.set(e.id, e); }),
       save: jest.fn(async (e: WorkOrderTemplateEntity) => { store.set(e.id, e); }),
@@ -187,6 +195,7 @@ describe('PRJ-SRS-008 work-order-templates (e2e HTTP contract)', () => {
     expect(created.body.code).toBe('SLAB-POUR');
     expect(created.body.status).toBe('DRAFT');
     expect(created.body.version).toBe(1);
+    expect(created.body.workType).toEqual({ id: ACTIVE_WORK_TYPE_ID, code: 'WT-ACT', name: 'Loại đang hoạt động' });
     expect(created.body.usableForNewWorkOrder).toBe(false);
     createdId = created.body.id as string;
 
@@ -210,6 +219,7 @@ describe('PRJ-SRS-008 work-order-templates (e2e HTTP contract)', () => {
       .get(`/api/v1/work-order-templates/${createdId}`)
       .set('Authorization', `Bearer ${pmToken}`)
       .expect(200);
+    expect(detail.body.workType).toEqual({ id: ACTIVE_WORK_TYPE_ID, code: 'WT-ACT', name: 'Loại đang hoạt động' });
     expect(detail.body.requiredSkills).toHaveLength(1);
     expect(detail.body.checklistSnapshot).toHaveLength(1);
     expect(detail.headers['cache-control']).toContain('no-store');

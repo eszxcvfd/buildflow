@@ -15,6 +15,7 @@ import {
   ActiveWorkTypeRef,
   ChecklistTemplateSnapshot,
   SaveWorkOrderTemplateOptions,
+  TemplateWorkTypeRef,
   WorkOrderTemplateFilter,
   WorkOrderTemplateRepositoryPort,
 } from '../../domain/repository/work-order-template-repository.port';
@@ -161,6 +162,26 @@ export class PgWorkOrderTemplateRepository implements WorkOrderTemplateRepositor
     );
     if (r.rows.length === 0) return null;
     return { id: String(r.rows[0].id), isActive: Boolean(r.rows[0].is_active) };
+  }
+
+  async findWorkTypeRefs(ids: string[]): Promise<Map<string, TemplateWorkTypeRef>> {
+    // Batch cho template profile enrichment: MỘT query cho mọi id, tránh N+1
+    // (mirror crews `findListEnrichments`). Không lọc is_active — mẫu tham
+    // chiếu loại đã ngừng vẫn hiện tên thay vì fallback id rút gọn.
+    const refs = new Map<string, TemplateWorkTypeRef>();
+    if (ids.length === 0) return refs;
+    const r = await this.pool().query(
+      'SELECT id, code, name FROM public.work_types WHERE id = ANY($1::uuid[])',
+      [ids],
+    );
+    for (const row of r.rows as Row[]) {
+      refs.set(String(row['id']), {
+        id: String(row['id']),
+        code: String(row['code']),
+        name: String(row['name']),
+      });
+    }
+    return refs;
   }
 
   async findChecklistTemplateSnapshot(templateId: string): Promise<ChecklistTemplateSnapshot | null> {

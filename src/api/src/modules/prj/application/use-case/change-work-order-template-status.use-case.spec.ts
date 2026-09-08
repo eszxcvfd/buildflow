@@ -26,6 +26,7 @@ function makeHarness(entity: WorkOrderTemplateEntity | null) {
     findById: jest.fn(async () => entity),
     save: jest.fn(async () => {}),
     saveWithClient: jest.fn(async () => {}),
+    findWorkTypeRefs: jest.fn(async () => new Map()),
   } as never;
   const audit = { logWithClient: jest.fn(async () => {}) };
   const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
