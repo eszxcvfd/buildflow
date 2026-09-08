@@ -1,0 +1,82 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "pm": "quoc.tran@vinacons.vn",
+  "admin": "hoang.anh@vinacons.vn",
+  "driverCode": "WOT-E2E-BE-TONG",
+  "driverId": "80bb17c2-76be-43ce-b88a-8fa9b7d69dec",
+  "driverNameV2": "Đổ bê tông dầm sàn chuẩn (bản cập nhật T9)",
+  "seedActive": "c80000a1-0001-4000-8000-000000000001",
+  "seedDraft": "c80000a1-0002-4000-8000-000000000002",
+  "inactiveTrade": "c8000001-0001-4000-8000-000000000001",
+  "woSnapshotCopy": [
+    {
+      "title": "Kiểm tra cốp pha dầm sàn",
+      "answerType": "YES_NO",
+      "isRequired": true,
+      "isBlocking": false,
+      "requiresPhoto": false,
+      "sequenceNo": 1
+    },
+    {
+      "title": "Đổ bê tông đúng mác thiết kế",
+      "answerType": "TEXT",
+      "isRequired": true,
+      "isBlocking": false,
+      "requiresPhoto": false,
+      "sequenceNo": 2
+    },
+    {
+      "title": "Bảo dưỡng sau đổ 7 ngày",
+      "answerType": "YES_NO",
+      "isRequired": true,
+      "isBlocking": false,
+      "requiresPhoto": false,
+      "sequenceNo": 3
+    }
+  ],
+  "auditBaseline": "2414",
+  "auditFinal": "2419",
+  "rest": "0/0",
+  "results": [
+    {
+      "id": "M1",
+      "ok": true,
+      "note": "UI tạo OK; API DRAFT v1, checklist=3, id=80bb17c2…"
+    },
+    {
+      "id": "M2",
+      "ok": true,
+      "note": "ACTIVE + audit id=e6fe22a8-f3f1-4205-87d9-06188a798a81; UI badge Hoạt động"
+    },
+    {
+      "id": "M3",
+      "ok": true,
+      "note": "/active n=2: có driver + seed ACTIVE, không DRAFT"
+    },
+    {
+      "id": "M6a",
+      "ok": true,
+      "note": "WO copy giữ 3 mục; DB snapshot bytes=436"
+    },
+    {
+      "id": "M4",
+      "ok": true,
+      "note": "UI sửa OK v1→v2 persists; stale expectedVersion=1 → 409 CONFLICT, dữ liệu nguyên vẹn"
+    },
+    {
+      "id": "M6b",
+      "ok": true,
+      "note": "WO copy byte-equal trước/sau (item1='Kiểm tra cốp pha dầm sàn'); template v2 item1='Kiểm tra cốp pha, cốt thép dầm sàn (sửa T9)'"
+    },
+    {
+      "id": "M5",
+      "ok": true,
+      "note": "INACTIVE (detail đọc được lịch sử); /active n=1 không chứa mẫu"
+    },
+    {
+      "id": "M7",
+      "ok": true,
+      "note": "trade INACTIVE → 400 fieldErrors; checklist thiếu title → 400; không bản ghi lạ"
+    }
+  ]
+}
