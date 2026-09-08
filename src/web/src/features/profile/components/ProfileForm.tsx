@@ -111,57 +111,64 @@ export function ProfileForm() {
       {globalError ? <Alert tone="error">{globalError}</Alert> : null}
       {success ? <Alert tone="success">Đã cập nhật hồ sơ thành công</Alert> : null}
       <form onSubmit={handleSubmit} noValidate style={{ display: 'grid', gap: 14, marginTop: globalError || success ? 14 : 0 }}>
-        <div className="bf-field">
-          <label htmlFor="pf-email" className="bf-label">
-            Email (read-only)
-          </label>
-          <Input id="pf-email" value={profile?.email ?? ''} readOnly aria-readonly="true" />
-        </div>
-        <div className="bf-field">
-          <label htmlFor="pf-role" className="bf-label">
-            Vai trò (read-only)
-          </label>
-          <Input id="pf-role" value={profile?.userType ?? ''} readOnly aria-readonly="true" />
-        </div>
-        <div className="bf-field">
-          <label htmlFor="pf-status" className="bf-label">
-            Trạng thái (read-only)
-          </label>
-          <Input id="pf-status" value={profile?.status ?? ''} readOnly aria-readonly="true" />
-        </div>
-        <div className="bf-field">
-          <label htmlFor="pf-name" className="bf-label">
-            Họ tên
-          </label>
-          <Input
-            id="pf-name"
-            value={fullName}
-            onChange={(ev) => setFullName(ev.target.value)}
-            hasError={Boolean(fieldErrors.fullName)}
-            aria-describedby={fieldErrors.fullName ? 'pf-name-err' : undefined}
-          />
-          {fieldErrors.fullName ? (
-            <p id="pf-name-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
-              {fieldErrors.fullName.join(' ')}
-            </p>
-          ) : null}
-        </div>
-        <div className="bf-field">
-          <label htmlFor="pf-phone" className="bf-label">
-            Số điện thoại
-          </label>
-          <Input
-            id="pf-phone"
-            value={phone}
-            onChange={(ev) => setPhone(ev.target.value)}
-            hasError={Boolean(fieldErrors.phone)}
-            aria-describedby={fieldErrors.phone ? 'pf-phone-err' : undefined}
-          />
-          {fieldErrors.phone ? (
-            <p id="pf-phone-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
-              {fieldErrors.phone.join(' ')}
-            </p>
-          ) : null}
+        <dl className="bf-def-grid bf-def-grid-3">
+          <div>
+            <dt>Email</dt>
+            <dd>{profile?.email ?? '—'}</dd>
+            <p className="bf-card-meta" style={{ margin: '2px 0 0' }}>chỉ đọc</p>
+          </div>
+          <div>
+            <dt>Vai trò</dt>
+            <dd>{profile?.userType ?? '—'}</dd>
+            <p className="bf-card-meta" style={{ margin: '2px 0 0' }}>chỉ đọc</p>
+          </div>
+          <div>
+            <dt>Trạng thái</dt>
+            <dd>
+              <span className={`bf-badge ${profile?.status === 'ACTIVE' ? 'bf-badge-ok' : 'bf-badge-idle'}`}>
+                {profile?.status ?? '—'}
+              </span>
+            </dd>
+            <p className="bf-card-meta" style={{ margin: '2px 0 0' }}>chỉ đọc</p>
+          </div>
+        </dl>
+        <div className="bf-form-grid-2">
+          <div className="bf-field">
+            <label htmlFor="pf-name" className="bf-label">
+              Họ tên
+            </label>
+            <Input
+              id="pf-name"
+              value={fullName}
+              placeholder="Nhập họ tên đầy đủ"
+              onChange={(ev) => setFullName(ev.target.value)}
+              hasError={Boolean(fieldErrors.fullName)}
+              aria-describedby={fieldErrors.fullName ? 'pf-name-err' : undefined}
+            />
+            {fieldErrors.fullName ? (
+              <p id="pf-name-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
+                {fieldErrors.fullName.join(' ')}
+              </p>
+            ) : null}
+          </div>
+          <div className="bf-field">
+            <label htmlFor="pf-phone" className="bf-label">
+              Số điện thoại
+            </label>
+            <Input
+              id="pf-phone"
+              value={phone}
+              placeholder="VD: 0901234567"
+              onChange={(ev) => setPhone(ev.target.value)}
+              hasError={Boolean(fieldErrors.phone)}
+              aria-describedby={fieldErrors.phone ? 'pf-phone-err' : undefined}
+            />
+            {fieldErrors.phone ? (
+              <p id="pf-phone-err" role="alert" className="bf-field-error" style={{ margin: 0 }}>
+                {fieldErrors.phone.join(' ')}
+              </p>
+            ) : null}
+          </div>
         </div>
         <Button type="submit" loading={saving} aria-busy={saving}>
           Lưu thay đổi

@@ -378,13 +378,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="bf-promo">
-          <span className="bf-promo-title">Xin chào, {auth.user.fullName}</span>
-          <span className="bf-promo-sub">{auth.roles[0]?.name ?? auth.user.userType}</span>
-          <a href="/profile" className="bf-promo-btn">
-            Xem hồ sơ
-          </a>
-        </div>
       </aside>
 
       <button className="bf-scrim" aria-label="Đóng menu" data-open={open} onClick={() => setOpen(false)} />

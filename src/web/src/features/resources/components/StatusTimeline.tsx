@@ -133,29 +133,36 @@ export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WO
 
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
-      <div style={{ display: 'grid', gap: '0.5rem' }}>
-        {logs.map((log) => {
-          const label = LIFECYCLE_ACTION_LABEL[log.action] ?? log.action;
-          const isStatusAction = LIFECYCLE_STATUS_ACTIONS.has(log.action);
-          return (
-            <div
-              key={log.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '170px minmax(130px, auto) 1fr',
-                gap: '0.5rem 0.75rem',
-                fontSize: '0.87rem',
-                alignItems: 'start',
-              }}
-            >
-              <span style={{ color: 'var(--bf-muted)', whiteSpace: 'nowrap' }}>{formatDateTime(log.createdAt)}</span>
-              <span style={{ fontWeight: 600 }}>{label}</span>
-              <span style={{ color: 'var(--bf-muted)', overflowWrap: 'anywhere', minWidth: 0 }}>
-                {isStatusAction && log.reason ? `Lý do: ${log.reason}` : ''} · {shortenActor(log.actorUserId)}
-              </span>
-            </div>
-          );
-        })}
+      <div className="bf-table-wrap">
+        <table className="bf-table">
+          <thead>
+            <tr>
+              <th scope="col">Thời gian</th>
+              <th scope="col">Sự kiện</th>
+              <th scope="col">Người thực hiện</th>
+              <th scope="col">Lý do / Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => {
+              const label = LIFECYCLE_ACTION_LABEL[log.action] ?? log.action;
+              const isStatusAction = LIFECYCLE_STATUS_ACTIONS.has(log.action);
+              return (
+                <tr key={log.id}>
+                  <td style={{ color: 'var(--bf-muted)', whiteSpace: 'nowrap' }}>{formatDateTime(log.createdAt)}</td>
+                  <td>
+                    <span style={{ display: 'block', fontWeight: 600 }}>{label}</span>
+                    <span style={{ display: 'block', color: 'var(--bf-muted)', fontSize: '0.8rem' }}>{log.action}</span>
+                  </td>
+                  <td>{shortenActor(log.actorUserId)}</td>
+                  <td style={{ color: 'var(--bf-muted)', overflowWrap: 'anywhere', minWidth: 0 }}>
+                    {isStatusAction && log.reason ? `Lý do: ${log.reason}` : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       <p style={{ margin: 0, fontSize: '0.85rem' }}>
         {total > logs.length ? (

@@ -14,7 +14,6 @@ import {
   RESOURCE_ACTION_LABEL,
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
-import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -26,6 +25,15 @@ function statusLabel(status: string): string {
     case 'INACTIVE': return 'Ngừng hoạt động';
     case 'LOCKED': return 'Bị khóa';
     default: return status;
+  }
+}
+
+function statusTone(status: string): 'ok' | 'busy' | 'risk' | 'idle' {
+  switch (status) {
+    case 'ACTIVE': return 'ok';
+    case 'INACTIVE': return 'busy';
+    case 'LOCKED': return 'risk';
+    default: return 'idle';
   }
 }
 
@@ -194,35 +202,61 @@ export function WorkerDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <PageHeader
-        title={worker.fullName}
-        subtitle={`${worker.email} · ${statusLabel(worker.status)}`}
-        actions={
-          isAdmin ? (
-            <a className="bf-btn bf-btn-secondary" href={`/workers/${worker.id}/edit`}>
-              Sửa hồ sơ
-            </a>
-          ) : undefined
-        }
-      />
-
       <Card>
-        <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mã nhân viên</dt>
-            <dd style={{ margin: 0 }}>{worker.employeeCode ?? '—'}</dd>
+        <div className="bf-profile-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{worker.fullName}</h2>
+              <span className={`bf-badge bf-badge-${statusTone(worker.status)}`}>{statusLabel(worker.status)}</span>
+            </div>
+            <p style={{ margin: '0.3rem 0 0', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>{worker.email}</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>SĐT</dt>
-            <dd style={{ margin: 0 }}>{worker.phone ?? '—'}</dd>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {isAdmin ? (
+              <>
+                <a className="bf-btn bf-btn-secondary" href={`/workers/${worker.id}/edit`}>
+                  Sửa hồ sơ
+                </a>
+                {isActive ? (
+                  <>
+                    <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
+                      Tạm ngừng
+                    </Button>
+                    <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
+                      Chấm dứt
+                    </Button>
+                  </>
+                ) : worker.status === 'INACTIVE' ? (
+                  <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
+                    Kích hoạt lại
+                  </Button>
+                ) : null}
+              </>
+            ) : (
+              <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
+                Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
+              </span>
+            )}
+            <a href="/workers" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trạng thái</dt>
-            <dd style={{ margin: 0 }}>{statusLabel(worker.status)}</dd>
+        </div>
+
+        <dl className="bf-def-grid">
+          <div>
+            <dt>Mã nhân viên</dt>
+            <dd>{worker.employeeCode ?? '—'}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Ngành nghề / kỹ năng</dt>
-            <dd style={{ margin: 0 }}>
+          <div>
+            <dt>SĐT</dt>
+            <dd>{worker.phone ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Trạng thái</dt>
+            <dd>{statusLabel(worker.status)}</dd>
+          </div>
+          <div>
+            <dt>Ngành nghề / kỹ năng</dt>
+            <dd>
               {worker.trades.length
                 ? worker.trades
                     .map((t) => {
@@ -233,39 +267,15 @@ export function WorkerDetail({ id }: { id: string }) {
                 : '—'}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tạo</dt>
-            <dd style={{ margin: 0 }}>{new Date(worker.createdAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Tạo</dt>
+            <dd>{new Date(worker.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Cập nhật</dt>
-            <dd style={{ margin: 0 }}>{new Date(worker.updatedAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Cập nhật</dt>
+            <dd>{new Date(worker.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
-
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {isAdmin ? (
-            isActive ? (
-              <>
-                <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
-                  Tạm ngừng
-                </Button>
-                <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
-                  Chấm dứt
-                </Button>
-              </>
-            ) : worker.status === 'INACTIVE' ? (
-              <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
-                Kích hoạt lại
-              </Button>
-            ) : null
-          ) : (
-            <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
-              Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
-            </span>
-          )}
-          <a href="/workers" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
-        </div>
 
         {confirmAction && worker ? (
           <div style={{ marginTop: '1rem' }}>

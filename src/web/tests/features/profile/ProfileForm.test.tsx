@@ -62,16 +62,18 @@ describe('ProfileForm (IAM-SRS-003)', () => {
 
   afterEach(cleanup);
 
-  it('renders read-only identity/role/status fields from loaded profile', async () => {
+  it('renders read-only identity/role/status as plain values (not disabled inputs)', async () => {
     saveValidAuth();
     fetchProfileMock.mockImplementationOnce(async () => sampleProfile);
     render(<ProfileForm />);
 
-    expect(await screen.findByDisplayValue('a@b.com')).toBeTruthy();
-    const email = screen.getByDisplayValue('a@b.com') as HTMLInputElement;
-    expect(email.readOnly).toBe(true);
-    expect(screen.getByDisplayValue('STAFF')).toBeTruthy();
-    expect(screen.getByDisplayValue('ACTIVE')).toBeTruthy();
+    // read-only fields: plain text + 'chỉ đọc' hint, KHÔNG ô input disabled
+    expect(await screen.findByText('a@b.com')).toBeTruthy();
+    expect(screen.getByText('STAFF')).toBeTruthy();
+    expect(screen.getByText('ACTIVE')).toBeTruthy();
+    expect(screen.getAllByText('chỉ đọc').length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByDisplayValue('a@b.com')).toBeNull();
+    // editable fields vẫn là input DashCode
     expect(screen.getByDisplayValue('Nguyen Van A')).toBeTruthy();
     expect(screen.getByDisplayValue('0901234567')).toBeTruthy();
     expect(fetchProfileMock).toHaveBeenCalledWith('tok123');

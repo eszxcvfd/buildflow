@@ -57,7 +57,6 @@ export function EligibilityChecklist({
   loading,
   error,
   onRefresh,
-  compact,
 }: {
   result: EligibilityResult | null;
   loading: boolean;
@@ -112,29 +111,33 @@ export function EligibilityChecklist({
         {passedCount}/{result.conditions.length} điều kiện đạt · {naCount} không áp dụng
       </p>
 
-      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: compact ? '0.5rem' : '0.75rem' }}>
-        {result.conditions.map((c: EligibilityCondition) => {
-          const badge = badgeFor(c.passed, c.reasonCode);
-          return (
-            <li
-              key={c.code}
-              style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}
-            >
-              <span className={`bf-badge bf-badge-${badge.tone}`} style={{ flexShrink: 0, marginTop: 2 }}>
-                {badge.label}
-              </span>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem' }}>
-                  {conditionLabel(c.code)}
-                </span>
-                <span style={{ display: 'block', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
-                  {c.detail}
-                </span>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="bf-table-wrap">
+        <table className="bf-table">
+          <thead>
+            <tr>
+              <th scope="col">Điều kiện</th>
+              <th scope="col">Trạng thái</th>
+              <th scope="col">Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.conditions.map((c: EligibilityCondition) => {
+              const badge = badgeFor(c.passed, c.reasonCode);
+              return (
+                <tr key={c.code}>
+                  <td style={{ fontWeight: 600 }}>{conditionLabel(c.code)}</td>
+                  <td>
+                    <span className={`bf-badge bf-badge-${badge.tone}`}>
+                      {badge.label}
+                    </span>
+                  </td>
+                  <td style={{ color: 'var(--bf-muted)' }}>{c.detail}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.8rem' }}>
         Kiểm tra lúc {new Date(result.checkedAt).toLocaleString('vi-VN')} ·{' '}

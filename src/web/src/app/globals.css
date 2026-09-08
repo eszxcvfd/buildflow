@@ -178,53 +178,7 @@
     text-overflow: ellipsis;
   }
 
-  /* DashCode sidebar promo card đáy: bg-slate-900 rounded-2xl p-4 + nút trắng. */
-  .bf-promo {
-    margin: 10px 12px 16px;
-    padding: 16px;
-    border-radius: 16px;
-    background: #0f172a;
-    color: #fff;
-    display: grid;
-    gap: 4px;
-  }
-
-  .bf-promo-title {
-    font-size: 13.5px;
-    font-weight: 600;
-    color: #fff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .bf-promo-sub {
-    font-size: 12px;
-    color: #cbd5e1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .bf-promo-btn {
-    margin-top: 10px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    background: #fff;
-    color: #0f172a;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 8px 16px;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .bf-promo-btn:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-  }
+  /* (promo card sidebar đã bỏ — profile nằm ở topbar menu) */
 
   .bf-avatar {
     width: 34px;
@@ -323,13 +277,15 @@
     color: var(--bf-muted);
   }
 
-  /* DashCode bell icon button + red dot badge. */
+  /* DashCode bell icon button + red dot badge.
+     Dot neo theo nút 38px (top-right), không che icon 20px. */
   .bf-icon-badge-wrap {
-    position: relative;
+    position: static;
     display: inline-flex;
   }
 
   .bf-bell-btn {
+    position: relative;
     display: inline-grid;
     place-items: center;
     width: 38px;
@@ -348,13 +304,19 @@
 
   .bf-dot {
     position: absolute;
-    top: 7px;
+    top: 8px;
     right: 8px;
     width: 8px;
     height: 8px;
     border-radius: var(--bf-r-pill);
     background: var(--bf-risk);
     border: 2px solid var(--bf-surface);
+  }
+
+  /* Menu bọc triggerLabel trong span truncate (overflow hidden) — mở lại
+     cho nút chuông để dot không bị cắt. */
+  .bf-bell-btn > span {
+    overflow: visible;
   }
 
   /* Search palette list rows: active row = slate-900 bg, white text. */
@@ -673,6 +635,74 @@
   .bf-field-error {
     font-size: 12.5px;
     color: var(--bf-risk);
+  }
+
+  /* ---------- Profile card (DashCode): tên lớn + badge trái, actions phải;
+     definition-grid 2 cột căn trái ---------- */
+  .bf-profile-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    text-align: left;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--bf-line);
+    margin-bottom: 16px;
+  }
+
+  .bf-def-grid {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 24px;
+    text-align: left;
+  }
+
+  .bf-def-grid > div {
+    min-width: 0;
+  }
+
+  .bf-def-grid dt {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bf-muted);
+    margin-bottom: 4px;
+    text-align: left;
+  }
+
+  .bf-def-grid dd {
+    margin: 0;
+    font-weight: 500;
+    color: var(--bf-text);
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .bf-def-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    .bf-def-grid,
+    .bf-def-grid-3 {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* Form 2 cột (DashCode): còn 1 cột trên mobile. */
+  .bf-form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  @media (max-width: 640px) {
+    .bf-form-grid-2 {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   /* ---------- Cảnh báo ---------- */
