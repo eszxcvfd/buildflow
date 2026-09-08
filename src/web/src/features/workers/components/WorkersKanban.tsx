@@ -7,8 +7,21 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Select } from '@/components/ui/select/Select';
-import { KanbanView, type KanbanColumn } from '@/components/ui/kanban/KanbanView';
+import { KanbanView, type KanbanColumn, type KanbanTone } from '@/components/ui/kanban/KanbanView';
 import { ClearFiltersButton, ListToolbar, SearchField } from '@/components/ui/list/ListKit';
+
+function statusLabel(status: string): string {
+  if (status === 'ACTIVE') return 'Hoạt động';
+  if (status === 'INACTIVE') return 'Ngừng hoạt động';
+  if (status === 'LOCKED') return 'Bị khóa';
+  return status;
+}
+
+function statusTone(status: string): KanbanTone {
+  if (status === 'ACTIVE') return 'ok';
+  if (status === 'LOCKED') return 'busy';
+  return 'risk';
+}
 
 /**
  * Kanban công nhân — CHỈ ĐỌC, nhóm theo lifecycle status.
@@ -117,7 +130,11 @@ export function WorkersKanban() {
           </Button>
           {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
         </ListToolbar>
-        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0.75rem 0 0', fontSize: '0.8rem', color: 'var(--bf-muted, #64748b)' }}>
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5m0-8v.01" />
+          </svg>
           Kanban chỉ đọc — đổi trạng thái qua nút hành động ở chế độ bảng hoặc trang chi tiết.
         </p>
       </Card>
@@ -134,7 +151,12 @@ export function WorkersKanban() {
           getColumnKey={(w) => w.status}
           getCardProps={(w) => ({
             title: w.fullName,
-            metas: [`${w.employeeCode ?? '—'} · ${w.email}`, w.eligible ? 'Đang hoạt động' : 'Không nhận việc mới'],
+            metas: [
+              { icon: 'hash', text: w.employeeCode ?? '—' },
+              { icon: 'mail', text: w.email },
+            ],
+            badge: statusLabel(w.status),
+            badgeTone: statusTone(w.status),
             href: `/workers/${w.id}`,
           })}
         />

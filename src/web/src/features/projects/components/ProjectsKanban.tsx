@@ -7,8 +7,16 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Select } from '@/components/ui/select/Select';
-import { KanbanView, type KanbanColumn } from '@/components/ui/kanban/KanbanView';
+import { KanbanView, type KanbanColumn, type KanbanTone } from '@/components/ui/kanban/KanbanView';
 import { ClearFiltersButton, ListToolbar, SearchField } from '@/components/ui/list/ListKit';
+
+const STATUS_TONE: Record<string, KanbanTone> = {
+  DRAFT: 'idle',
+  ACTIVE: 'ok',
+  PAUSED: 'busy',
+  COMPLETED: 'info',
+  CLOSED: 'idle',
+};
 
 /**
  * Kanban dự án — CHỈ ĐỌC, nhóm theo lifecycle DRAFT/ACTIVE/PAUSED/COMPLETED/CLOSED.
@@ -122,7 +130,11 @@ export function ProjectsKanban() {
             />
           ) : null}
         </ListToolbar>
-        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0.75rem 0 0', fontSize: '0.8rem', color: 'var(--bf-muted, #64748b)' }}>
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5m0-8v.01" />
+          </svg>
           Kanban chỉ đọc — đổi trạng thái qua dialog ở trang chi tiết dự án.
         </p>
       </Card>
@@ -139,7 +151,12 @@ export function ProjectsKanban() {
           getColumnKey={(p) => p.status}
           getCardProps={(p) => ({
             title: p.name,
-            metas: [p.code, new Date(p.createdAt).toLocaleDateString('vi-VN')],
+            metas: [
+              { icon: 'hash', text: p.code },
+              { icon: 'clock', text: new Date(p.createdAt).toLocaleDateString('vi-VN') },
+            ],
+            badge: STATUS_OPTION_LABEL[p.status as (typeof STATUS_OPTIONS)[number]] ?? p.status,
+            badgeTone: STATUS_TONE[p.status] ?? 'idle',
             href: `/projects/${p.id}`,
           })}
         />

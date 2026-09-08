@@ -33,7 +33,7 @@ export function EmptyState({
 }: {
   title: string;
   children?: React.ReactNode;
-  /** CTA dưới copy phụ (vd: link 'Thêm công nhân'). */
+  /** CTA dưới copy phụ (vd: link 'Thêm mới'). */
   action?: React.ReactNode;
   /** Minh họa phía trên text (vd: <EmptyProfileIcon /> trong vòng tròn soft). */
   icon?: React.ReactNode;

@@ -9,12 +9,13 @@ import { CrewCreateDialog } from './CrewCreateDialog';
 import { CrewsKanban } from './CrewsKanban';
 
 /**
- * /crews — PageHeader + toggle Bảng|Kanban + CrewList/CrewsKanban + dialog
- * "Thêm đội thi công".
- * Nút header và CTA empty-state đều mở dialog; tạo thành công → đóng +
- * refresh list (remount CrewList qua key). Route /crews/new giữ nguyên
- * cho E2E drivers goto trực tiếp.
- * Mặc định = Bảng (?view=kanban để share kanban); toggle nằm cạnh toolbar.
+ * /crews — PageHeader (toggle Bảng|Kanban + nút "Thêm mới" cùng hàng
+ * actions: toggle trái, nút thêm phải) + CrewList/CrewsKanban + dialog
+ * tạo mới.
+ * Nút header là CTA thêm duy nhất của trang (CrewList không còn nút/CTA
+ * thêm riêng); tạo thành công → đóng + refresh list (remount CrewList qua
+ * key). Route /crews/new giữ nguyên cho E2E drivers goto trực tiếp.
+ * Mặc định = Bảng (?view=kanban để share kanban).
  */
 export function CrewsView() {
   const [seq, setSeq] = React.useState(0);
@@ -29,15 +30,15 @@ export function CrewsView() {
         title="Đội thi công"
         subtitle="Danh sách đội thi công — tạo đội, chỉ định trưởng nhóm và cập nhật trạng thái. Đội ngừng hoạt động không nhận phân công mới."
         actions={
-          <Button onClick={openCreate}>
-            Thêm đội thi công
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ViewToggle value={view} onChange={setView} />
+            <Button onClick={openCreate}>
+              Thêm mới
+            </Button>
+          </div>
         }
       />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <ViewToggle value={view} onChange={setView} />
-      </div>
-      {view === 'kanban' ? <CrewsKanban key={seq} /> : <CrewList key={seq} onCreateRequest={openCreate} />}
+      {view === 'kanban' ? <CrewsKanban key={seq} /> : <CrewList key={seq} />}
       <CrewCreateDialog
         open={createOpen}
         onClose={closeCreate}

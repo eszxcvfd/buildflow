@@ -9,12 +9,14 @@ import { WorkerCreateDialog } from './WorkerCreateDialog';
 import { WorkersKanban } from './WorkersKanban';
 
 /**
- * /workers — PageHeader + toggle Bảng|Kanban + WorkerList/WorkersKanban +
- * dialog "Thêm công nhân".
- * Nút header và CTA empty-state đều mở dialog; tạo thành công → đóng +
+ * /workers — PageHeader (toggle Bảng|Kanban + nút "Thêm mới" cùng hàng
+ * actions: toggle trái, nút thêm phải) + WorkerList/WorkersKanban +
+ * dialog tạo mới.
+ * Nút header là CTA thêm duy nhất của trang (WorkerList không còn nút/CTA
+ * thêm riêng — empty-state chỉ còn copy hướng dẫn); tạo thành công → đóng +
  * refresh list (remount WorkerList qua key). Route /workers/new giữ nguyên
  * cho E2E drivers goto trực tiếp.
- * Mặc định = Bảng (?view=kanban để share kanban); toggle nằm cạnh toolbar.
+ * Mặc định = Bảng (?view=kanban để share kanban).
  */
 export function WorkersView() {
   const [seq, setSeq] = React.useState(0);
@@ -29,15 +31,15 @@ export function WorkersView() {
         title="Công nhân"
         subtitle="Quản lý hồ sơ công nhân — tạo mới, tìm kiếm, cập nhật và chuyển trạng thái hoạt động."
         actions={
-          <Button onClick={openCreate}>
-            Thêm công nhân
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ViewToggle value={view} onChange={setView} />
+            <Button onClick={openCreate}>
+              Thêm mới
+            </Button>
+          </div>
         }
       />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <ViewToggle value={view} onChange={setView} />
-      </div>
-      {view === 'kanban' ? <WorkersKanban key={seq} /> : <WorkerList key={seq} onCreateRequest={openCreate} />}
+      {view === 'kanban' ? <WorkersKanban key={seq} /> : <WorkerList key={seq} />}
       <WorkerCreateDialog
         open={createOpen}
         onClose={closeCreate}

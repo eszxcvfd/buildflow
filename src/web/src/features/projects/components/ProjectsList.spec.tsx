@@ -79,9 +79,9 @@ describe('ProjectsList PRJ-SRS-001 upgrade (issue #32)', () => {
     await waitFor(() => expect(screen.getByText('Du an 1')).not.toBeNull());
   });
 
-  it('CTA Tạo dự án nằm ở PageHeader actions, dẫn tới /projects/new', async () => {
+  it('CTA Thêm mới nằm ở PageHeader actions, dẫn tới /projects/new', async () => {
     render(<ProjectsHeaderActions />);
-    const cta = screen.getByRole('link', { name: 'Tạo dự án' });
+    const cta = screen.getByRole('link', { name: 'Thêm mới' });
     expect(cta.getAttribute('href')).toBe('/projects/new');
   });
 

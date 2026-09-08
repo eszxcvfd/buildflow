@@ -7,10 +7,10 @@ import { TradeList } from './TradeList';
 import { TradeCreateDialog } from './TradeCreateDialog';
 
 /**
- * /trades — PageHeader + TradeList + dialog "Thêm ngành nghề".
- * Nút header và CTA empty-state đều mở dialog; tạo thành công → đóng +
- * refresh list (remount TradeList qua key). Route /trades/new giữ nguyên
- * cho E2E drivers goto trực tiếp.
+ * /trades — PageHeader (nút "Thêm mới") + TradeList + dialog tạo mới.
+ * Nút header là CTA thêm duy nhất của trang (TradeList không còn nút/CTA
+ * thêm riêng); tạo thành công → đóng + refresh list (remount TradeList qua
+ * key). Route /trades/new giữ nguyên cho E2E drivers goto trực tiếp.
  */
 export function TradesView() {
   const [seq, setSeq] = React.useState(0);
@@ -25,11 +25,11 @@ export function TradesView() {
         subtitle="Danh mục ngành nghề/kỹ năng dùng khi phân công công việc — nguồn chọn cho worker, loại công việc và work order."
         actions={
           <Button onClick={openCreate}>
-            Thêm ngành nghề
+            Thêm mới
           </Button>
         }
       />
-      <TradeList key={seq} onCreateRequest={openCreate} />
+      <TradeList key={seq} />
       <TradeCreateDialog
         open={createOpen}
         onClose={closeCreate}

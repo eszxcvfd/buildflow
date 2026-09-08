@@ -49,6 +49,28 @@ describe('KanbanView', () => {
     expect(within(link as HTMLElement).getByText('NV-001')).not.toBeNull();
   });
 
+  it('card có avatar initials + badge trạng thái (.bf-badge-*)', () => {
+    render(
+      <KanbanView<Item>
+        columns={COLUMNS}
+        items={ITEMS}
+        getColumnKey={(i) => i.status}
+        getCardProps={(i) => ({
+          title: i.name,
+          metas: [{ icon: 'hash', text: i.code }],
+          badge: i.status === 'ACTIVE' ? 'Hoạt động' : 'Ngừng hoạt động',
+          badgeTone: i.status === 'ACTIVE' ? 'ok' : 'risk',
+          href: `/workers/${i.id}`,
+        })}
+      />,
+    );
+    const link = screen.getByRole('link', { name: /Nguyen Van A/ });
+    // initials 'NV' từ tên
+    expect(within(link as HTMLElement).getByText('NV')).not.toBeNull();
+    const badge = within(link as HTMLElement).getByText('Hoạt động');
+    expect(badge.className).toContain('bf-badge-ok');
+  });
+
   it('cột rỗng hiển thị dashed placeholder', () => {
     renderKanban();
     const locked = screen.getByLabelText('Bị khóa (0)');

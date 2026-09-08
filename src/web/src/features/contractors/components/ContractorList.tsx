@@ -17,7 +17,7 @@ import {
   SearchField,
 } from '@/components/ui/list/ListKit';
 
-export function ContractorList({ onCreateRequest }: { onCreateRequest?: () => void }) {
+export function ContractorList() {
   const [contractors, setContractors] = React.useState<Contractor[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
@@ -162,21 +162,8 @@ export function ContractorList({ onCreateRequest }: { onCreateRequest?: () => vo
 
       {contractors.length === 0 ? (
         <Card>
-          <EmptyState
-            title="Chưa có nhà thầu nào phù hợp bộ lọc"
-            action={
-              onCreateRequest ? (
-                <Button onClick={onCreateRequest}>
-                  Thêm nhà thầu
-                </Button>
-              ) : (
-                <a className="bf-btn bf-btn-primary" href="/contractors/new">
-                  Thêm nhà thầu
-                </a>
-              )
-            }
-          >
-            Thử thay đổi từ khóa hoặc tạo hồ sơ mới.
+          <EmptyState title="Chưa có nhà thầu nào phù hợp bộ lọc">
+            Thử thay đổi từ khóa hoặc tạo hồ sơ mới từ nút “Thêm mới” ở đầu trang.
           </EmptyState>
         </Card>
       ) : (

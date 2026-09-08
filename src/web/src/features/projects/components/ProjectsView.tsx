@@ -10,12 +10,14 @@ import { ProjectCreateDialog } from './ProjectCreateDialog';
 import { ProjectsKanban } from './ProjectsKanban';
 
 /**
- * /projects — PageHeader + toggle Bảng|Kanban + ProjectsList/ProjectsKanban +
- * dialog "Tạo dự án".
- * Nút header mở dialog (gated quyền quản lý dự án như ProjectsHeaderActions
- * cũ); tạo thành công → đóng + refresh list (remount ProjectsList qua key).
- * Route /projects/new giữ nguyên cho E2E drivers goto trực tiếp.
- * Mặc định = Bảng (?view=kanban để share kanban); toggle nằm cạnh toolbar.
+ * /projects — PageHeader (toggle Bảng|Kanban + nút "Thêm mới" cùng hàng
+ * actions: toggle trái, nút thêm phải) + ProjectsList/ProjectsKanban +
+ * dialog tạo mới.
+ * Nút header (gated quyền quản lý dự án như ProjectsHeaderActions cũ) là
+ * CTA thêm duy nhất của trang; tạo thành công → đóng + refresh list
+ * (remount ProjectsList qua key). Route /projects/new giữ nguyên cho E2E
+ * drivers goto trực tiếp.
+ * Mặc định = Bảng (?view=kanban để share kanban).
  */
 export function ProjectsView() {
   const canManage = useCanManageProjects();
@@ -31,16 +33,16 @@ export function ProjectsView() {
         title="Dự án"
         subtitle="Các dự án bạn là thành viên — server lọc theo quyền"
         actions={
-          canManage ? (
-            <Button onClick={openCreate}>
-              Tạo dự án
-            </Button>
-          ) : null
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <ViewToggle value={view} onChange={setView} />
+            {canManage ? (
+              <Button onClick={openCreate}>
+                Thêm mới
+              </Button>
+            ) : null}
+          </div>
         }
       />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-        <ViewToggle value={view} onChange={setView} />
-      </div>
       {view === 'kanban' ? <ProjectsKanban key={seq} /> : <ProjectsList key={seq} />}
       <ProjectCreateDialog
         open={createOpen}

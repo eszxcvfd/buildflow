@@ -7,8 +7,16 @@ import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Select } from '@/components/ui/select/Select';
-import { KanbanView, type KanbanColumn } from '@/components/ui/kanban/KanbanView';
+import { KanbanView, type KanbanColumn, type KanbanTone } from '@/components/ui/kanban/KanbanView';
 import { ClearFiltersButton, ListToolbar, SearchField } from '@/components/ui/list/ListKit';
+
+function statusLabel(status: string): string {
+  return status === 'ACTIVE' ? 'Hoạt động' : 'Ngừng hoạt động';
+}
+
+function statusTone(status: string): KanbanTone {
+  return status === 'ACTIVE' ? 'ok' : 'risk';
+}
 
 /**
  * Kanban nhà thầu — CHỈ ĐỌC, nhóm theo status.
@@ -114,7 +122,11 @@ export function ContractorsKanban() {
           </Button>
           {hasActiveFilter ? <ClearFiltersButton onClear={handleClearFilters} /> : null}
         </ListToolbar>
-        <p className="bf-card-meta" style={{ marginTop: '0.75rem' }}>
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0.75rem 0 0', fontSize: '0.8rem', color: 'var(--bf-muted, #64748b)' }}>
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5m0-8v.01" />
+          </svg>
           Kanban chỉ đọc — đổi trạng thái qua trang chi tiết nhà thầu.
         </p>
       </Card>
@@ -131,7 +143,12 @@ export function ContractorsKanban() {
           getColumnKey={(c) => c.status}
           getCardProps={(c) => ({
             title: c.name,
-            metas: [c.code, c.contactName ?? c.phone ?? ''],
+            metas: [
+              { icon: 'hash', text: c.code },
+              { icon: 'user', text: c.contactName ?? c.phone ?? '—' },
+            ],
+            badge: statusLabel(c.status),
+            badgeTone: statusTone(c.status),
             href: `/contractors/${c.id}`,
           })}
         />

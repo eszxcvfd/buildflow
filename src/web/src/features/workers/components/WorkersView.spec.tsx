@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { WorkersView } from './WorkersView';
 import { listWorkers } from '@/lib/api/workers';
 
@@ -70,5 +70,22 @@ describe('WorkersView Bảng | Kanban', () => {
     listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 20, offset: 0 });
     render(<WorkersView />);
     await waitFor(() => expect(screen.getByLabelText('Hoạt động (1)')).not.toBeNull());
+  });
+
+  it('toggle Bảng|Kanban nằm cùng hàng PageHeader với nút Thêm mới (toggle trái, nút phải)', async () => {
+    listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 20, offset: 0 });
+    render(<WorkersView />);
+    const addBtn = await screen.findByRole('button', { name: 'Thêm mới' });
+    const header = addBtn.closest('header');
+    expect(header).not.toBeNull();
+    // toggle group và nút thêm chung một PageHeader actions row
+    expect(within(header as HTMLElement).getByRole('group', { name: 'Chế độ xem' })).not.toBeNull();
+  });
+
+  it('mỗi trang chỉ một nút Thêm mới (kể cả khi danh sách rỗng)', async () => {
+    listWorkersMock.mockResolvedValue({ data: [], total: 0, limit: 20, offset: 0 });
+    render(<WorkersView />);
+    await waitFor(() => expect(screen.getByText('Chưa có worker nào phù hợp bộ lọc')).not.toBeNull());
+    expect(screen.getAllByRole('button', { name: 'Thêm mới' })).toHaveLength(1);
   });
 });

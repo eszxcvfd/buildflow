@@ -819,6 +819,43 @@
     color: #007a8d;
   }
 
+  /* ---------- Kanban (DashCode Task card): scroll mảnh, card hover nâng -2px ---------- */
+  .bf-kanban {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  .bf-kanban::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .bf-kanban::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
+
+  .bf-kanban::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .bf-kanban-card {
+    transition: box-shadow 120ms ease, transform 120ms ease;
+  }
+
+  .bf-kanban-card:hover {
+    transform: translateY(-2px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bf-kanban-card {
+      transition: none;
+    }
+
+    .bf-kanban-card:hover {
+      transform: none;
+    }
+  }
+
   /* ---------- Bảng ---------- */
   .bf-table-wrap {
     overflow-x: auto;

@@ -21,7 +21,7 @@ export const TRADE_IN_USE_WARNING =
 
 const PAGE_SIZE = 20;
 
-export function TradeList({ onCreateRequest }: { onCreateRequest?: () => void }) {
+export function TradeList() {
   const [trades, setTrades] = React.useState<Trade[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
@@ -209,21 +209,8 @@ export function TradeList({ onCreateRequest }: { onCreateRequest?: () => void })
 
       {trades.length === 0 ? (
         <Card>
-          <EmptyState
-            title="Chưa có ngành nghề nào phù hợp bộ lọc"
-            action={
-              onCreateRequest ? (
-                <Button onClick={onCreateRequest}>
-                  Tạo ngành nghề
-                </Button>
-              ) : (
-                <a className="bf-btn bf-btn-primary" href="/trades/new">
-                  Tạo ngành nghề
-                </a>
-              )
-            }
-          >
-            Thử thay đổi từ khóa hoặc tạo danh mục mới.
+          <EmptyState title="Chưa có ngành nghề nào phù hợp bộ lọc">
+            Thử thay đổi từ khóa hoặc tạo danh mục mới từ nút “Thêm mới” ở đầu trang.
           </EmptyState>
         </Card>
       ) : (
