@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { PrjProjectsController } from './api/rest/controller/projects.controller';
 import { WorkTypesController } from './api/rest/controller/work-types.controller';
 import { WorkOrderTemplatesController } from './api/rest/controller/work-order-templates.controller';
+import {
+  ProjectAttachmentsController,
+  WorkOrderAttachmentsController,
+} from './api/rest/controller/project-attachments.controller';
 import { CreateProjectUseCase } from './application/use-case/create-project.use-case';
 import { UpdateProjectUseCase } from './application/use-case/update-project.use-case';
 import { TransitionProjectStatusUseCase } from './application/use-case/transition-project-status.use-case';
@@ -23,12 +27,22 @@ import { GetWorkOrderTemplateUseCase } from './application/use-case/get-work-ord
 import { UpdateWorkOrderTemplateUseCase } from './application/use-case/update-work-order-template.use-case';
 import { ChangeWorkOrderTemplateStatusUseCase } from './application/use-case/change-work-order-template-status.use-case';
 import { ListActiveWorkOrderTemplatesUseCase } from './application/use-case/list-active-work-order-templates.use-case';
+import { UploadAttachmentUseCase } from './application/use-case/upload-attachment.use-case';
+import {
+  ListAttachmentsUseCase,
+  DownloadAttachmentUseCase,
+  RetireAttachmentUseCase,
+} from './application/use-case/attachment-read-retire.use-case';
 import { PgProjectRepository } from './infrastructure/database/pg-project.repository';
 import { PgWorkTypeRepository } from './infrastructure/database/pg-work-type.repository';
 import { PgWorkOrderTemplateRepository } from './infrastructure/database/pg-work-order-template.repository';
+import { PgAttachmentRepository } from './infrastructure/database/pg-attachment.repository';
+import { LocalAttachmentStorageService } from './infrastructure/storage/local-attachment-storage.service';
 import { PRJ_PROJECT_REPOSITORY, PRJ_PROJECT_AREA_REPOSITORY } from './domain/repository/project-repository.port';
 import { PRJ_WORK_TYPE_REPOSITORY } from './domain/repository/work-type-repository.port';
 import { PRJ_WORK_ORDER_TEMPLATE_REPOSITORY } from './domain/repository/work-order-template-repository.port';
+import { PRJ_ATTACHMENT_REPOSITORY } from './domain/repository/attachment-repository.port';
+import { PRJ_ATTACHMENT_STORAGE } from './domain/service/attachment-storage.port';
 import { PgAuditRepository } from '../iam/infrastructure/database/pg-audit.repository';
 import { PgTransactionManager } from '../iam/infrastructure/database/pg-transaction.manager';
 import { BcryptHasherService } from '../iam/infrastructure/security/bcrypt-hasher.service';
@@ -54,10 +68,14 @@ import { IamModule } from '../iam/iam.module';
  * PRJ-SRS-008 (issue #39) — thêm catalog mẫu công việc
  * (`WorkOrderTemplatesController`, xem ENDPOINTS.md §16); roles read+write =
  * ADMIN + PROJECT_MANAGER (mirror work-types #35).
+ * PRJ-SRS-009 (issue #40) — attachments cơ bản (`ProjectAttachmentsController`
+ * + `WorkOrderAttachmentsController` WO extension cùng bảng/service, xem
+ * ENDPOINTS.md §18); upload/retire = project-write-scope, list/download =
+ * project-member-scope (qua `ProjectScopeService` dùng chung).
  */
 @Module({
   imports: [IamModule],
-  controllers: [PrjProjectsController, WorkTypesController, WorkOrderTemplatesController],
+  controllers: [PrjProjectsController, WorkTypesController, WorkOrderTemplatesController, ProjectAttachmentsController, WorkOrderAttachmentsController],
   providers: [
     CreateProjectUseCase,
     UpdateProjectUseCase,
@@ -80,12 +98,23 @@ import { IamModule } from '../iam/iam.module';
     UpdateWorkOrderTemplateUseCase,
     ChangeWorkOrderTemplateStatusUseCase,
     ListActiveWorkOrderTemplatesUseCase,
+    UploadAttachmentUseCase,
+    ListAttachmentsUseCase,
+    DownloadAttachmentUseCase,
+    RetireAttachmentUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: PRJ_PROJECT_REPOSITORY, useClass: PgProjectRepository },
     { provide: PRJ_PROJECT_AREA_REPOSITORY, useClass: PgProjectRepository },
     { provide: PRJ_WORK_TYPE_REPOSITORY, useClass: PgWorkTypeRepository },
     { provide: PRJ_WORK_ORDER_TEMPLATE_REPOSITORY, useClass: PgWorkOrderTemplateRepository },
+    { provide: PRJ_ATTACHMENT_REPOSITORY, useClass: PgAttachmentRepository },
+    // Factory (không inject constructor param — baseDir đọc từ UPLOADS_DIR;
+    // test truyền tmp dir qua `new LocalAttachmentStorageService(dir)`).
+    {
+      provide: PRJ_ATTACHMENT_STORAGE,
+      useFactory: () => new LocalAttachmentStorageService(),
+    },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: HASHER_PORT, useClass: BcryptHasherService },

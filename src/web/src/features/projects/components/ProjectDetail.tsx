@@ -13,6 +13,7 @@ import {
 } from './ProjectStatusDialog';
 import { ProjectMembers } from './ProjectMembers';
 import { ProjectAreas } from './ProjectAreas';
+import { ProjectAttachments } from './ProjectAttachments';
 import { ProjectEditDialog } from './ProjectEditDialog';
 import { WorkOrderCreateDialog } from '@/features/work-orders';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
@@ -53,6 +54,8 @@ function statusLabel(status: string): string {
  * JOB-SRS-001 (issue #41) — nút 'Tạo Work Order' gated bởi cùng predicate
  * canManageProjects (server là authoritative: ADMIN bypass hoặc ACTIVE member
  * MANAGER/COORDINATOR); dialog tạo nháp gắn projectId của trang.
+ * PRJ-SRS-009 (issue #40) — panel 'Tài liệu đính kèm' (`ProjectAttachments`):
+ * upload/list/download/retire qua `lib/api/attachments.ts` (ENDPOINTS §18).
  * PRJ-SRS-006 (issue #37) — list server-scope nên detail 403 (deep-link cũ /
  * bị thu hồi membership) render graceful: EmptyState 'Bạn không phải thành
  * viên dự án này' + icon + link về danh sách, KHÔNG Alert đỏ; members section
@@ -372,6 +375,10 @@ export function ProjectDetail({ id }: { id: string }) {
 
       <Card>
         <ProjectAreas projectId={project.id} />
+      </Card>
+
+      <Card>
+        <ProjectAttachments projectId={project.id} />
       </Card>
 
       <Card>

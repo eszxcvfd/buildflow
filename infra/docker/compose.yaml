@@ -7,6 +7,11 @@ networks:
 volumes:
   pgdata:
     driver: local
+  # PRJ-SRS-009 (issue #40) — local disk cho attachments
+  # (`uploads/{projectId}/{uuid}-{safeName}`); named volume để file không mất
+  # khi container restart/rebuild (mirror pgdata).
+  uploads:
+    driver: local
 
 services:
   postgres:
@@ -52,6 +57,10 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (>= 32 ky tu) in infra/docker/.env}
+      # PRJ-SRS-009 (issue #40) — base dir attachments trong container.
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - uploads:/app/uploads
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     networks: [internal]

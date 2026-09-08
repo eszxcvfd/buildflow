@@ -1,0 +1,74 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker": "hau.le@vinacons.vn",
+  "outsider": "thang.nguyen@vinacons.vn",
+  "admin": "hoang.anh@vinacons.vn",
+  "projectId": "10000000-0000-4000-8000-000000000001",
+  "workOrderId": "e2e4b300-0000-4000-8000-0000000000b4",
+  "attIds": [
+    "43abf38a-4cbf-4b74-bff6-398e3f5cbcac",
+    "4744a924-8da3-4612-8f98-8de386110f48",
+    "7a04280c-72a5-4ab6-91de-a092fe8c981d",
+    "2c689296-33e6-421a-baae-8a2858915545",
+    "b5088ad5-3822-4edc-b5e8-f9f073d0bc2f"
+  ],
+  "attA1Id": "43abf38a-4cbf-4b74-bff6-398e3f5cbcac",
+  "attJpgId": "4744a924-8da3-4612-8f98-8de386110f48",
+  "attWebpId": "7a04280c-72a5-4ab6-91de-a092fe8c981d",
+  "attReplayId": "2c689296-33e6-421a-baae-8a2858915545",
+  "attWoId": "b5088ad5-3822-4edc-b5e8-f9f073d0bc2f",
+  "pdfSha256": "165f1bed7edec5f590562724ec0a7297879cfc8c9056db0b5495739c7bba78b1",
+  "jpgSha256": "e895510ef980758c2a9470338c568d0198bc670f5eebd0a204d6eba8858beb3c",
+  "auditBaseline": "6",
+  "auditFinal": "12",
+  "uploadedTotal": "10",
+  "rest": "0/0",
+  "results": [
+    {
+      "id": "A1",
+      "ok": true,
+      "note": "UI upload OK; metadata name/type/size/uploader đúng; no-store; id=43abf38a…"
+    },
+    {
+      "id": "A2",
+      "ok": true,
+      "note": "JPEG 201 + WebP 201, mime sniff đúng; ids=4744a924…/7a04280c…"
+    },
+    {
+      "id": "A3",
+      "ok": true,
+      "note": "txt/exe rename .jpg → 400 fieldErrors.file; không DB row, không chạm disk"
+    },
+    {
+      "id": "A4",
+      "ok": true,
+      "note": ">10MB (10485860B) → 400 lý do rõ; không DB row, không chạm disk"
+    },
+    {
+      "id": "A5",
+      "ok": true,
+      "note": "sha256 khớp 165f1bed7edec5f5…; attachment + no-store"
+    },
+    {
+      "id": "A6",
+      "ok": true,
+      "note": "badge Đã ngừng + audit 0e95e145…; history giữ + download ok; alreadyInactive không audit"
+    },
+    {
+      "id": "A7",
+      "ok": true,
+      "note": "WORKER upload/retire 403 + list/download ok; non-member 403 không leak; UI ẩn nút"
+    },
+    {
+      "id": "A8",
+      "ok": true,
+      "note": "201 → 200+idempotentReplay cùng id; total +1; audit=1"
+    },
+    {
+      "id": "L5",
+      "ok": true,
+      "note": "WO upload 201 ownerType=WORK_ORDER + list thấy; outsider 403; id=b5088ad5…"
+    }
+  ]
+}

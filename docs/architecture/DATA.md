@@ -99,6 +99,10 @@ Compose file phải thể hiện tối thiểu:
 
 - services `postgres` và `redis` với image version được pin khi scaffold;
 - named volume cho PostgreSQL;
+- named volume `uploads` mount vào api service (`uploads:/app/uploads`,
+  `UPLOADS_DIR=/app/uploads`) cho attachments local disk PRJ-SRS-009 (`#40`,
+  xem [`ENDPOINTS.md`](ENDPOINTS.md) §18); file không mất khi container
+  restart/rebuild (mirror `pgdata`);
 - network nội bộ cho data services;
 - healthcheck tương ứng (`pg_isready`, `redis-cli PING`);
 - environment interpolation hoặc secret file, không hard-code credential;
@@ -141,6 +145,7 @@ Forward-only migration do `src/api` sở hữu, chạy qua `scripts/migrate.js` 
 | 0006 | `0006_prj_srs003_area_name_ci.sql` | Drop `ux_project_areas_active_name`, tạo expression unique `ux_project_areas_active_name_ci ON project_areas (project_id, lower(name)) WHERE is_active` | PRJ-SRS-003 polish (`#34` P2-2): tên active duy nhất mỗi project **DB-enforced case-insensitive** (đóng case-race 0005 — hai create đồng thời khác case không còn lọt); xem [`ENDPOINTS.md`](ENDPOINTS.md) §13 A3 |
 | 0007 | `0007_prj_srs004_work_types.sql` | Bảng `public.work_types` (có từ baseline 0001 — KHÔNG bảng mới): `work_type_group` text NULL; `required_fields` jsonb NOT NULL DEFAULT `'[]'`; `config_version` integer NOT NULL DEFAULT 1 + `CHECK work_types_config_version_ck (config_version >= 1)` | loại công việc PRJ-SRS-004 (`#35`): chỉ ADD cột, không đổi FK/index hiện có (`ux_work_types_code`, `ix_work_types_trade_active`, `work_types_required_trade_id_fkey` giữ nguyên); xem [`ENDPOINTS.md`](ENDPOINTS.md) §14 |
 | 0009 | `0009_job_srs001_work_order_request_key.sql` | Bảng `public.work_orders` (có từ baseline 0001 — KHÔNG bảng mới): `request_key` uuid NULL + partial unique `ux_work_orders_request_key (request_key) WHERE request_key IS NOT NULL` (`IF NOT EXISTS` cả hai — replay an toàn) | Work Order nháp JOB-SRS-001 (`#41`): idempotency key cho `POST /api/v1/work-orders` (trùng key → replay `200`, không audit mới); NULL không match; xem [`ENDPOINTS.md`](ENDPOINTS.md) §17 J3 |
+| 0010 | `0010_prj_srs009_attachments.sql` | Bảng `public.attachments` (có từ baseline 0001 — KHÔNG bảng mới): `is_active` boolean NOT NULL DEFAULT true + `deactivated_at` timestamptz NULL + `deactivated_by` uuid → `users` NULL + `deactivate_reason` varchar(500) NULL + `CHECK attachments_revocation_ck (is_active OR deactivated_at IS NOT NULL)` (mirror `project_members_revocation_ck`); `request_key` uuid NULL + partial unique `ux_attachments_request_key (request_key) WHERE request_key IS NOT NULL` (`IF NOT EXISTS` — replay an toàn) | Attachments cơ bản PRJ-SRS-009 (`#40`): soft-retire (không xóa file vật lý — history giữ) + idempotency key cho upload (trùng key → replay `200`, không ghi file mới, không audit mới); xem [`ENDPOINTS.md`](ENDPOINTS.md) §18 |
 
 - Migration 0003 không tự dọn dữ liệu trùng legacy (append-only); môi trường có trùng `(correlation_id, action)` phải cleanup theo quyết định owner trước khi apply.
 - Migration 0005 không tự dọn tên trùng legacy (pre-flight `SELECT project_id, lower(name), count(*) ... HAVING count(*) > 1` ghi trong file migration); môi trường có trùng phải xử lý theo quyết định owner trước khi apply 0005/0006.

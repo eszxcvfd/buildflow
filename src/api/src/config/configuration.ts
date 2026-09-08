@@ -7,6 +7,8 @@ export interface AppConfig {
   loginMaxFailedAttempts: number;
   loginLockDurationMinutes: number;
   auditRetentionDays: number;
+  /** Local disk base dir cho attachments (PRJ-SRS-009 #40). */
+  uploadsDir: string;
 }
 
 /** @returns parsed positive integer; logs a warn and falls back on invalid input */
@@ -42,5 +44,8 @@ export function loadConfig(): AppConfig {
     loginLockDurationMinutes: parseInt(process.env.LOGIN_LOCK_DURATION_MINUTES ?? '15', 10),
     // IAM-SRS-008 audit retention (owner-approved 2026-09-05): default 365 days.
     auditRetentionDays: parseIntWithDefault('AUDIT_RETENTION_DAYS', 365),
+    // PRJ-SRS-009 (issue #40): compose mount `uploads:/app/uploads` →
+    // `UPLOADS_DIR=/app/uploads`; local dev/test default `./uploads`.
+    uploadsDir: process.env.UPLOADS_DIR ?? 'uploads',
   };
 }

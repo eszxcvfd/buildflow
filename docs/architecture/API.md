@@ -88,6 +88,7 @@ Mỗi module nên là một deep module: public interface nhỏ, implementation 
 - API dùng `DATABASE_URL` và `REDIS_URL`/typed config qua adapter; use case không tạo client connection trực tiếp.
 - Cache miss, Redis timeout và Redis outage phải có behavior được test. Với cache-aside, fallback đọc PostgreSQL; không retry vô hạn hoặc biến cache thành transaction store.
 - Docker Compose lifecycle, service name, healthcheck và volume thuộc [`DATA.md`](DATA.md); API sở hữu migration/schema và adapter contract.
+- File/binary (attachments PRJ-SRS-009, xem [`ENDPOINTS.md`](ENDPOINTS.md) §18) đi qua storage port riêng (`AttachmentStoragePort`, adapter local disk `uploads/{projectId}/{uuid}-{safeName}`): upload nhận multipart qua controller → use case validate (size/mime/magic/tên) → ghi file NGOÀI tx → DB tx (metadata + audit) sau; DB/audit fail → xóa file (orphan cleanup). File operation không bao giờ nằm trong DB tx.
 
 ## 5. Quy tắc NestJS module
 

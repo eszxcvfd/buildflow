@@ -3,6 +3,7 @@ import { ProjectDetail } from './ProjectDetail';
 import { getProject, changeProjectStatus, listProjectMembers } from '@/lib/api/projects';
 import { listWorkers } from '@/lib/api/workers';
 import { listAuditLogs } from '@/lib/api/audit-logs';
+import { listAttachments } from '@/lib/api/attachments';
 
 jest.mock('@/lib/api/projects', () => ({
   listProjects: jest.fn(),
@@ -17,6 +18,16 @@ jest.mock('@/lib/api/projects', () => ({
 }));
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
+jest.mock('@/lib/api/attachments', () => ({
+  listAttachments: jest.fn(),
+  uploadAttachment: jest.fn(),
+  downloadAttachment: jest.fn(),
+  retireAttachment: jest.fn(),
+  newRequestKey: jest.fn(() => 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),
+  ATTACHMENT_ALLOWED_MIME_TYPES: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+  ATTACHMENT_MAX_SIZE_BYTES: 10 * 1024 * 1024,
+  ATTACHMENT_TEXT_MAX_LENGTH: 500,
+}));
 // Dialog Sửa hồ sơ mount ProjectForm (dùng useRouter) — mock như CrewForm.spec.
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), refresh: jest.fn() }),
@@ -27,6 +38,7 @@ const changeProjectStatusMock = changeProjectStatus as jest.Mock;
 const listProjectMembersMock = listProjectMembers as jest.Mock;
 const listWorkersMock = listWorkers as jest.Mock;
 const listAuditLogsMock = listAuditLogs as jest.Mock;
+const listAttachmentsMock = listAttachments as jest.Mock;
 
 function project(overrides = {}) {
   return {
@@ -61,6 +73,7 @@ beforeEach(() => {
   listProjectMembersMock.mockResolvedValue({ data: [], total: 0 });
   listWorkersMock.mockResolvedValue({ data: [], total: 0, limit: 100, offset: 0 });
   listAuditLogsMock.mockResolvedValue({ data: [], total: 0, limit: 10, offset: 0 });
+  listAttachmentsMock.mockResolvedValue({ data: [], total: 0 });
 });
 
 describe('ProjectDetail PRJ-SRS-001 (issue #32)', () => {
@@ -267,5 +280,13 @@ describe('ProjectDetail status actions PRJ-SRS-002 (issue #33)', () => {
     fireEvent.change(screen.getByLabelText(/Lý do/), { target: { value: 'ok' } });
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận tạm dừng' }));
     await waitFor(() => expect(screen.getByText('Lý do là bắt buộc khi tạm dừng/đóng/mở lại dự án')).not.toBeNull());
+  });
+
+  it('PRJ-SRS-009 smoke: panel Tài liệu đính kèm render cùng trang chi tiết', async () => {
+    setSessionRoles(['ADMIN']);
+    render(<ProjectDetail id="p-1" />);
+    await waitFor(() => expect(screen.getByText('Tài liệu đính kèm')).not.toBeNull());
+    expect(listAttachmentsMock).toHaveBeenCalledWith('p-1');
+    await waitFor(() => expect(screen.getByText('Chưa có tài liệu đính kèm')).not.toBeNull());
   });
 });
