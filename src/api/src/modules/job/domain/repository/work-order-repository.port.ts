@@ -17,6 +17,12 @@ export interface ActiveTradeRef {
   isActive: boolean;
 }
 
+export interface ProjectStatusRef {
+  id: string;
+  /** Raw `public.projects.status` (`DRAFT|ACTIVE|PAUSED|COMPLETED|CLOSED`). */
+  status: string;
+}
+
 export interface WorkOrderRepositoryPort {
   findById(id: string): Promise<WorkOrderEntity | null>;
   /** Tra cứu theo code, case-insensitive (`lower(code) = lower($1)`). */
@@ -38,6 +44,12 @@ export interface WorkOrderRepositoryPort {
    * mirror `WorkTypeRepositoryPort.findActiveTradeById`).
    */
   findActiveTradeById(tradeId: string): Promise<ActiveTradeRef | null>;
+  /**
+   * Trạng thái dự án: đọc trực tiếp `public.projects` (prj-owned, không
+   * migration mới — mirror `findActiveWorkTypeById`). Caller yêu cầu `ACTIVE`
+   * khi tạo WO (flow SRS step 1 'chọn project active').
+   */
+  findProjectStatusById(projectId: string): Promise<ProjectStatusRef | null>;
   /** Tên loại công việc cho response summary (`workTypeName?`). */
   findWorkTypeNameById(workTypeId: string): Promise<string | null>;
   create(workOrder: WorkOrderEntity): Promise<void>;

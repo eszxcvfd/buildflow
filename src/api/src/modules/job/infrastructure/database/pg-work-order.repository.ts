@@ -16,7 +16,7 @@ function getPool(): Pool {
 type Row = Record<string, unknown>;
 
 function mapRow(row: Row): WorkOrderEntity {
-  return new WorkOrderEntity({
+  return WorkOrderEntity.fromPersistence({
     id: String(row['id']),
     code: String(row['code']),
     projectId: String(row['project_id']),
@@ -107,6 +107,14 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
     );
     if (r.rows.length === 0) return null;
     return { id: String(r.rows[0].id), isActive: Boolean(r.rows[0].is_active) };
+  }
+
+  async findProjectStatusById(projectId: string): Promise<{ id: string; status: string } | null> {
+    const r = await this.pool().query('SELECT id, status FROM public.projects WHERE id = $1 LIMIT 1', [
+      projectId,
+    ]);
+    if (r.rows.length === 0) return null;
+    return { id: String(r.rows[0].id), status: String(r.rows[0].status) };
   }
 
   async findWorkTypeNameById(workTypeId: string): Promise<string | null> {

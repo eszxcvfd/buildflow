@@ -1,0 +1,28 @@
+{
+  "digits": "345187",
+  "titleW2": "Thi công sàn B1 khu KQ-01 345187",
+  "titleW3": "Thi công dầm khu TM-02 345187",
+  "titleW7": "Thi công lan can sảnh chính 345187",
+  "tempWorkTypeCode": "WT-GACH-OP-345187",
+  "workOrderIds": [
+    "5b7c85c4-b53a-44b2-92b5-a4680e7454b8",
+    "bb0da9d5-ceb6-49c6-bce0-b159232ea747",
+    "58fe3041-54a2-4931-ab23-7b98a3b48ce5"
+  ],
+  "tempWorkTypeId": "dd9db518-6163-4338-8232-2ad0caa30748",
+  "requestKeyW3": "c83e7564-5ba5-4113-831b-541bf02af2ab",
+  "woW2": {
+    "id": "5b7c85c4-b53a-44b2-92b5-a4680e7454b8",
+    "code": "WO-MTSP056ZJE60"
+  },
+  "woW7": {
+    "id": "58fe3041-54a2-4931-ab23-7b98a3b48ce5",
+    "code": "WO-MTSP07QVTM4H"
+  },
+  "prevWorkOrderIds": [
+    "856fd92e-64b0-4354-9a7a-7618b977640e",
+    "603d5bbf-af56-44a3-b7b0-d98870f0dcac",
+    "c9276549-6778-4a60-bd20-a889986eb6e6"
+  ],
+  "prevTempWorkTypeId": "7eaaccc0-740e-452e-af88-b2ed54453d6a"
+}

@@ -11,6 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { WorkOrderPriority } from '../../../../domain/service/work-order.policy';
+import { WorkOrderStatus } from '../../../../domain/entity/work-order.entity';
 
 export interface WorkOrderResponseDto {
   id: string;
@@ -24,7 +25,8 @@ export interface WorkOrderResponseDto {
   description: string | null;
   instructions: string | null;
   priority: WorkOrderPriority;
-  status: 'DRAFT';
+  /** Full DB enum (G1: GET mọi WO non-DRAFT phải serialize đúng). */
+  status: WorkOrderStatus;
   plannedStartAt: string | null;
   plannedEndAt: string | null;
   plannedHeadcount: number | null;

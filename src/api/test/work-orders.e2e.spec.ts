@@ -44,6 +44,10 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
     [`${P2}:${PM_ID}`, 'COORDINATOR'],
   ]);
   const projects = new Set([P1, P2]);
+  const projectStatuses = new Map<string, string>([
+    [P1, 'ACTIVE'],
+    [P2, 'ACTIVE'],
+  ]);
   let auditLogWithClient: jest.Mock;
 
   function makeUser(id: string, email: string, passwordHash: string): UserEntity {
@@ -151,6 +155,10 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
         return null;
       }),
       findWorkTypeNameById: jest.fn(async (id: string) => (id === ACTIVE_TYPE ? 'Đổ bê tông' : null)),
+      findProjectStatusById: jest.fn(async (id: string) => {
+        const status = projectStatuses.get(id);
+        return status ? { id, status } : null;
+      }),
       create: jest.fn(async (e: WorkOrderEntity) => { store.set(e.id, e); }),
       createWithClient: jest.fn(async (_c: unknown, e: WorkOrderEntity) => { store.set(e.id, e); }),
     };
@@ -320,6 +328,31 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
     expect(second.body.id).toBe(first.body.id);
     expect(second.body.idempotentReplay).toBe(true);
     expect(auditLogWithClient.mock.calls.length).toBe(before + 1);
+  });
+
+  it('G3 project PAUSED/DRAFT → 400 WORK_ORDER_PROJECT_NOT_ACTIVE + fieldErrors projectId', async () => {
+    const pmToken = await login('pm-e2e-wo@example.com');
+    try {
+      projectStatuses.set(P2, 'PAUSED');
+      const r1 = await request(app.getHttpServer())
+        .post('/api/v1/work-orders')
+        .set('Authorization', `Bearer ${pmToken}`)
+        .send({ projectId: P2, workTypeId: ACTIVE_TYPE, title: 'X' })
+        .expect(400);
+      expect(r1.body.code).toBe('WORK_ORDER_PROJECT_NOT_ACTIVE');
+      expect(r1.body.fieldErrors.projectId).toBeDefined();
+
+      projectStatuses.set(P2, 'DRAFT');
+      const r2 = await request(app.getHttpServer())
+        .post('/api/v1/work-orders')
+        .set('Authorization', `Bearer ${pmToken}`)
+        .send({ projectId: P2, workTypeId: ACTIVE_TYPE, title: 'X' })
+        .expect(400);
+      expect(r2.body.code).toBe('WORK_ORDER_PROJECT_NOT_ACTIVE');
+      expect(r2.body.fieldErrors.projectId).toBeDefined();
+    } finally {
+      projectStatuses.set(P2, 'ACTIVE');
+    }
   });
 
   it('X-Correlation-Id sai → 400; ADMIN GET missing → 404', async () => {

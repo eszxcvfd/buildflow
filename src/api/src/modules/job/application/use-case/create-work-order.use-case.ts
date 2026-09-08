@@ -1,4 +1,4 @@
-import { Inject, Injectable, ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Inject, Injectable, ConflictException, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PoolClient } from 'pg';
 import { JOB_WORK_ORDER_REPOSITORY, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
@@ -64,6 +64,16 @@ function duplicateCode409(): ConflictException {
   });
 }
 
+function projectNotActive400(projectStatus: string): BadRequestException {
+  const message = `Dự án phải ở trạng thái hoạt động (ACTIVE) để tạo công việc (hiện tại: ${projectStatus})`;
+  return new BadRequestException({
+    statusCode: 400,
+    message,
+    code: 'WORK_ORDER_PROJECT_NOT_ACTIVE',
+    fieldErrors: { projectId: [message] },
+  });
+}
+
 /**
  * JOB-SRS-001 (issue #41) — tạo Work Order nháp.
  * - J1 scope-first (lesson P1-1 #37): `assertProjectWriteScope` TRƯỚC mọi
@@ -74,7 +84,9 @@ function duplicateCode409(): ConflictException {
  *   tồn tại VÀ ACTIVE; `areaId` optional — khi gửi phải cùng project VÀ
  *   ACTIVE; `requiredTradeId` optional — khi gửi phải là trade ACTIVE;
  *   thiếu schedule/area/trade vẫn DRAFT (không chặn).
- * - J3 idempotent `requestKey`: trùng → 200 row hiện có, không audit mới.
+ * - J3 idempotent `requestKey`: trùng pre-check → 200 row hiện có, không audit
+ *   mới; race đồng thời chạm `ux_work_orders_request_key` trong tx → re-fetch
+ *   theo `request_key` trả 200 idempotentReplay (mirror code-409 handling).
  * - J4 code: client-supplied theo pattern → 409 CI pre-check + race guard
  *   `ux_work_orders_code` trong tx (constraint-cụ-thể-trước; bare 23505
  *   rethrow — precedent work-types W2); absent → server sinh `WO-`+base36+rand.
@@ -162,6 +174,17 @@ export class CreateWorkOrderUseCase {
       userAgent: input.userAgent ?? null,
     });
 
+    // J1b — flow SRS step 1 'chọn project active': chỉ tạo WO trên project
+    // ACTIVE (sau scope-first J1 để không leak existence; 1 query read trực
+    // tiếp `public.projects`, không migration — mirror findActiveWorkTypeById).
+    const project = await this.workOrderRepo.findProjectStatusById(input.projectId);
+    if (!project) {
+      throw new NotFoundException('Không tìm thấy dự án');
+    }
+    if (project.status !== 'ACTIVE') {
+      throw projectNotActive400(project.status);
+    }
+
     const workType = await this.workOrderRepo.findActiveWorkTypeById(input.workTypeId);
     if (!workType || !workType.isActive) {
       throw fieldError('workTypeId', 'Loại công việc không tồn tại hoặc đã ngừng hoạt động');
@@ -220,7 +243,7 @@ export class CreateWorkOrderUseCase {
     const id = randomUUID();
     let entity: WorkOrderEntity;
     try {
-      entity = new WorkOrderEntity({
+      entity = WorkOrderEntity.createDraft({
         id,
         code,
         projectId: input.projectId,
@@ -245,7 +268,8 @@ export class CreateWorkOrderUseCase {
       throw fieldError('title', e instanceof Error ? e.message : 'Dữ liệu không hợp lệ');
     }
 
-    await this.tx.withTransaction(async (client: PoolClient) => {      try {
+    try {
+      await this.tx.withTransaction(async (client: PoolClient) => {      try {
         if (this.workOrderRepo.createWithClient) {
           await this.workOrderRepo.createWithClient(client, entity);
         } else {
@@ -280,7 +304,28 @@ export class CreateWorkOrderUseCase {
       } catch {
         throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
       }
-    });
+      });
+    } catch (e) {
+      // G2 race `requestKey`: hai request đồng thời cùng key đều qua pre-check
+      // J3 → insert thứ hai chạm partial unique trong tx (tx đã rollback khi
+      // tới đây) → re-fetch row HIỆN CÓ theo `request_key` trả 200
+      // idempotentReplay (mirror code-409 handling; audit fail 500 không vào
+      // nhánh này vì không mang constraint).
+      const err = e as Record<string, unknown>;
+      const isUniqueViolation = String(err['code'] ?? '') === '23505';
+      const isRequestKeyRace =
+        isUniqueViolation &&
+        /ux_work_orders_request_key/i.test(String(err['constraint'] ?? '')) &&
+        requestKey !== null;
+      if (isRequestKeyRace && requestKey !== null) {
+        const existing = await this.workOrderRepo.findByRequestKey(requestKey);
+        if (existing) {
+          const replayWorkTypeName = await this.workOrderRepo.findWorkTypeNameById(existing.workTypeId);
+          return { entity: existing, workTypeName: replayWorkTypeName, idempotentReplay: true };
+        }
+      }
+      throw e;
+    }
 
     const workTypeName = await this.workOrderRepo.findWorkTypeNameById(input.workTypeId);
     return { entity, workTypeName, idempotentReplay: false };

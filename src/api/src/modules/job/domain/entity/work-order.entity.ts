@@ -7,7 +7,27 @@ import {
   normalizeWorkOrderTitle,
 } from '../service/work-order.policy';
 
-export type WorkOrderStatus = 'DRAFT';
+/** Full DB enum (`work_orders_status_ck`, migration 0001) — rehydrate chấp nhận tất cả. */
+export type WorkOrderStatus =
+  | 'DRAFT'
+  | 'READY'
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'WORK_DONE'
+  | 'CLOSED'
+  | 'CANCELLED';
+
+const WORK_ORDER_STATUSES: readonly WorkOrderStatus[] = [
+  'DRAFT',
+  'READY',
+  'OPEN',
+  'ASSIGNED',
+  'IN_PROGRESS',
+  'WORK_DONE',
+  'CLOSED',
+  'CANCELLED',
+];
 
 export interface WorkOrderProps {
   id: string;
@@ -20,7 +40,7 @@ export interface WorkOrderProps {
   description: string | null;
   instructions: string | null;
   priority: WorkOrderPriority;
-  /** Slice này chỉ tạo nháp — luôn `DRAFT` (gán/phát hành thuộc #42/#44). */
+  /** Trạng thái hiện tại (tạo mới luôn `DRAFT` qua `createDraft`; lifecycle sau thuộc #42/#44). */
   status: WorkOrderStatus;
   plannedStartAt: Date | null;
   plannedEndAt: Date | null;
@@ -39,6 +59,23 @@ function assertUuid(value: string, label: string): void {
 }
 
 export class WorkOrderEntity {
+  /**
+   * Tạo nháp mới — giữ invariant DRAFT-at-creation (slice này chỉ tạo nháp;
+   * gán/phát hành thuộc #42/#44).
+   */
+  static createDraft(props: Omit<WorkOrderProps, 'status'> & { status: 'DRAFT' }): WorkOrderEntity {
+    if (props.status !== 'DRAFT') throw new Error('Work Order mới phải ở trạng thái DRAFT');
+    return new WorkOrderEntity({ ...props, status: 'DRAFT' });
+  }
+
+  /**
+   * Rehydrate từ persistence — chấp nhận full DB enum, không ép DRAFT
+   * (GET mọi WO non-DRAFT đi qua đây qua `mapRow`).
+   */
+  static fromPersistence(props: WorkOrderProps): WorkOrderEntity {
+    return new WorkOrderEntity({ ...props });
+  }
+
   constructor(private props: WorkOrderProps) {
     assertUuid(this.props.id, 'ID công việc');
     assertUuid(this.props.projectId, 'ID dự án');
@@ -53,7 +90,7 @@ export class WorkOrderEntity {
     this.props.description = normalizeWorkOrderText(this.props.description, 'Mô tả công việc');
     this.props.instructions = normalizeWorkOrderText(this.props.instructions, 'Hướng dẫn thực hiện');
     this.props.priority = normalizeWorkOrderPriority(this.props.priority);
-    if (this.props.status !== 'DRAFT') throw new Error('Work Order mới phải ở trạng thái DRAFT');
+    if (!WORK_ORDER_STATUSES.includes(this.props.status)) throw new Error('Trạng thái công việc không hợp lệ');
     this.props.plannedHeadcount = normalizePlannedHeadcount(this.props.plannedHeadcount);
     if (!Number.isInteger(this.props.version) || this.props.version < 1) {
       throw new Error('Version công việc không hợp lệ');

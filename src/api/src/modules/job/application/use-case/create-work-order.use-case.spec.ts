@@ -51,6 +51,7 @@ function makeRepo(overrides?: Partial<WorkOrderRepositoryPort>): WorkOrderReposi
     findActiveTradeById: jest.fn(async (id: string) =>
       id === IDS.inactiveTrade ? { id, isActive: false } : { id, isActive: true },
     ),
+    findProjectStatusById: jest.fn(async (id: string) => ({ id, status: 'ACTIVE' })),
     findWorkTypeNameById: jest.fn(async () => 'Đổ bê tông'),
     create: jest.fn(async () => {}),
     createWithClient: jest.fn(async () => {}),
@@ -79,7 +80,7 @@ const baseInput: CreateWorkOrderInput = {
 function setup(repoOverrides?: Partial<WorkOrderRepositoryPort>, order: string[] = []) {
   const repo = makeRepo(repoOverrides);
   // Ghi nhận thứ tự: mọi repo read phải chạy SAU scope (J1 scope-first).
-  for (const key of ['findByCode', 'findByRequestKey', 'findActiveWorkTypeById', 'findActiveAreaById', 'findActiveTradeById'] as const) {
+  for (const key of ['findByCode', 'findByRequestKey', 'findActiveWorkTypeById', 'findActiveAreaById', 'findActiveTradeById', 'findProjectStatusById'] as const) {
     const original = repo[key] as jest.Mock;
     const inner = original.getMockImplementation();
     original.mockImplementation(async (...args: unknown[]) => {
@@ -208,6 +209,72 @@ describe('CreateWorkOrderUseCase (JOB-SRS-001)', () => {
     await expect(raceBare.uc.execute({ ...baseInput, code: 'WO-2026-A1' })).rejects.toMatchObject({
       code: '23505',
     });
+  });
+
+  it('G2 race 23505 ux_work_orders_request_key → 200 replay idempotentReplay, không audit', async () => {
+    const existing = makeEntity('WO-OLD-9');
+    const repo = makeRepo({
+      findByRequestKey: jest.fn(async () => existing),
+      createWithClient: jest.fn(async () => {
+        throw { code: '23505', constraint: 'ux_work_orders_request_key' };
+      }),
+    });
+    const scope = makeScope();
+    const audit = { log: jest.fn(), logWithClient: jest.fn(async () => {}) };
+    const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
+    const uc = new CreateWorkOrderUseCase(repo, audit as never, tx as never, scope as never);
+    const out = await uc.execute({ ...baseInput, requestKey: IDS.key });
+    expect(out.entity.code).toBe('WO-OLD-9');
+    expect(out.idempotentReplay).toBe(true);
+    expect(out.workTypeName).toBe('Đổ bê tông');
+    expect(audit.logWithClient).not.toHaveBeenCalled();
+  });
+
+  it('G2 race request_key nhưng row không còn → rethrow lỗi gốc', async () => {
+    const { uc } = setup({
+      findByRequestKey: jest.fn(async () => null),
+      createWithClient: jest.fn(async () => {
+        throw { code: '23505', constraint: 'ux_work_orders_request_key' };
+      }),
+    });
+    await expect(uc.execute({ ...baseInput, requestKey: IDS.key })).rejects.toMatchObject({
+      code: '23505',
+    });
+  });
+
+  it('G3 project PAUSED/DRAFT/COMPLETED/CLOSED → 400 WORK_ORDER_PROJECT_NOT_ACTIVE + fieldErrors projectId', async () => {
+    for (const status of ['PAUSED', 'DRAFT', 'COMPLETED', 'CLOSED']) {
+      const withTx = { withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({})) };
+      const repo = makeRepo({ findProjectStatusById: jest.fn(async (id: string) => ({ id, status })) });
+      const scope = makeScope();
+      const audit = { log: jest.fn(), logWithClient: jest.fn(async () => {}) };
+      const uc = new CreateWorkOrderUseCase(repo, audit as never, withTx as never, scope as never);
+      try {
+        await uc.execute({ ...baseInput });
+        fail(`expected 400 for project status ${status}`);
+      } catch (e) {
+        expect(e).toBeInstanceOf(BadRequestException);
+        expect((e as BadRequestException).getResponse()).toMatchObject({
+          code: 'WORK_ORDER_PROJECT_NOT_ACTIVE',
+          fieldErrors: { projectId: expect.anything() },
+        });
+      }
+      expect(withTx.withTransaction).not.toHaveBeenCalled();
+    }
+  });
+
+  it('G3 project missing sau scope → 404 (defensive)', async () => {
+    const { uc } = setup({ findProjectStatusById: jest.fn(async () => null) });
+    await expect(uc.execute({ ...baseInput })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('G3 project status read chạy sau scope (scope-first J1)', async () => {
+    const order: string[] = [];
+    const { uc } = setup(undefined, order);
+    await uc.execute({ ...baseInput });
+    expect(order[0]).toBe('scope');
+    expect(order).toContain('findProjectStatusById');
+    expect(order.indexOf('scope')).toBeLessThan(order.indexOf('findProjectStatusById'));
   });
 
   it('requestKey trùng → 200 existing + idempotentReplay, KHÔNG audit, KHÔNG tx', async () => {

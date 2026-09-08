@@ -84,4 +84,19 @@ describe('GetWorkOrderUseCase (JOB-SRS-001)', () => {
       uc.execute({ workOrderId: IDS.missing, actorUserId: IDS.admin, actorRoles: ['ADMIN'] }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('G1: WO ASSIGNED (non-DRAFT) đọc được — rehydrate không ép DRAFT', async () => {
+    const assigned = WorkOrderEntity.fromPersistence({ ...makeEntity().getProps(), status: 'ASSIGNED' });
+    const repo = {
+      findById: jest.fn(async () => assigned),
+      findWorkTypeNameById: jest.fn(async () => 'Đổ bê tông'),
+    } as unknown as WorkOrderRepositoryPort & { findById: jest.Mock };
+    const scope = {
+      assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
+    };
+    const uc = new GetWorkOrderUseCase(repo, scope as never);
+    const out = await uc.execute({ workOrderId: IDS.wo, actorUserId: IDS.member, actorRoles: ['WORKER'] });
+    expect(out.entity.status).toBe('ASSIGNED');
+    expect(out.entity.isDraft()).toBe(false);
+  });
 });

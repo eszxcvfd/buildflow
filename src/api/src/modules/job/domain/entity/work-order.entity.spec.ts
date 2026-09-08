@@ -1,4 +1,4 @@
-import { WorkOrderEntity, WorkOrderProps } from './work-order.entity';
+import { WorkOrderEntity, WorkOrderProps, WorkOrderStatus } from './work-order.entity';
 
 const IDS = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -62,8 +62,23 @@ describe('WorkOrderEntity (JOB-SRS-001)', () => {
     expect(() => new WorkOrderEntity(baseProps({ version: 0 }))).toThrow();
   });
 
-  it('status khác DRAFT → reject (slice này chỉ tạo nháp)', () => {
-    expect(() => new WorkOrderEntity(baseProps({ status: 'READY' as never }))).toThrow('DRAFT');
+  it('createDraft giữ invariant DRAFT-at-creation (status khác DRAFT → reject)', () => {
+    const e = WorkOrderEntity.createDraft({ ...baseProps(), status: 'DRAFT' });
+    expect(e.isDraft()).toBe(true);
+    expect(() => WorkOrderEntity.createDraft({ ...baseProps(), status: 'READY' as 'DRAFT' })).toThrow('DRAFT');
+  });
+
+  it('G1 regression: rehydrate row ASSIGNED (full DB enum) không throw', () => {
+    const e = WorkOrderEntity.fromPersistence(baseProps({ status: 'ASSIGNED' }));
+    expect(e.status).toBe('ASSIGNED');
+    expect(e.isDraft()).toBe(false);
+    const all: WorkOrderStatus[] = [
+      'DRAFT', 'READY', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WORK_DONE', 'CLOSED', 'CANCELLED',
+    ];
+    for (const status of all) {
+      expect(() => WorkOrderEntity.fromPersistence(baseProps({ status }))).not.toThrow();
+    }
+    expect(() => WorkOrderEntity.fromPersistence(baseProps({ status: 'GHOST' as WorkOrderStatus }))).toThrow();
   });
 
   it('toPublic expose public fields, không secret', () => {
