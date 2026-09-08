@@ -1275,6 +1275,64 @@
     border-top: 1px solid var(--bf-line);
   }
 
+  /* ---------- Dialog chuẩn (popup CRUD dài bị che — fix tại wrapper) ----------
+     Panel `.bf-dialog` (xem components/ui/dialog/Dialog.tsx): flex column +
+     `max-height: min(85vh, 900px)`; header `.bf-dialog__header` shrink-0 luôn
+     nhìn thấy; body `.bf-dialog__body` (flex-1 min-h-0 overflow-y-auto) scroll
+     mảnh bên trong; footer `.bf-form-actions` của form sticky đáy body nên
+     nút Lưu luôn thấy trên màn thấp (vd 768px). Áp cho mọi dialog dùng
+     wrapper (28 chỗ) + className `max-w-*` riêng vẫn thắng width. */
+  .bf-dialog {
+    max-height: min(85vh, 900px);
+    margin-top: auto;
+    margin-bottom: auto;
+    overscroll-behavior: contain;
+  }
+
+  .bf-dialog__header {
+    flex-shrink: 0;
+  }
+
+  .bf-dialog__body {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    /* Giữ chỗ scrollbar để nội dung không bị đè khi scroll xuất hiện. */
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+
+  .bf-dialog__body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .bf-dialog__body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
+
+  .bf-dialog__body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Footer actions của form sticky đáy vùng scroll của dialog. */
+  .bf-dialog__body .bf-form-actions {
+    position: sticky;
+    bottom: -16px;
+    margin: 16px -20px -16px;
+    padding: 12px 20px;
+    background: var(--bf-surface);
+    border-top: 1px solid var(--bf-line);
+  }
+
+  /* Mobile (<640px): panel full-width edge-to-edge trừ margin nhỏ
+     của positioner (p-3). */
+  @media (max-width: 639px) {
+    .bf-dialog {
+      margin-left: 0;
+      margin-right: 0;
+    }
+  }
+
 }
 
 /* Utilities-layer overrides (thắng w-full của Menu trigger trong topbar). */

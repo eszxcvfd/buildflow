@@ -33,4 +33,50 @@ describe('Dialog wrapper (Ark UI)', () => {
     // Ark keeps content in the DOM (presence); closed state is data-state.
     expect(screen.getByRole('dialog', { hidden: true }).getAttribute('data-state')).toBe('closed');
   });
+
+  it('panel scroll chuẩn: body có overflow class, header không scroll', () => {
+    // Portal render ra document.body nên query từ đó, không phải container.
+    render(
+      <Dialog title="Tiêu đề">
+        <p>Nội dung dài</p>
+      </Dialog>,
+    );
+    const panel = document.body.querySelector('.bf-dialog');
+    expect(panel).not.toBeNull();
+    // Panel flex column + max-h chuẩn (min(85vh, 900px)) qua inline style
+    // (Ark Content loại class chứa dấu phẩy) + fallback `.bf-dialog` CSS.
+    expect(panel?.className).toMatch('flex-col');
+    expect((panel as HTMLElement)?.style?.maxHeight).toBe('min(85vh, 900px)');
+    const header = document.body.querySelector('.bf-dialog__header');
+    expect(header).not.toBeNull();
+    expect(header?.className).toMatch('flex-shrink-0');
+    const body = document.body.querySelector('.bf-dialog__body');
+    expect(body).not.toBeNull();
+    // Body scroll bên trong: flex-1 min-h-0 overflow-y-auto.
+    expect(body?.className).toMatch('flex-1');
+    expect(body?.className).toMatch('min-h-0');
+    expect(body?.className).toMatch('overflow-y-auto');
+  });
+
+  it('size prop đổi width, default giữ max-w-lg hiện tại', () => {
+    const { rerender } = render(
+      <Dialog title="Tiêu đề">
+        <p>Nội dung</p>
+      </Dialog>,
+    );
+    const panel = () => document.body.querySelector('.bf-dialog');
+    expect(panel()?.className).toMatch('max-w-lg');
+    rerender(
+      <Dialog title="Tiêu đề" size="sm">
+        <p>Nội dung</p>
+      </Dialog>,
+    );
+    expect(panel()?.className).toMatch('max-w-md');
+    rerender(
+      <Dialog title="Tiêu đề" size="lg">
+        <p>Nội dung</p>
+      </Dialog>,
+    );
+    expect(panel()?.className).toMatch('max-w-3xl');
+  });
 });
