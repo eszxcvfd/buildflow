@@ -13,7 +13,7 @@ import {
   type OpenWorkCheck,
   RESOURCE_ACTION_LABEL,
 } from '@/features/resources/components/ResourceStatusDialog';
-import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
+import { StatusTimeline, statusTimelineHref, TimelineExternalIcon } from '@/features/resources/components/StatusTimeline';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -316,13 +316,19 @@ export function WorkerDetail({ id }: { id: string }) {
       <Card>
         <div className="bf-card-head">
           <span className="bf-card-title">Lịch sử trạng thái</span>
+          {isAdmin && worker ? (
+            <a className="bf-btn bf-btn-ghost bf-btn-sm" href={statusTimelineHref(worker.id, 'WORKER')}>
+              <TimelineExternalIcon />
+              Xem trên Nhật ký thao tác
+            </a>
+          ) : null}
         </div>
         {isAdmin ? (
           <>
             <p style={{ margin: '0 0 0.75rem', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
               Các lần kích hoạt, tạm ngừng, chấm dứt — kèm lý do và người thực hiện (10 bản ghi mới nhất).
             </p>
-            <StatusTimeline key={timelineKey} id={worker.id} entityType="WORKER" />
+            <StatusTimeline key={timelineKey} id={worker.id} entityType="WORKER" hideFooterAction />
           </>
         ) : (
           <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.85rem' }}>

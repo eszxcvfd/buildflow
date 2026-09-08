@@ -139,9 +139,14 @@ export function EligibilityChecklist({
         </table>
       </div>
 
-      <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.8rem' }}>
+      <p className="text-xs text-slate-400" style={{ margin: 0 }}>
         Kiểm tra lúc {new Date(result.checkedAt).toLocaleString('vi-VN')} ·{' '}
-        <span>Mã đối chiếu: {result.correlationId}</span>
+        <span>
+          Mã đối chiếu:{' '}
+          <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-500">
+            {result.correlationId}
+          </code>
+        </span>
       </p>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         <Button variant="secondary" onClick={onRefresh} loading={loading} aria-busy={loading || undefined}>

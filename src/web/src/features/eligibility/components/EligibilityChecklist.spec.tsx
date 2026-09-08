@@ -30,7 +30,8 @@ describe('EligibilityChecklist ORG-SRS-008', () => {
     expect(screen.getByText('Không đủ điều kiện')).not.toBeNull();
     expect(screen.getByText(/chặn phân công mới, lịch sử vẫn giữ/)).not.toBeNull();
     expect(screen.getByText('3/5 điều kiện đạt · 1 không áp dụng')).not.toBeNull();
-    expect(screen.getByText(/Mã đối chiếu: corr-123/)).not.toBeNull();
+    expect(screen.getByText(/Mã đối chiếu:/)).not.toBeNull();
+    expect(screen.getByText('corr-123')).not.toBeNull();
     // chi tiết từng condition
     expect(screen.getByText('Cấp kỹ năng thấp hơn yêu cầu')).not.toBeNull();
   });

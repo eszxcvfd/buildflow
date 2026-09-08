@@ -153,7 +153,8 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     // ORG-SRS-008: nguồn duy nhất là checklist (không còn boolean-only cũ).
     expect(await screen.findByText('Điều kiện nhận việc')).toBeTruthy();
     expect(screen.getByText('Đủ điều kiện')).toBeTruthy();
-    expect(screen.getByText(/Mã đối chiếu: corr-w-1/)).toBeTruthy();
+    expect(screen.getByText('Mã đối chiếu:')).toBeTruthy();
+    expect(screen.getByText('corr-w-1')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tạm ngừng' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chấm dứt' })).toBeTruthy();
     // timeline section present

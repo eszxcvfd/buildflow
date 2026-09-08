@@ -16,6 +16,14 @@ import { toast } from '@/components/ui/toast/Toaster';
 interface Props {
   mode: 'create' | 'edit';
   initial?: Project | null;
+  /**
+   * Dùng trong dialog (vd: ProjectCreateDialog trên /projects): submit thành
+   * công gọi onSuccess thay vì tự điều hướng; nút Hủy gọi onCancel (đóng
+   * dialog) thay vì router.back(). Route standalone (/projects/new) giữ hành
+   * vi cũ khi omit cả hai.
+   */
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 const TIMEZONES = [
@@ -42,7 +50,7 @@ function workerLabel(w: Worker): string {
  * address/dates/description/timezone bắt đầu trống vì reads iam-owned chỉ trả
  * summary — PATCH diff nên field trống không đổi không được gửi).
  */
-export function ProjectForm({ mode, initial }: Props) {
+export function ProjectForm({ mode, initial, onSuccess, onCancel }: Props) {
   const router = useRouter();
   const [code, setCode] = React.useState(initial?.code ?? '');
   const [name, setName] = React.useState(initial?.name ?? '');
@@ -147,7 +155,8 @@ export function ProjectForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Tạo dự án thành công');
         toast.success({ title: 'Tạo dự án thành công' });
-        setTimeout(() => router.push('/projects'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/projects'), 800);
       } else if (initial) {
         await updateProject(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật dự án thành công');
@@ -368,7 +377,7 @@ export function ProjectForm({ mode, initial }: Props) {
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo dự án' : 'Lưu thay đổi'}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => router.back()}>
+          <Button type="button" variant="secondary" onClick={() => (onCancel ? onCancel() : router.back())}>
             Hủy
           </Button>
         </div>

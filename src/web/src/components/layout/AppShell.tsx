@@ -424,7 +424,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                 }
                 triggerAriaLabel="Mở menu tài khoản"
-                triggerClassName="bf-avatar-btn"
+                triggerClassName="bf-avatar-btn h-9 w-9 shrink-0 rounded-full"
                 header={
                   <>
                     <div className="bf-menu-header-name">{auth.user.fullName}</div>

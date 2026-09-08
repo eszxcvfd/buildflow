@@ -158,7 +158,8 @@ describe('CrewDetail ORG-SRS-006', () => {
     await waitFor(() => expect(checkCrewEligibilityMock).toHaveBeenCalledWith('crew-1'));
     expect(screen.getByText('Điều kiện nhận việc')).not.toBeNull();
     expect(screen.getByText('Đủ điều kiện')).not.toBeNull();
-    expect(screen.getByText(/Mã đối chiếu: corr-crew-1/)).not.toBeNull();
+    expect(screen.getByText(/Mã đối chiếu:/)).not.toBeNull();
+    expect(screen.getByText('corr-crew-1')).not.toBeNull();
     expect(screen.getByText('Không đánh giá được')).not.toBeNull();
   });
 

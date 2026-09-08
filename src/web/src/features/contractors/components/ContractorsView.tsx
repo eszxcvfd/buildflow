@@ -4,19 +4,19 @@ import * as React from 'react';
 import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Button } from '@/components/ui/button/Button';
 import { useViewMode, ViewToggle } from '@/components/ui/kanban/KanbanView';
-import { WorkerList } from './WorkerList';
-import { WorkerCreateDialog } from './WorkerCreateDialog';
-import { WorkersKanban } from './WorkersKanban';
+import { ContractorList } from './ContractorList';
+import { ContractorCreateDialog } from './ContractorCreateDialog';
+import { ContractorsKanban } from './ContractorsKanban';
 
 /**
- * /workers — PageHeader + toggle Bảng|Kanban + WorkerList/WorkersKanban +
- * dialog "Thêm công nhân".
+ * /contractors — PageHeader + toggle Bảng|Kanban + ContractorList/
+ * ContractorsKanban + dialog "Thêm nhà thầu".
  * Nút header và CTA empty-state đều mở dialog; tạo thành công → đóng +
- * refresh list (remount WorkerList qua key). Route /workers/new giữ nguyên
- * cho E2E drivers goto trực tiếp.
+ * refresh list (remount ContractorList qua key). Route /contractors/new giữ
+ * nguyên cho E2E drivers goto trực tiếp.
  * Mặc định = Bảng (?view=kanban để share kanban); toggle nằm cạnh toolbar.
  */
-export function WorkersView() {
+export function ContractorsView() {
   const [seq, setSeq] = React.useState(0);
   const [createOpen, setCreateOpen] = React.useState(false);
   const [view, setView] = useViewMode();
@@ -26,19 +26,19 @@ export function WorkersView() {
   return (
     <>
       <PageHeader
-        title="Công nhân"
-        subtitle="Quản lý hồ sơ công nhân — tạo mới, tìm kiếm, cập nhật và chuyển trạng thái hoạt động."
+        title="Nhà thầu"
+        subtitle="Danh sách nhà thầu của công ty — nguồn chọn khi phân công công việc."
         actions={
           <Button onClick={openCreate}>
-            Thêm công nhân
+            Thêm nhà thầu
           </Button>
         }
       />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         <ViewToggle value={view} onChange={setView} />
       </div>
-      {view === 'kanban' ? <WorkersKanban key={seq} /> : <WorkerList key={seq} onCreateRequest={openCreate} />}
-      <WorkerCreateDialog
+      {view === 'kanban' ? <ContractorsKanban key={seq} /> : <ContractorList key={seq} onCreateRequest={openCreate} />}
+      <ContractorCreateDialog
         open={createOpen}
         onClose={closeCreate}
         onCreated={() => setSeq((s) => s + 1)}

@@ -15,9 +15,17 @@ import { toast } from '@/components/ui/toast/Toaster';
 interface Props {
   mode: 'create' | 'edit';
   initial?: Contractor | null;
+  /**
+   * Dùng trong dialog (vd: ContractorCreateDialog trên /contractors): submit
+   * thành công gọi onSuccess thay vì tự điều hướng; nút Hủy gọi onCancel (đóng
+   * dialog) thay vì push /contractors. Route standalone (/contractors/new) giữ
+   * hành vi cũ khi omit cả hai.
+   */
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
-export function ContractorForm({ mode, initial }: Props) {
+export function ContractorForm({ mode, initial, onSuccess, onCancel }: Props) {
   const router = useRouter();
   const [code, setCode] = React.useState(initial?.code ?? '');
   const [name, setName] = React.useState(initial?.name ?? '');
@@ -85,7 +93,8 @@ export function ContractorForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Tạo nhà thầu thành công');
         toast.success({ title: 'Tạo nhà thầu thành công' });
-        setTimeout(() => router.push('/contractors'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/contractors'), 800);
       } else if (initial) {
         await updateContractor(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật nhà thầu thành công');
@@ -211,7 +220,7 @@ export function ContractorForm({ mode, initial }: Props) {
 
         <div className="bf-form-actions">
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>Tải lại</Button>
-          <Button type="button" variant="secondary" onClick={() => router.push('/contractors')}>Hủy</Button>
+          <Button type="button" variant="secondary" onClick={() => (onCancel ? onCancel() : router.push('/contractors'))}>Hủy</Button>
           <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo nhà thầu' : 'Lưu thay đổi'}</Button>
         </div>
 

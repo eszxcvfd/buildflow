@@ -1,6 +1,9 @@
 export { ProjectsList } from './components/ProjectsList';
 export { ProjectsHeaderActions } from './components/ProjectsHeaderActions';
 export { ProjectForm } from './components/ProjectForm';
+export { ProjectCreateDialog } from './components/ProjectCreateDialog';
+export { ProjectsView } from './components/ProjectsView';
+export { ProjectsKanban } from './components/ProjectsKanban';
 export { ProjectDetail } from './components/ProjectDetail';
 export { ProjectMembers } from './components/ProjectMembers';
 export { ProjectAreas } from './components/ProjectAreas';

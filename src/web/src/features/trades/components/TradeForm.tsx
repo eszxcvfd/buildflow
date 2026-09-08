@@ -14,9 +14,17 @@ import { toast } from '@/components/ui/toast/Toaster';
 interface Props {
   mode: 'create' | 'edit';
   initial?: Trade | null;
+  /**
+   * Dùng trong dialog (vd: TradeCreateDialog trên /trades): submit thành công
+   * gọi onSuccess thay vì tự điều hướng; nút Hủy gọi onCancel (đóng dialog)
+   * thay vì push /trades. Route standalone (/trades/new) giữ hành vi cũ khi
+   * omit cả hai.
+   */
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
-export function TradeForm({ mode, initial }: Props) {
+export function TradeForm({ mode, initial, onSuccess, onCancel }: Props) {
   const router = useRouter();
   const [code, setCode] = React.useState(initial?.code ?? '');
   const [name, setName] = React.useState(initial?.name ?? '');
@@ -69,7 +77,8 @@ export function TradeForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Tạo ngành nghề thành công');
         toast.success({ title: 'Tạo ngành nghề thành công' });
-        setTimeout(() => router.push('/trades'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/trades'), 800);
       } else if (initial) {
         await updateTrade(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật ngành nghề thành công');
@@ -145,7 +154,7 @@ export function TradeForm({ mode, initial }: Props) {
 
         <div className="bf-form-actions">
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>Tải lại</Button>
-          <Button type="button" variant="secondary" onClick={() => router.push('/trades')}>Hủy</Button>
+          <Button type="button" variant="secondary" onClick={() => (onCancel ? onCancel() : router.push('/trades'))}>Hủy</Button>
           <Button type="submit" loading={loading} aria-busy={loading}>{mode === 'create' ? 'Tạo ngành nghề' : 'Lưu thay đổi'}</Button>
         </div>
 

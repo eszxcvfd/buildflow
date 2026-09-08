@@ -77,7 +77,8 @@ describe('WorkerDetail ORG-SRS-008', () => {
     expect(checkEligibilityMock).toHaveBeenCalledWith('worker-1');
     await waitFor(() => expect(screen.getByText('Điều kiện nhận việc')).not.toBeNull());
     expect(screen.getByText('Không đủ điều kiện')).not.toBeNull();
-    expect(screen.getByText(/Mã đối chiếu: corr-w-1/)).not.toBeNull();
+    expect(screen.getByText(/Mã đối chiếu:/)).not.toBeNull();
+    expect(screen.getByText('corr-w-1')).not.toBeNull();
     expect(screen.getByText('Thiếu dữ liệu năng lực')).not.toBeNull();
     // boolean-only cũ đã gỡ: không còn dòng tóm tắt theo worker.eligible
     expect(screen.queryByText('Không đủ điều kiện — chặn phân công mới, lịch sử vẫn giữ')).toBeNull();

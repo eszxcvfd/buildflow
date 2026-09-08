@@ -38,7 +38,8 @@ describe('MyEligibility ORG-SRS-008', () => {
     checkMyMock.mockResolvedValue(myResult());
     render(<MyEligibility />);
     await waitFor(() => expect(screen.getByText('Đủ điều kiện')).not.toBeNull());
-    expect(screen.getByText(/Mã đối chiếu: corr-me-1/)).not.toBeNull();
+    expect(screen.getByText(/Mã đối chiếu:/)).not.toBeNull();
+    expect(screen.getByText('corr-me-1')).not.toBeNull();
     expect(screen.getByText('Điều kiện nhận việc của tôi')).not.toBeNull();
   });
 

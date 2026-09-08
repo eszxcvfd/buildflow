@@ -35,7 +35,7 @@ const ORDERS = [
  * Filter status/search/eligibleOnly + sort/order + pagination; reads no-store.
  * Đội INACTIVE hiển thị rõ 'không nhận phân công mới'.
  */
-export function CrewList() {
+export function CrewList({ onCreateRequest }: { onCreateRequest?: () => void }) {
   const [crews, setCrews] = React.useState<Crew[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
@@ -226,9 +226,15 @@ export function CrewList() {
           <EmptyState
             title="Chưa có đội thi công nào phù hợp bộ lọc"
             action={
-              <a className="bf-btn bf-btn-primary" href="/crews/new">
-                Tạo đội
-              </a>
+              onCreateRequest ? (
+                <Button onClick={onCreateRequest}>
+                  Tạo đội
+                </Button>
+              ) : (
+                <a className="bf-btn bf-btn-primary" href="/crews/new">
+                  Tạo đội
+                </a>
+              )
             }
           >
             Thử thay đổi từ khóa hoặc tạo đội mới.

@@ -397,6 +397,8 @@
     place-items: center;
     width: 36px;
     height: 36px;
+    aspect-ratio: 1 / 1;
+    flex: none;
     padding: 0;
     border-radius: var(--bf-r-pill);
     border: 2px solid #fff;
@@ -412,9 +414,14 @@
     background: #dfe5ff;
   }
 
-  /* Menu bọc triggerLabel trong span truncate — mở lại cho chip avatar. */
+  /* Menu bọc triggerLabel trong span truncate — mở lại + căn giữa cho chip avatar. */
   .bf-avatar-btn > span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
     overflow: visible;
+    white-space: nowrap;
   }
 
   .bf-profile-name {

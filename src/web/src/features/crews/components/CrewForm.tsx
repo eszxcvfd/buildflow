@@ -16,6 +16,14 @@ import { toast } from '@/components/ui/toast/Toaster';
 interface Props {
   mode: 'create' | 'edit';
   initial?: Crew | null;
+  /**
+   * Dùng trong dialog (vd: CrewCreateDialog trên /crews): submit thành công
+   * gọi onSuccess thay vì tự điều hướng; nút Hủy gọi onCancel (đóng dialog)
+   * thay vì router.back(). Route standalone (/crews/new) giữ hành vi cũ khi
+   * omit cả hai.
+   */
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 function workerLabel(w: Worker): string {
@@ -30,7 +38,7 @@ function workerLabel(w: Worker): string {
  * trừ khi thật sự đổi). Đổi leader ở edit cần xác nhận nhẹ (confirm inline).
  * Nhà thầu chọn optional từ contractors ACTIVE.
  */
-export function CrewForm({ mode, initial }: Props) {
+export function CrewForm({ mode, initial, onSuccess, onCancel }: Props) {
   const router = useRouter();
   const [code, setCode] = React.useState(initial?.code ?? '');
   const [name, setName] = React.useState(initial?.name ?? '');
@@ -154,7 +162,8 @@ export function CrewForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Tạo đội thi công thành công');
         toast.success({ title: 'Tạo đội thi công thành công' });
-        setTimeout(() => router.push('/crews'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/crews'), 800);
       } else if (initial) {
         await updateCrew(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật đội thi công thành công');
@@ -304,7 +313,7 @@ export function CrewForm({ mode, initial }: Props) {
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo đội' : 'Lưu thay đổi'}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => router.back()}>
+          <Button type="button" variant="secondary" onClick={() => (onCancel ? onCancel() : router.back())}>
             Hủy
           </Button>
         </div>

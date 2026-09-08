@@ -58,7 +58,47 @@ function shortenActor(v: string | null): string {
   return v.length > 12 ? `${v.slice(0, 8)}…` : v;
 }
 
-export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' | 'PROJECT' }) {
+/**
+ * Deep-link sang /admin/audit-logs: CHỈ entityType + entityId + result.
+ * KHÔNG kèm param action — API audit lọc action EXACT-MATCH nên prefix
+ * 'ORG_WORKER'/'ORG_CONTRACTOR' cho 0 dòng (E2E ORG-SRS-004 B5).
+ */
+export function statusTimelineHref(id: string, entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' | 'PROJECT'): string {
+  return `/admin/audit-logs?entityType=${entityType}&entityId=${encodeURIComponent(id)}&result=SUCCESS`;
+}
+
+/** Icon arrow-up-right 14px cho action ghost 'Xem trên Nhật ký thao tác'. */
+export function TimelineExternalIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 17 17 7M7 7h10v10" />
+    </svg>
+  );
+}
+
+export function StatusTimeline({
+  id,
+  entityType,
+  hideFooterAction,
+}: {
+  id: string;
+  entityType: 'WORKER' | 'CONTRACTOR' | 'CREW' | 'PROJECT';
+  /**
+   * Ẩn link footer khi detail đã render action tương đương ở card header
+   * (title trái + action phải, DashCode pattern) — tránh trùng lặp.
+   */
+  hideFooterAction?: boolean;
+}) {
   const [logs, setLogs] = React.useState<AuditLog[] | null>(null);
   const [total, setTotal] = React.useState(0);
   const [error, setError] = React.useState<AuditLogError | null>(null);
@@ -129,7 +169,7 @@ export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WO
   // 'ORG_WORKER'/'ORG_CONTRACTOR' cho 0 dòng (E2E ORG-SRS-004 B5). entityType +
   // entityId + result=SUCCESS đã đủ chính xác; AuditLogList đọc 3 param này
   // qua useSearchParams và truyền thẳng cho GET /api/v1/audit-logs.
-  const allHref = `/admin/audit-logs?entityType=${entityType}&entityId=${encodeURIComponent(id)}&result=SUCCESS`;
+  const allHref = statusTimelineHref(id, entityType);
 
   return (
     <div style={{ display: 'grid', gap: '0.6rem' }}>
@@ -164,17 +204,21 @@ export function StatusTimeline({ id, entityType }: { id: string; entityType: 'WO
           </tbody>
         </table>
       </div>
-      <p style={{ margin: 0, fontSize: '0.85rem' }}>
-        {total > logs.length ? (
-          <a href={allHref} style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
-            Xem tất cả {total} bản ghi trên Nhật ký thao tác
-          </a>
-        ) : (
-          <a href={allHref} style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
-            Xem trên Nhật ký thao tác
-          </a>
-        )}
-      </p>
+      {hideFooterAction ? null : (
+        <p style={{ margin: 0 }}>
+          {total > logs.length ? (
+            <a className="bf-btn bf-btn-ghost bf-btn-sm" href={allHref}>
+              <TimelineExternalIcon />
+              Xem tất cả {total} bản ghi trên Nhật ký thao tác
+            </a>
+          ) : (
+            <a className="bf-btn bf-btn-ghost bf-btn-sm" href={allHref}>
+              <TimelineExternalIcon />
+              Xem trên Nhật ký thao tác
+            </a>
+          )}
+        </p>
+      )}
     </div>
   );
 }

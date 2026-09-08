@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
-import { EmptyState } from '@/components/ui/empty-state/EmptyState';
+import { EmptyState, EmptyProfileIcon } from '@/components/ui/empty-state/EmptyState';
 
 /**
  * ORG-SRS-008 (issue #31) — trang tự kiểm tra điều kiện nhận việc cho mọi
@@ -56,7 +56,7 @@ export function MyEligibility() {
       <div style={{ display: 'grid', gap: '1rem' }}>
         <PageHeader title="Điều kiện nhận việc của tôi" subtitle="Tự kiểm tra trước khi nhận phân công" />
         <Card>
-          <EmptyState title="Tài khoản không có hồ sơ worker">
+          <EmptyState title="Tài khoản không có hồ sơ worker" icon={<EmptyProfileIcon />}>
             Tài khoản này chưa liên kết hồ sơ công nhân nên chưa thể tự kiểm tra điều kiện nhận việc.
             Liên hệ quản trị để tạo hồ sơ worker.
           </EmptyState>
