@@ -135,6 +135,11 @@ features/<feature>/index.ts
 - `components/ui` chỉ là primitive/design system; không chứa business rule của feature.
 - `services/` bọc API client hoặc orchestration của feature; không được trở thành một lớp pass-through vô nghĩa.
 - `schemas/` xác thực input ở UI boundary; server vẫn là nơi quyết định invariant và authorization.
+
+### 5.1 Lifecycle UI conventions cho catalog/dữ liệu nền (PRJ-SRS-007)
+
+- Mọi catalog có lifecycle (trades, work-types, project areas…) hiển thị trạng thái bằng `.bf-badge-*` + confirm dialog khi deactivate với **usage warning** từ API (`warning` + `usage.workOrders`) — mirror `WorkTypeStatusDialog`; notice chỉ hiển thị sau PATCH thành công (API quyết định warning, UI không tự đoán).
+- Giao dịch mới dùng picker active-only (`/work-types/active`, `GET /projects/:projectId/areas/active`) — UI không tự lọc phía client cho nghiệp vụ chọn lựa.
 - Feature A không import `features/B/components/internal-file`; nếu cần collaboration, expose một interface nhỏ ở `B/index.ts` hoặc route qua API.
 - `lib/` chỉ chứa technical adapter/framework utility dùng bởi nhiều feature; code chỉ có một consumer phải ở feature đó.
 

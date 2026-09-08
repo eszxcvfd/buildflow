@@ -299,6 +299,8 @@ export class PrjProjectsController {
   /**
    * PRJ-SRS-003 (issue #34, A1/A4) — cập nhật khu vực: rename tại chỗ /
    * đổi mã / toggle active. Deactivate đã inactive → `{alreadyInactive: true}`.
+   * PRJ-SRS-007 (issue #38) — retire kèm `usage` + `warning` khi đang bị WO mở
+   * tham chiếu (mirror work-types #35 warning shape).
    */
   @Patch(':projectId/areas/:areaId')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
@@ -311,7 +313,7 @@ export class PrjProjectsController {
     const actor = assertProjectWriteAccess(req);
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
-    const { area, alreadyInactive } = await this.updateProjectArea.execute({
+    const { area, alreadyInactive, usage, warning } = await this.updateProjectArea.execute({
       projectId,
       areaId,
       name: dto.name ?? undefined,
@@ -324,7 +326,29 @@ export class PrjProjectsController {
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
     });
-    return { ...toProjectAreaResponse(area), alreadyInactive };
+    return toProjectAreaResponse(area, { usage, warning, alreadyInactive });
+  }
+
+  /**
+   * PRJ-SRS-007 (issue #38) — picker khu vực cho giao dịch mới (tạo Work
+   * Order): chỉ khu vực còn hoạt động, sắp `name ASC` (mirror
+   * `GET /work-types/active` #35). Scope như list: mọi ACTIVE member
+   * (kể cả WORKER) — ADMIN bypass. Current data → no-store.
+   */
+  @Get(':projectId/areas/active')
+  @Header('Cache-Control', 'no-store')
+  async listActiveAreas(
+    @Param('projectId', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) projectId: string,
+    @Req() req: Request,
+  ) {
+    const user = (req as unknown as { user: TokenPayload }).user;
+    const { areas } = await this.listProjectAreas.execute({
+      projectId,
+      activeOnly: true,
+      actorUserId: user.sub,
+      actorRoles: user.roles ?? [],
+    });
+    return { data: toProjectAreaListResponse(areas), total: areas.length };
   }
 
   /**

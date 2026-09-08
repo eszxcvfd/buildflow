@@ -39,7 +39,14 @@ export interface UpdateProjectAreaOutput {
   area: ProjectAreaRow;
   /** true khi deactivate khu vực đã inactive: không mutation, không audit. */
   alreadyInactive: boolean;
+  /** Số WO mở đang tham chiếu (chỉ tính khi retire — forward-ref JOB). */
+  usage?: { workOrders: number };
+  /** Cảnh báo phạm vi áp dụng khi retire khu vực đang bị WO mở tham chiếu. */
+  warning?: string;
 }
+
+export const AREA_IN_USE_WARNING =
+  'Khu vực đang được tham chiếu bởi Work Order đang hiệu lực';
 
 function fieldError(field: string, message: string): BadRequestException {
   return new BadRequestException({ statusCode: 400, message, fieldErrors: { [field]: [message] } });
@@ -69,6 +76,13 @@ function duplicateCode409(): ConflictException {
  *   (`reason` ở cột audit và trong `afterData` khi gửi).
  * - Trùng tên active (trừ self) → 409 `AREA_DUPLICATE`; trùng mã (trừ self)
  *   → 409 `AREA_CODE_DUPLICATE`; constraint-cụ-thể-trước, bare 23505 rethrow.
+ * - PRJ-SRS-007 (issue #38) — vòng đời dữ liệu nền (mirror work-types #35):
+ *   retire (active→inactive) đếm WO mở qua `countOpenWorkOrders` (forward-ref
+ *   JOB, hôm nay = 0); `usage > 0` → kèm `warning` phạm vi áp dụng + `_warning`
+ *   trong audit afterData (KHÔNG chặn transition). Count thất bại → lỗi lan ra
+ *   (500), không transition thiếu cảnh báo. Mọi transition `isActive` (cả hai
+ *   chiều) ghi thêm audit `PRJ_AREA_STATUS_CHANGED` tx-embedded fail-closed
+ *   (actor/before/after/reason — `reason` reuse từ PATCH DTO, đã có sẵn).
  */
 @Injectable()
 export class UpdateProjectAreaUseCase {
@@ -128,6 +142,19 @@ export class UpdateProjectAreaUseCase {
     });
 
     const projectCode = project.code;
+
+    // PRJ-SRS-007 (#38): retire (active→inactive) đếm WO mở TRƯỚC tx để gắn
+    // cảnh báo phạm vi áp dụng (mirror work-types DEACTIVATE — count fail →
+    // 500, không transition thiếu cảnh báo). Pure rename/reactivate không đếm.
+    // Lưu ý: pre-check ngoài tx, trong tx vẫn giữ FOR UPDATE + re-check scope.
+    let usage: { workOrders: number } | undefined;
+    let usageWarning = false;
+    if (input.isActive === false && existing.isActive) {
+      const openWorkOrders = await this.areaRepo.countOpenWorkOrders(input.areaId);
+      usage = { workOrders: openWorkOrders };
+      usageWarning = openWorkOrders > 0;
+    }
+
     let result: UpdateProjectAreaOutput | null = null;
 
     await this.tx.withTransaction(async (client: PoolClient) => {
@@ -176,6 +203,7 @@ export class UpdateProjectAreaUseCase {
       }
 
       const before = { ...current, projectCode };
+      const statusTransition = nextActive !== current.isActive;
 
       let updated: ProjectAreaRow | null;
       try {
@@ -195,6 +223,9 @@ export class UpdateProjectAreaUseCase {
       }
       if (!updated) throw new NotFoundException('Không tìm thấy khu vực trong dự án');
 
+      const afterData = { ...updated, projectCode, ...(reason ? { reason } : {}) } as Record<string, unknown>;
+      if (usageWarning) afterData['_warning'] = AREA_IN_USE_WARNING;
+
       try {
         const payload: Record<string, unknown> = {
           actorUserId: input.actorUserId,
@@ -202,7 +233,7 @@ export class UpdateProjectAreaUseCase {
           entityType: 'PROJECT',
           entityId: input.projectId,
           beforeData: before,
-          afterData: { ...updated, projectCode, ...(reason ? { reason } : {}) },
+          afterData,
           reason,
           result: 'SUCCESS' as const,
           ipAddress: input.ipAddress ?? null,
@@ -217,7 +248,41 @@ export class UpdateProjectAreaUseCase {
         throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
       }
 
-      result = { area: updated, alreadyInactive: false };
+      // PRJ-SRS-007 (#38): transition isActive (cả hai chiều) ghi thêm audit
+      // `PRJ_AREA_STATUS_CHANGED` tx-embedded fail-closed (mirror
+      // `PRJ_WORK_TYPE_STATUS_CHANGED` — actor/before/after/reason; `_warning`
+      // khi retire đang bị WO mở tham chiếu). alreadyInactive giữ nguyên
+      // (không audit — nhánh no-op ở trên).
+      if (statusTransition) {
+        try {
+          const statusPayload: Record<string, unknown> = {
+            actorUserId: input.actorUserId,
+            action: 'PRJ_AREA_STATUS_CHANGED',
+            entityType: 'PROJECT',
+            entityId: input.projectId,
+            beforeData: before,
+            afterData,
+            reason,
+            result: 'SUCCESS' as const,
+            ipAddress: input.ipAddress ?? null,
+            userAgent: input.userAgent ?? null,
+            correlationId: input.correlationId ?? null,
+          };
+          if (!this.audit.logWithClient) {
+            throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
+          }
+          await this.audit.logWithClient(client, statusPayload as never);
+        } catch {
+          throw new InternalServerErrorException('Không thể ghi nhật ký kiểm toán');
+        }
+      }
+
+      result = {
+        area: updated,
+        alreadyInactive: false,
+        ...(usage ? { usage } : {}),
+        ...(usageWarning ? { warning: AREA_IN_USE_WARNING } : {}),
+      };
     });
 
     if (!result) throw new InternalServerErrorException('Không thể cập nhật khu vực dự án');

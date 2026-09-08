@@ -50,4 +50,10 @@ export class ProjectAreaDto {
   isActive!: boolean;
   createdAt!: string;
   updatedAt!: string;
+  /** Số WO mở đang tham chiếu (chỉ khi retire — PRJ-SRS-007 #38). */
+  usage?: { workOrders: number };
+  /** Cảnh báo phạm vi áp dụng khi retire khu vực đang bị WO mở tham chiếu. */
+  warning?: string;
+  /** true khi deactivate khu vực đã inactive (idempotent, không audit). */
+  alreadyInactive?: boolean;
 }

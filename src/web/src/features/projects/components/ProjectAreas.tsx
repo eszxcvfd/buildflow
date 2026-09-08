@@ -40,7 +40,9 @@ function areaCodeLabel(code: string | null): string {
  *   AREA_CODE_DUPLICATE map về field tương ứng.
  * - Đổi tên inline từng hàng (name + code, code rỗng = gỡ mã → gửi null).
  * - Ngừng sử dụng: confirm inline + reason optional (max 500, counter);
- *   `alreadyInactive` → notice info, không báo lỗi. Kích hoạt lại cùng
+ *   `alreadyInactive` → notice info, không báo lỗi. Retire khi đang bị WO
+ *   mở tham chiếu → notice info kèm `warning`/`usage` từ API (PRJ-SRS-007
+ *   #38, mirror WorkTypeDetail). Kích hoạt lại cùng
  *   đường PATCH (không confirm). Không có hard delete.
  * - Write controls gated bởi canManageProjects (ADMIN + PROJECT_MANAGER,
  *   fail-closed); reads mở cho mọi member nên list luôn fetch.
@@ -247,6 +249,17 @@ export function ProjectAreas({ projectId, onChanged }: Props) {
       });
       if (res.alreadyInactive) {
         setNotice({ tone: 'info', text: `Khu vực “${res.name}” đã ngừng sử dụng trước đó — không thay đổi gì thêm.` });
+      } else if (res.warning) {
+        // PRJ-SRS-007 (#38, mirror WorkTypeDetail): retire khi đang bị WO mở
+        // tham chiếu → API trả `warning` (+ `usage.workOrders`), không chặn.
+        // List không có usage nên warning chỉ hiện sau PATCH, tone info.
+        const openCount = res.usage?.workOrders ?? 0;
+        setNotice({
+          tone: 'info',
+          text:
+            `Đã ngừng sử dụng khu vực “${res.name}” — ${res.warning}` +
+            (openCount > 0 ? ` (đang có ${openCount} work order đang hiệu lực).` : '.'),
+        });
       } else {
         setNotice({ tone: 'success', text: `Đã ngừng sử dụng khu vực “${res.name}” — lịch sử vẫn được giữ.` });
       }

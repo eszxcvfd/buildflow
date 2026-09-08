@@ -578,6 +578,14 @@ export interface UpdateProjectAreaPayload {
 /** PATCH → area; deactivate lặp → alreadyInactive:true, không mutation/audit. */
 export type UpdateProjectAreaResult = ProjectArea & {
   alreadyInactive: boolean;
+  /**
+   * PRJ-SRS-007 (issue #38) — retire (`isActive: false`) kèm `usage`
+   * `{ workOrders }` (số WO mở đang tham chiếu, forward-ref JOB nên hôm nay
+   * = 0) + `warning` khi `usage.workOrders > 0` (mirror work-types #35).
+   * Rename/reactivate → không có hai field này.
+   */
+  usage?: { workOrders: number };
+  warning?: string;
 };
 
 function classifyAreaMessage(m: string): { field: string } | null {
@@ -687,6 +695,8 @@ export async function createProjectArea(
 /**
  * PRJ-SRS-003 — sửa khu vực (rename tại chỗ / gỡ mã / toggle isActive).
  * Deactivate lặp → 200 `{ alreadyInactive: true }`, không audit thêm.
+ * PRJ-SRS-007 (#38): retire trả thêm `usage`/`warning` khi khu vực đang bị
+ * WO mở tham chiếu (không chặn); reason optional 1–500 vào audit.
  */
 export async function updateProjectArea(
   projectId: string,

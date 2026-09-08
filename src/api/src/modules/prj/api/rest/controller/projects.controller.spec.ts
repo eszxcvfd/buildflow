@@ -503,6 +503,35 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       expect(dup.getResponse()).toEqual(expect.objectContaining({ code: 'AREA_DUPLICATE' }));
     });
 
+    it('GET /areas/active picker: gọi list use case với activeOnly=true, mở mọi role', async () => {
+      const picker = await controller.listActiveAreas(PID, workerReq() as never);
+      expect(listAreasMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, activeOnly: true, actorUserId: 'u-1' }),
+      );
+      expect(picker).toEqual({
+        data: [expect.objectContaining({ id: AREA_ID, name: 'Khu A', isActive: true })],
+        total: 1,
+      });
+      await controller.listActiveAreas(PID, adminReq() as never);
+      expect(listAreasMock.execute).toHaveBeenCalledWith(expect.objectContaining({ activeOnly: true }));
+    });
+
+    it('PATCH retire kèm usage/warning → truyền nguyên ra response (mirror work-types)', async () => {
+      updateAreaMock.execute.mockResolvedValue({
+        area: makeAreaRow() as never,
+        alreadyInactive: false,
+        usage: { workOrders: 2 },
+        warning: 'Khu vực đang được tham chiếu bởi Work Order đang hiệu lực',
+      });
+      const out = await controller.updateArea(PID, AREA_ID, { isActive: false } as never, adminReq() as never);
+      expect(out).toEqual(
+        expect.objectContaining({
+          alreadyInactive: false,
+          usage: { workOrders: 2 },
+          warning: 'Khu vực đang được tham chiếu bởi Work Order đang hiệu lực',
+        }),
+      );
+    });
     it('contract: :projectId/:areaId validate UUID (400 khi sai)', async () => {
       const { ROUTE_ARGS_METADATA } = jest.requireActual('@nestjs/common/constants') as {
         ROUTE_ARGS_METADATA: string;

@@ -1,0 +1,57 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "projectP": "b7000001-0001-4000-8000-000000000001",
+  "codeP": "DA-PHUOC-LONG",
+  "areas": {
+    "A1": "bdcd84b4-14a3-43b7-9fe2-55fed609a583",
+    "A2": "de2182dc-095d-49e7-8d73-7914fde350bc",
+    "A3": "f114812d-c153-42c9-ae3f-8a7cda6f4db6"
+  },
+  "runtime": {
+    "workTypeIds": [
+      "99cd8255-22d7-4d42-8557-a5f9057a9b3f",
+      "5c40d240-7276-49f9-a32c-c945d6df4808"
+    ],
+    "crewIds": [
+      "2075ccd5-6a19-4231-b3c5-a216bf614642"
+    ]
+  },
+  "auditBaseline": "2383",
+  "auditFinal": "2400",
+  "rest": "0",
+  "workOrdersRest": "0",
+  "results": [
+    {
+      "id": "L1",
+      "ok": true,
+      "note": "UI notice + badge Ngừng sử dụng; audit STATUS_CHANGED id=7f5aaa1d-8f33-48ad-96f4-37db401df05e reason đúng"
+    },
+    {
+      "id": "L2",
+      "ok": true,
+      "note": "picker n=2 [A2,A3], loại A1 retired"
+    },
+    {
+      "id": "L3",
+      "ok": true,
+      "note": "DELETE → 404; A1 retired vẫn đọc đủ (isActive=false, tên nguyên)"
+    },
+    {
+      "id": "L4",
+      "ok": true,
+      "note": "notice 'đang có 1 work order đang hiệu lực'; audit _warning có; WO1 cleanup"
+    },
+    {
+      "id": "L5",
+      "ok": true,
+      "note": "trade warning in-use + audit; work-type DEACTIVATE + /active loại + audit; crew openWork=0, worker openWork=0; crew SUSPEND + audit"
+    },
+    {
+      "id": "L6",
+      "ok": true,
+      "note": "A2 → 'Khu tháp B – mở rộng (đợt T9/2026)'; WO-007-002 giữ area_id + code/title ('de2182dc-095d-49e7-8d73-7914fde350bc|WO-007-002|Tô trát mặt …')"
+    }
+  ]
+}

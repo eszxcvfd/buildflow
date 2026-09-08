@@ -396,6 +396,19 @@ export class PgProjectRepository implements ProjectRepositoryPort, ProjectAreaRe
     return this.mapAreaRow(r.rows[0] as Record<string, unknown>);
   }
 
+  async countOpenWorkOrders(areaId: string): Promise<number> {
+    // PRJ-SRS-007 (issue #38) — forward-ref contract cho JOB module (chưa tồn
+    // tại), mirror `PgWorkTypeRepository.countActiveWorkOrders`: đếm Work Order
+    // đang tham chiếu khu vực, trừ trạng thái kết thúc. Chỉ dùng cho cảnh báo
+    // phạm vi áp dụng khi retire — KHÔNG chặn transition.
+    const r = await this.pool().query(
+      `SELECT COUNT(*)::int AS total FROM public.work_orders
+        WHERE area_id = $1 AND status NOT IN ('CANCELLED', 'CLOSED')`,
+      [areaId],
+    );
+    return Number(r.rows[0].total ?? 0);
+  }
+
   async isActiveProjectMember(projectId: string, userId: string): Promise<boolean> {
     const r = await this.pool().query(
       `SELECT 1 FROM public.project_members

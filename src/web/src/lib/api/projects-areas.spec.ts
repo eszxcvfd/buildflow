@@ -100,6 +100,22 @@ describe('projects api client PRJ-SRS-003 (issue #34)', () => {
     expect(JSON.parse(init.body as string)).toEqual({ isActive: false });
   });
 
+  it('updateProjectArea retire giữ usage/warning từ API (PRJ-SRS-007 #38)', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        ...area(),
+        isActive: false,
+        alreadyInactive: false,
+        usage: { workOrders: 2 },
+        warning: 'Khu vực đang được tham chiếu bởi work order đang hiệu lực',
+      }),
+    );
+    const res = await updateProjectArea('p-1', 'a-1', { isActive: false, reason: null });
+    expect(res.alreadyInactive).toBe(false);
+    expect(res.usage).toEqual({ workOrders: 2 });
+    expect(res.warning).toContain('work order');
+  });
+
   it('400 { message, fieldErrors } giữ nguyên fieldErrors server', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ statusCode: 400, message: 'Dữ liệu không hợp lệ', fieldErrors: { name: ['Tên bắt buộc'] } }, 400),

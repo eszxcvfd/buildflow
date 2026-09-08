@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { UpdateProjectAreaUseCase } from './update-project-area.use-case';
+import { AREA_IN_USE_WARNING, UpdateProjectAreaUseCase } from './update-project-area.use-case';
 import { ProjectRepositoryPort, ProjectAreaRepositoryPort, ProjectAreaRow } from '../../domain/repository/project-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
@@ -62,6 +62,8 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
       findAreaForUpdateWithClient: jest.fn(async () => makeArea()),
       findActiveAreaByNameWithClient: jest.fn(async () => null),
       findAreaByCodeWithClient: jest.fn(async () => null),
+      // PRJ-SRS-007 (#38): forward-ref JOB — hôm nay = 0, test gắn usage đè mock này.
+      countOpenWorkOrders: jest.fn(async () => 0),
       saveAreaWithClient: jest.fn(async (_c, input) =>
         makeArea({ code: input.code, name: input.name, isActive: input.isActive }),
       ),
@@ -104,24 +106,129 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     );
   });
 
-  it('deactivate: isActive=false → save + audit; double-deactivate → alreadyInactive, không mutation/audit', async () => {
+  it('deactivate: isActive=false → save + audit UPDATED + STATUS_CHANGED; double-deactivate → alreadyInactive, không mutation/audit', async () => {
     const out = await useCase.execute({
       projectId: PID, areaId: AID, isActive: false, actorUserId: ACTOR, actorRoles: ['ADMIN'],
     });
     expect(out.area.isActive).toBe(false);
     expect(out.alreadyInactive).toBe(false);
-    expect(audit.logWithClient).toHaveBeenCalledTimes(1);
+    expect(out.usage).toEqual({ workOrders: 0 });
+    expect(out.warning).toBeUndefined();
+    expect(areaRepo.countOpenWorkOrders).toHaveBeenCalledWith(AID);
+    // PRJ-SRS-007 (#38): transition isActive ghi 2 audit rows cùng tx.
+    expect(audit.logWithClient).toHaveBeenCalledTimes(2);
+    const actions = (audit.logWithClient as jest.Mock).mock.calls.map((c) => (c[1] as Record<string, unknown>).action);
+    expect(actions).toEqual(['PRJ_PROJECT_AREA_UPDATED', 'PRJ_AREA_STATUS_CHANGED']);
+    // STATUS_CHANGED: actor/before/after/reason, entityType PROJECT.
+    const statusPayload = (audit.logWithClient as jest.Mock).mock.calls[1][1] as Record<string, unknown>;
+    expect(statusPayload).toEqual(
+      expect.objectContaining({
+        actorUserId: ACTOR,
+        action: 'PRJ_AREA_STATUS_CHANGED',
+        entityType: 'PROJECT',
+        entityId: PID,
+        reason: null,
+        result: 'SUCCESS',
+      }),
+    );
+    expect(statusPayload.beforeData).toEqual(expect.objectContaining({ name: 'Khu A', projectCode: 'PRJ-001' }));
+    expect(statusPayload.afterData).toEqual(
+      expect.objectContaining({ isActive: false, projectCode: 'PRJ-001' }),
+    );
 
     areaRepo.findAreaById.mockResolvedValue(makeArea({ isActive: false }));
     areaRepo.findAreaForUpdateWithClient.mockResolvedValue(makeArea({ isActive: false }));
     (areaRepo.saveAreaWithClient as jest.Mock).mockClear();
+    (audit.logWithClient as jest.Mock).mockClear();
     const again = await useCase.execute({
       projectId: PID, areaId: AID, isActive: false, actorUserId: ACTOR, actorRoles: ['ADMIN'],
     });
     expect(again.alreadyInactive).toBe(true);
     expect(again.area.isActive).toBe(false);
     expect(areaRepo.saveAreaWithClient).not.toHaveBeenCalled();
+    expect(audit.logWithClient).not.toHaveBeenCalled();
+  });
+
+  it('retire khi WO mở đang tham chiếu → usage + warning + _warning trong audit afterData (không chặn)', async () => {
+    areaRepo.countOpenWorkOrders.mockResolvedValue(3);
+    const out = await useCase.execute({
+      projectId: PID, areaId: AID, isActive: false, reason: 'Thu hẹp', actorUserId: ACTOR, actorRoles: ['ADMIN'],
+    });
+    expect(out.area.isActive).toBe(false);
+    expect(out.usage).toEqual({ workOrders: 3 });
+    expect(out.warning).toBe(AREA_IN_USE_WARNING);
+    const updatedPayload = (audit.logWithClient as jest.Mock).mock.calls[0][1] as Record<string, unknown>;
+    expect(updatedPayload.afterData).toEqual(
+      expect.objectContaining({ _warning: AREA_IN_USE_WARNING, reason: 'Thu hẹp' }),
+    );
+    const statusPayload = (audit.logWithClient as jest.Mock).mock.calls[1][1] as Record<string, unknown>;
+    expect(statusPayload).toEqual(
+      expect.objectContaining({ action: 'PRJ_AREA_STATUS_CHANGED', reason: 'Thu hẹp' }),
+    );
+    expect(statusPayload.afterData).toEqual(expect.objectContaining({ _warning: AREA_IN_USE_WARNING }));
+  });
+
+  it('reactivate (false→true) → audit STATUS_CHANGED, không đếm usage, không warning', async () => {
+    areaRepo.findAreaById.mockResolvedValue(makeArea({ isActive: false }));
+    areaRepo.findAreaForUpdateWithClient.mockResolvedValue(makeArea({ isActive: false }));
+    const out = await useCase.execute({
+      projectId: PID, areaId: AID, isActive: true, actorUserId: ACTOR, actorRoles: ['ADMIN'],
+    });
+    expect(out.area.isActive).toBe(true);
+    expect(out.usage).toBeUndefined();
+    expect(out.warning).toBeUndefined();
+    expect(areaRepo.countOpenWorkOrders).not.toHaveBeenCalled();
+    const actions = (audit.logWithClient as jest.Mock).mock.calls.map((c) => (c[1] as Record<string, unknown>).action);
+    expect(actions).toEqual(['PRJ_PROJECT_AREA_UPDATED', 'PRJ_AREA_STATUS_CHANGED']);
+  });
+
+  it('pure rename → chỉ audit UPDATED (không STATUS_CHANGED), không đếm usage', async () => {
+    const out = await useCase.execute({
+      projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['ADMIN'],
+    });
+    expect(out.area.name).toBe('Khu B');
+    expect(out.usage).toBeUndefined();
+    expect(areaRepo.countOpenWorkOrders).not.toHaveBeenCalled();
     expect(audit.logWithClient).toHaveBeenCalledTimes(1);
+    expect((audit.logWithClient as jest.Mock).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ action: 'PRJ_PROJECT_AREA_UPDATED' }),
+    );
+  });
+
+  it('count usage thất bại → 500 lan ra, không transition thiếu cảnh báo (mirror work-types)', async () => {
+    areaRepo.countOpenWorkOrders.mockRejectedValue(new Error('db down'));
+    const err = await useCase
+      .execute({ projectId: PID, areaId: AID, isActive: false, actorUserId: ACTOR, actorRoles: ['ADMIN'] })
+      .catch((e: unknown) => e);
+    expect((err as Error).message).toBe('db down');
+    expect(areaRepo.saveAreaWithClient).not.toHaveBeenCalled();
+    expect(audit.logWithClient).not.toHaveBeenCalled();
+  });
+
+  it('STATUS audit fail → 500 rollback (fail-closed, mirror work-types status)', async () => {
+    (audit.logWithClient as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('audit down'));
+    const err = await useCase
+      .execute({ projectId: PID, areaId: AID, isActive: false, actorUserId: ACTOR, actorRoles: ['ADMIN'] })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InternalServerErrorException);
+  });
+
+  it('deactivate-race: membership bị revoke giữa pre-check và lock trong tx → 403, rollback không save', async () => {
+    // Pre-check ngoài tx pass (ADMIN bypass=false, member) nhưng trong tx sau
+    // FOR UPDATE lock, membership đã mất → 403 → rollback (mirror #37 re-check).
+    (scope.assertProjectMemberScope as jest.Mock).mockResolvedValueOnce({ isAdminBypass: false });
+    projectRepo.findActiveMemberWithClient.mockResolvedValue(null);
+    (scope.assertMemberScopeTxCheck as jest.Mock).mockImplementationOnce(() => {
+      throw new ForbiddenException('Không có quyền truy cập dự án này');
+    });
+    const err = await useCase
+      .execute({ projectId: PID, areaId: AID, isActive: false, actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(areaRepo.saveAreaWithClient).not.toHaveBeenCalled();
+    expect(audit.logWithClient).not.toHaveBeenCalled();
   });
 
   it('rename trùng tên active (trừ self) → 409 AREA_DUPLICATE; trùng mã → 409 AREA_CODE_DUPLICATE', async () => {

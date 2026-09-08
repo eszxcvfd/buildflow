@@ -139,6 +139,43 @@ describe('ProjectAreas PRJ-SRS-003 (issue #34)', () => {
     await waitFor(() => expect(screen.getByText(/đã ngừng sử dụng trước đó/)).not.toBeNull());
   });
 
+  it('ngừng sử dụng: warning kèm usage.workOrders → notice info có số work order (PRJ-SRS-007 #38)', async () => {
+    updateAreaMock.mockResolvedValue({
+      ...area(),
+      isActive: false,
+      alreadyInactive: false,
+      usage: { workOrders: 2 },
+      warning: 'Khu vực đang được tham chiếu bởi work order đang hiệu lực',
+    });
+    render(<ProjectAreas projectId={PROJECT_ID} />);
+    await waitFor(() => expect(screen.getByText('Tang 1 — Khu A')).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận ngừng sử dụng' }));
+    await waitFor(() =>
+      expect(updateAreaMock).toHaveBeenCalledWith(PROJECT_ID, AREA_ID, { isActive: false, reason: null }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/đang có 2 work order đang hiệu lực/)).not.toBeNull(),
+    );
+  });
+
+  it('ngừng sử dụng: reason đã nhập được gửi kèm (optional, vào audit)', async () => {
+    updateAreaMock.mockResolvedValue({ ...area(), isActive: false, alreadyInactive: false });
+    render(<ProjectAreas projectId={PROJECT_ID} />);
+    await waitFor(() => expect(screen.getByText('Tang 1 — Khu A')).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Ngừng sử dụng' }));
+    fireEvent.change(screen.getByLabelText('Lý do (không bắt buộc)'), {
+      target: { value: 'Gộp khu A vào khu B' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận ngừng sử dụng' }));
+    await waitFor(() =>
+      expect(updateAreaMock).toHaveBeenCalledWith(PROJECT_ID, AREA_ID, {
+        isActive: false,
+        reason: 'Gộp khu A vào khu B',
+      }),
+    );
+    await waitFor(() => expect(screen.getByText(/Đã ngừng sử dụng khu vực/)).not.toBeNull());
+  });
   it('đổi tên inline: Lưu gọi updateProjectArea với name mới', async () => {
     updateAreaMock.mockResolvedValue({ ...area(), name: 'Tang 1 — Khu A mới', alreadyInactive: false });
     render(<ProjectAreas projectId={PROJECT_ID} />);

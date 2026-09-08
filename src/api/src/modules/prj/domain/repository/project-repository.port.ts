@@ -172,6 +172,13 @@ export interface ProjectAreaRepositoryPort {
     client: PoolClient,
     input: { id: string; code: string | null; name: string; isActive: boolean },
   ): Promise<ProjectAreaRow | null>;
+  /**
+   * PRJ-SRS-007 (issue #38) — forward-ref contract cho JOB module (chưa tồn
+   * tại), mirror `WorkTypeRepositoryPort.countActiveWorkOrders`: đếm Work
+   * Order đang tham chiếu khu vực, trừ trạng thái kết thúc. Chỉ dùng cho cảnh
+   * báo phạm vi áp dụng khi retire (KHÔNG chặn transition).
+   */
+  countOpenWorkOrders(areaId: string): Promise<number>;
   /** Scope check pool-read: caller có ACTIVE membership trong project không. */
   isActiveProjectMember(projectId: string, userId: string): Promise<boolean>;
 }
