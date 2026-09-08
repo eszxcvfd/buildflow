@@ -44,6 +44,8 @@ export interface WorkOrderProps {
   status: WorkOrderStatus;
   plannedStartAt: Date | null;
   plannedEndAt: Date | null;
+  /** Hạn hoàn thành (`work_orders.due_at`) — chỉnh qua PATCH #43 (create để null). */
+  dueAt: Date | null;
   plannedHeadcount: number | null;
   createdBy: string;
   version: number;
@@ -110,6 +112,7 @@ export class WorkOrderEntity {
   get status(): WorkOrderStatus { return this.props.status; }
   get plannedStartAt(): Date | null { return this.props.plannedStartAt; }
   get plannedEndAt(): Date | null { return this.props.plannedEndAt; }
+  get dueAt(): Date | null { return this.props.dueAt; }
   get plannedHeadcount(): number | null { return this.props.plannedHeadcount; }
   get createdBy(): string { return this.props.createdBy; }
   get version(): number { return this.props.version; }
@@ -145,6 +148,7 @@ export class WorkOrderEntity {
     plannedStartAt: Date | null;
     plannedEndAt: Date | null;
     plannedHeadcount: number | null;
+    dueAt: Date | null;
     createdBy: string;
     version: number;
     requestKey: string | null;

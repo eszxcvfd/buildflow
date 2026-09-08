@@ -1,7 +1,8 @@
 /**
  * JOB-SRS-001 (issue #41) — work-orders API client (Web part).
  *
- * Contract: WorkOrdersController (ENDPOINTS §17) — POST tạo nháp + GET chi tiết.
+ * Contract: WorkOrdersController (ENDPOINTS §17) — POST tạo nháp + GET chi tiết
+ * + PATCH cập nhật (JOB-SRS-003 #43).
  * - POST /api/v1/work-orders: scope-first write (ADMIN bypass hoặc ACTIVE member
  *   MANAGER/COORDINATOR); strict `X-Correlation-Id` (client luôn tự sinh UUID
  *   mỗi lần gửi, cho phép override qua opts để test/retry có kiểm soát);
@@ -19,6 +20,8 @@ export interface WorkOrder {
   id: string;
   code: string;
   projectId: string;
+  /** Tên dự án do API kèm trong list (batch `findProjectRefs`) — `null`/absent → fallback id rút gọn. */
+  projectName?: string | null;
   areaId: string | null;
   workTypeId: string;
   workTypeName?: string | null;
@@ -30,6 +33,8 @@ export interface WorkOrder {
   status: 'DRAFT' | string;
   plannedStartAt: string | null;
   plannedEndAt: string | null;
+  /** Hạn hoàn thành (`due_at`) — đọc + PATCH #43 (create để null). */
+  dueAt: string | null;
   plannedHeadcount: number | null;
   createdBy: string;
   createdAt: string;
@@ -58,6 +63,29 @@ export interface CreateWorkOrderOptions {
   correlationId?: string;
 }
 
+/**
+ * JOB-SRS-003 (issue #43) — payload PATCH /api/v1/work-orders/:id.
+ * Mọi field optional (absent = không đụng); `requiredTradeId: null` = gỡ skill.
+ * `status`/`title`/`code` KHÔNG thuộc whitelist (server 400 forbidNonWhitelisted).
+ */
+export interface UpdateWorkOrderPayload {
+  description?: string | null;
+  instructions?: string | null;
+  priority?: WorkOrderPriority;
+  dueAt?: string | null;
+  plannedStartAt?: string | null;
+  plannedEndAt?: string | null;
+  requiredTradeId?: string | null;
+  workTypeId?: string;
+  expectedVersion?: number;
+  reason?: string | null;
+}
+
+export interface UpdateWorkOrderOptions {
+  /** Override correlation id (mặc định tự sinh UUID mỗi lần gửi — strict như POST). */
+  correlationId?: string;
+}
+
 export interface CreateWorkOrderResult {
   workOrder: WorkOrder;
   /** true khi server replay requestKey trùng (200, không tạo bản ghi mới). */
@@ -70,6 +98,31 @@ export interface ApiError {
   code?: string;
   fieldErrors?: Record<string, string[]>;
   traceId?: string;
+}
+
+export type WorkOrderListStatus =
+  | 'DRAFT'
+  | 'READY'
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'WORK_DONE'
+  | 'CLOSED'
+  | 'CANCELLED';
+
+export interface SearchWorkOrdersParams {
+  projectId?: string;
+  status?: WorkOrderListStatus | 'ALL';
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SearchWorkOrdersResult {
+  data: WorkOrder[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 function getApiBaseUrl(): string {
@@ -135,6 +188,22 @@ function classifyMessage(m: string): { field: string } | null {
   if (lower.includes('bắt đầu') || lower.includes('plannedstartat')) return { field: 'plannedStartAt' };
   if (lower.includes('planned')) return { field: 'plannedEndAt' };
   if (lower.includes('số người') || lower.includes('headcount')) return { field: 'plannedHeadcount' };
+  if (lower.includes('hạn hoàn thành') || lower.includes('dueat') || lower.includes('due_at')) {
+    return { field: 'dueAt' };
+  }
+  if (lower.includes('lý do') || lower.includes('reason')) return { field: 'reason' };
+  if (
+    lower.includes('khóa ở trạng thái') || lower.includes('field_locked') || lower.includes('field locked') ||
+    lower.includes('khóa') || lower.includes('locked')
+  ) {
+    return { field: '_locked' };
+  }
+  if (
+    lower.includes('phiên bản') || lower.includes('version') || lower.includes('conflict') ||
+    lower.includes('người khác cập nhật') || lower.includes('work_order_conflict')
+  ) {
+    return { field: 'expectedVersion' };
+  }
   return null;
 }
 
@@ -172,6 +241,19 @@ async function parseError(res: Response, fallback: string): Promise<never> {
     // Single-string errors từ use case (400 domain rule, 409 trùng code) —
     // map về field để UI hiển thị đúng input.
     if (msg) {
+      if (
+        res.status === 409 &&
+        (code === 'WORK_ORDER_CONFLICT' ||
+          /(xung đột|người khác cập nhật|version|conflict)/i.test(msg))
+      ) {
+        throw {
+          status: res.status,
+          message: msg,
+          code,
+          fieldErrors: { expectedVersion: [msg] },
+          traceId,
+        } satisfies ApiError;
+      }
       if (
         res.status === 409 &&
         (code === 'WORK_ORDER_CODE_DUPLICATE' || /(đã tồn tại|duplicate|unique|trùng)/i.test(msg))
@@ -249,6 +331,61 @@ export async function getWorkOrder(id: string): Promise<WorkOrder> {
   });
   if (!res.ok) {
     await parseError(res, `Lấy work order thất bại (${res.status})`);
+  }
+  return (await res.json()) as WorkOrder;
+}
+
+/**
+ * Danh sách Work Order (`GET /api/v1/work-orders`, `{ data, total, limit,
+ * offset }`, `cache: 'no-store'`). Scope server-side: ADMIN = tất cả,
+ * non-ADMIN = WO các project mình là ACTIVE member; `projectId` ngoài scope
+ * → 403; lỗi 400 shape `{ message, fieldErrors }` giữ nguyên fieldErrors.
+ */
+export async function searchWorkOrders(
+  params: SearchWorkOrdersParams = {},
+): Promise<SearchWorkOrdersResult> {
+  const base = getApiBaseUrl();
+  const qs = new URLSearchParams();
+  if (params.projectId) qs.set('projectId', params.projectId);
+  if (params.status && params.status !== 'ALL') qs.set('status', params.status);
+  if (params.search) qs.set('search', params.search);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  const url = `${base}/api/v1/work-orders${qs.toString() ? `?${qs.toString()}` : ''}`;
+  const res = await fetch(url, { headers: authHeaders(), cache: 'no-store' });
+  if (!res.ok) {
+    await parseError(res, `Tải danh sách công việc thất bại (${res.status})`);
+  }
+  return (await res.json()) as SearchWorkOrdersResult;
+}
+/**
+ * JOB-SRS-003 (issue #43) — cập nhật Work Order (`200`, `version` +1).
+ * Gửi `expectedVersion` (optimistic lock → 409 WORK_ORDER_CONFLICT,
+ * fieldErrors.expectedVersion) + `reason` khi đổi lịch/skill/work-type
+ * (thiếu → 400 WORK_ORDER_REASON_REQUIRED, fieldErrors.reason).
+ * Field khóa per-state → 400 WORK_ORDER_FIELD_LOCKED (giữ nguyên fieldErrors
+ * từng field để dialog hiển thị đúng input). Strict `X-Correlation-Id` như POST.
+ */
+export async function updateWorkOrder(
+  id: string,
+  payload: UpdateWorkOrderPayload,
+  opts: UpdateWorkOrderOptions = {},
+): Promise<WorkOrder> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const correlationId = opts.correlationId ?? newCorrelationId();
+  const res = await fetch(`${base}/api/v1/work-orders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Accept: 'application/json',
+      'X-Correlation-Id': correlationId,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    await parseError(res, `Cập nhật work order thất bại (${res.status})`);
   }
   return (await res.json()) as WorkOrder;
 }

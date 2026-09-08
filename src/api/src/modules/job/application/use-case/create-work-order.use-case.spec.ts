@@ -30,6 +30,7 @@ function makeEntity(code = 'WO-2026-A1'): WorkOrderEntity {
     status: 'DRAFT',
     plannedStartAt: null,
     plannedEndAt: null,
+    dueAt: null,
     plannedHeadcount: null,
     createdBy: IDS.actor,
     version: 1,

@@ -9,7 +9,9 @@ import {
 } from '@/lib/api/work-order-readiness';
 import { listTrades } from '@/lib/api/trades';
 import { listProjectAreas } from '@/lib/api/projects';
+import { WorkOrderEditDialog } from '@/features/work-orders/components/WorkOrderEditDialog';
 import { WorkOrderReadinessPanel } from '@/features/work-orders/components/WorkOrderReadinessPanel';
+import { useCanManageProjects, useIsAdmin } from '@/lib/auth/roles';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -47,6 +49,9 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
   const [check, setCheck] = React.useState<PublishCheckResult | null>(null);
   const [checkLoading, setCheckLoading] = React.useState(true);
   const [checkError, setCheckError] = React.useState<ReadinessApiError | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const canManage = useCanManageProjects();
+  const isAdmin = useIsAdmin();
 
   const loadCheck = React.useCallback(async () => {
     setCheckLoading(true);
@@ -166,6 +171,10 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
   }
 
   const statusLabel = WORK_ORDER_STATUS_LABELS[workOrder.status] ?? workOrder.status;
+  // JOB-SRS-003 (#43) — nút Sửa: write-role gate mirror nút tạo WO
+  // (useCanManageProjects); WORK_DONE/CLOSED/CANCELLED chỉ ADMIN (exception mode).
+  const TERMINAL = workOrder ? ['WORK_DONE', 'CLOSED', 'CANCELLED'].includes(workOrder.status.toUpperCase()) : false;
+  const canEdit = workOrder ? (TERMINAL ? isAdmin && canManage : canManage) : false;
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
@@ -183,6 +192,13 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
               <a href={`/projects/${workOrder.projectId}`}>Về dự án</a>
             </div>
           </div>
+          {canEdit ? (
+            <div>
+              <Button variant="secondary" onClick={() => setEditOpen(true)}>
+                Sửa
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <dl className="bf-def-grid">
@@ -221,6 +237,10 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
             </dd>
           </div>
           <div>
+            <dt>Hạn hoàn thành</dt>
+            <dd>{formatDateTime(workOrder.dueAt)}</dd>
+          </div>
+          <div>
             <dt>Số người dự kiến</dt>
             <dd>{workOrder.plannedHeadcount != null ? workOrder.plannedHeadcount : '—'}</dd>
           </div>
@@ -233,6 +253,18 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         error={checkError}
         onRetry={() => void loadCheck()}
       />
+
+      {editOpen && canEdit ? (
+        <WorkOrderEditDialog
+          workOrder={workOrder}
+          isAdmin={isAdmin}
+          onClose={() => setEditOpen(false)}
+          onUpdated={() => {
+            setEditOpen(false);
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

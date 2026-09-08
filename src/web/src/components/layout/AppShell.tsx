@@ -30,6 +30,9 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
     items: [
       { href: '/dashboard', label: 'Tổng quan' },
       { href: '/projects', label: 'Dự án' },
+      // Danh sách công việc — mọi user đã đăng nhập (scope server-side theo
+      // membership; ADMIN thấy tất cả). Đặt sau Dự án (deep-link từ detail).
+      { href: '/work-orders', label: 'Công việc' },
       // ORG-SRS-008 (issue #31) — tự kiểm tra điều kiện nhận việc:
       // mọi user đã đăng nhập (GET /api/v1/eligibility/me, không check role).
       { href: '/my-eligibility', label: 'Điều kiện nhận việc của tôi' },
@@ -65,6 +68,7 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
 const TITLES: Array<[prefix: string, title: string]> = [
   ['/dashboard', 'Tổng quan'],
   ['/projects', 'Dự án'],
+  ['/work-orders', 'Công việc'],
   ['/my-eligibility', 'Điều kiện nhận việc của tôi'],
   ['/contractors', 'Nhà thầu'],
   ['/resources', 'Tra cứu nguồn lực'],
@@ -144,6 +148,13 @@ const NAV_ICON_PATHS: Record<string, React.ReactNode> = {
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M9 12h6m-6 4h6M9 8h6M5 3h11.25a1.5 1.5 0 0 1 1.06.44l2.25 2.25a1.5 1.5 0 0 1 .44 1.06V21a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3.5 21V4.5A1.5 1.5 0 0 1 5 3Z"
+    />
+  ),
+  '/work-orders': (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2m-6 0a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v0a2 2 0 0 0-2-2m-6 0V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 8 2 2 4-4"
     />
   ),
   '/admin/users': (

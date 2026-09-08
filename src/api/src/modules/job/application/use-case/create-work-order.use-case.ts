@@ -257,6 +257,7 @@ export class CreateWorkOrderUseCase {
         status: 'DRAFT',
         plannedStartAt,
         plannedEndAt,
+        dueAt: null,
         plannedHeadcount,
         createdBy: input.actorUserId,
         version: 1,

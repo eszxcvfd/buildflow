@@ -28,6 +28,13 @@ jest.mock('@/lib/api/attachments', () => ({
   ATTACHMENT_MAX_SIZE_BYTES: 10 * 1024 * 1024,
   ATTACHMENT_TEXT_MAX_LENGTH: 500,
 }));
+jest.mock('@/lib/api/work-orders', () => ({
+  searchWorkOrders: jest.fn(async () => ({ data: [], total: 0, limit: 1, offset: 0 })),
+  getWorkOrder: jest.fn(),
+  createWorkOrder: jest.fn(),
+  updateWorkOrder: jest.fn(),
+  newCorrelationId: jest.fn(() => 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),
+}));
 // Dialog Sửa hồ sơ mount ProjectForm (dùng useRouter) — mock như CrewForm.spec.
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), refresh: jest.fn() }),

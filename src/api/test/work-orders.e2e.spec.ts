@@ -107,6 +107,14 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
     };
 
     const mockScope = {
+      resolveAccessibleProjectIds: jest.fn(
+        async ({ userId, actorRoles }: { userId: string; actorRoles: string[] }) => {
+          if (actorRoles.includes('ADMIN')) return null;
+          return [...memberships.keys()]
+            .filter((k) => k.endsWith(`:${userId}`))
+            .map((k) => k.split(':')[0]);
+        },
+      ),
       assertProjectWriteScope: jest.fn(
         async ({ userId, actorRoles, projectId }: { userId: string; actorRoles: string[]; projectId: string }) => {
           if (actorRoles.includes('ADMIN')) {
@@ -155,6 +163,46 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
         return null;
       }),
       findWorkTypeNameById: jest.fn(async (id: string) => (id === ACTIVE_TYPE ? 'Đổ bê tông' : null)),
+      findWorkTypeRefs: jest.fn(async (ids: string[]) => {
+        const m = new Map<string, { id: string; code: string; name: string }>();
+        for (const id of ids) {
+          if (id === ACTIVE_TYPE) m.set(id, { id, code: 'WT-001', name: 'Đổ bê tông' });
+        }
+        return m;
+      }),
+      findProjectRefs: jest.fn(async (ids: string[]) => {
+        const m = new Map<string, { id: string; code: string; name: string }>();
+        for (const id of ids) {
+          if (id === P1) m.set(id, { id, code: 'PRJ-001', name: 'Dự án 1' });
+          if (id === P2) m.set(id, { id, code: 'PRJ-002', name: 'Dự án 2' });
+        }
+        return m;
+      }),
+      search: jest.fn(
+        async (filter: {
+          projectIds?: string[];
+          projectId?: string;
+          status?: string;
+          search?: string;
+          limit?: number;
+          offset?: number;
+        }) => {
+          let rows = [...store.values()];
+          if (filter.projectId) rows = rows.filter((e) => e.projectId === filter.projectId);
+          else if (filter.projectIds) rows = rows.filter((e) => filter.projectIds!.includes(e.projectId));
+          if (filter.status && filter.status !== 'ALL') rows = rows.filter((e) => e.status === filter.status);
+          if (filter.search) {
+            const term = filter.search.trim().toLowerCase();
+            rows = rows.filter(
+              (e) => e.code.toLowerCase().includes(term) || e.title.toLowerCase().includes(term),
+            );
+          }
+          const total = rows.length;
+          const limit = Math.min(Math.max(filter.limit ?? 20, 1), 100);
+          const offset = Math.max(filter.offset ?? 0, 0);
+          return { entities: rows.slice(offset, offset + limit), total };
+        },
+      ),
       findProjectStatusById: jest.fn(async (id: string) => {
         const status = projectStatuses.get(id);
         return status ? { id, status } : null;
@@ -369,5 +417,157 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
       .get('/api/v1/work-orders/00000000-0000-4000-8000-000000000000')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(404);
+  });
+
+  it('list: anon 401; non-admin chỉ WO project member; outsider membership rỗng → [] (không 403)', async () => {
+    await request(app.getHttpServer()).get('/api/v1/work-orders').expect(401);
+
+    const pmToken = await login('pm-e2e-wo@example.com');
+    // Seed 1 WO ở P2 (PM là COORDINATOR P2) để phân biệt scope.
+    const p2wo = await request(app.getHttpServer())
+      .post('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${pmToken}`)
+      .send({ projectId: P2, workTypeId: ACTIVE_TYPE, title: 'Việc scope P2' })
+      .expect(201);
+    expect(p2wo.body.projectName).toBeUndefined();
+
+    const workerToken = await login('worker-e2e-wo@example.com');
+    const workerList = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .expect(200);
+    expect(workerList.headers['cache-control']).toContain('no-store');
+    expect(workerList.body.total).toBeGreaterThanOrEqual(1);
+    for (const row of workerList.body.data as Array<{ projectId: string }>) {
+      expect(row.projectId).toBe(P1);
+    }
+    expect(workerList.body.limit).toBe(20);
+    expect(workerList.body.offset).toBe(0);
+
+    const pmList = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${pmToken}`)
+      .expect(200);
+    expect(pmList.body.total).toBeGreaterThan(workerList.body.total);
+    expect((pmList.body.data as Array<{ projectId: string }>).some((r) => r.projectId === P2)).toBe(true);
+
+    const outsiderToken = await login('outsider-e2e-wo@example.com');
+    const outsiderList = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${outsiderToken}`)
+      .expect(200);
+    expect(outsiderList.body).toMatchObject({ data: [], total: 0 });
+
+    const adminToken = await login('admin-e2e-wo@example.com');
+    const adminList = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(adminList.body.total).toBe(pmList.body.total);
+  });
+
+  it('list: projectId ngoài scope → 403; trong scope → lọc; query sai → 400', async () => {
+    const workerToken = await login('worker-e2e-wo@example.com');
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ projectId: P2 })
+      .expect(403);
+
+    const inScope = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ projectId: P1 })
+      .expect(200);
+    for (const row of inScope.body.data as Array<{ projectId: string }>) {
+      expect(row.projectId).toBe(P1);
+    }
+
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ projectId: 'not-a-uuid' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ status: 'WRONG' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ limit: '0' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ limit: '101' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .query({ offset: '-1' })
+      .expect(400);
+  });
+
+  it('list: filter status/search + pagination limit/offset', async () => {
+    const adminToken = await login('admin-e2e-wo@example.com');
+
+    const drafts = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ status: 'DRAFT' })
+      .expect(200);
+    expect(drafts.body.total).toBeGreaterThanOrEqual(1);
+
+    const open = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ status: 'OPEN' })
+      .expect(200);
+    expect(open.body).toMatchObject({ data: [], total: 0 });
+
+    const byCode = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ search: createdCode.slice(0, 8) })
+      .expect(200);
+    expect(byCode.body.total).toBeGreaterThanOrEqual(1);
+
+    const byTitle = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ search: 'scope p2' })
+      .expect(200);
+    expect(byTitle.body.total).toBe(1);
+    expect(byTitle.body.data[0]).toMatchObject({
+      projectId: P2,
+      workTypeName: 'Đổ bê tông',
+      projectName: 'Dự án 2',
+    });
+
+    const none = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ search: 'khong-ton-tai-xyz' })
+      .expect(200);
+    expect(none.body).toMatchObject({ data: [], total: 0 });
+
+    const page1 = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ limit: '1', offset: '0' })
+      .expect(200);
+    expect(page1.body.data).toHaveLength(1);
+    expect(page1.body).toMatchObject({ limit: 1, offset: 0 });
+    expect(page1.body.total).toBeGreaterThan(1);
+
+    const page2 = await request(app.getHttpServer())
+      .get('/api/v1/work-orders')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({ limit: '1', offset: '1' })
+      .expect(200);
+    expect(page2.body.data).toHaveLength(1);
+    expect(page2.body.data[0].id).not.toBe(page1.body.data[0].id);
   });
 });

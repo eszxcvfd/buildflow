@@ -28,6 +28,7 @@ function makeEntity(): WorkOrderEntity {
     status: 'DRAFT',
     plannedStartAt: null,
     plannedEndAt: null,
+    dueAt: null,
     plannedHeadcount: null,
     createdBy: IDS.admin,
     version: 1,

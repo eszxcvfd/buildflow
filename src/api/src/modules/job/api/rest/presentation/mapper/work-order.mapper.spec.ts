@@ -1,5 +1,5 @@
 import { WorkOrderEntity } from '../../../../domain/entity/work-order.entity';
-import { toWorkOrderResponse } from './work-order.mapper';
+import { toWorkOrderListResponse, toWorkOrderResponse } from './work-order.mapper';
 
 const IDS = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -25,6 +25,7 @@ function makeEntity(): WorkOrderEntity {
     status: 'DRAFT',
     plannedStartAt: new Date('2026-10-01T08:00:00.000Z'),
     plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
+    dueAt: new Date('2026-10-05T08:00:00.000Z'),
     plannedHeadcount: 5,
     createdBy: IDS.actor,
     version: 1,
@@ -50,6 +51,7 @@ describe('work-order.mapper (JOB-SRS-001)', () => {
       status: 'DRAFT',
       plannedStartAt: '2026-10-01T08:00:00.000Z',
       plannedEndAt: '2026-10-02T08:00:00.000Z',
+      dueAt: '2026-10-05T08:00:00.000Z',
       plannedHeadcount: 5,
       createdBy: IDS.actor,
       version: 1,
@@ -71,12 +73,27 @@ describe('work-order.mapper (JOB-SRS-001)', () => {
       requiredTradeId: null,
       plannedStartAt: null,
       plannedEndAt: null,
+      dueAt: null,
       plannedHeadcount: null,
     });
     const dto = toWorkOrderResponse(e, { workTypeName: null, idempotentReplay: true });
     expect(dto.plannedStartAt).toBeNull();
     expect(dto.plannedEndAt).toBeNull();
+    expect(dto.dueAt).toBeNull();
     expect(dto.plannedHeadcount).toBeNull();
     expect(dto.idempotentReplay).toBe(true);
+  });
+
+  it('toWorkOrderListResponse: gắn workTypeName/projectName từ refs; thiếu ref → undefined', () => {
+    const rows = toWorkOrderListResponse([makeEntity()], {
+      workTypeRefs: new Map([[IDS.workType, { id: IDS.workType, code: 'WT-001', name: 'Đổ bê tông' }]]),
+      projectRefs: new Map([[IDS.project, { id: IDS.project, code: 'PRJ-001', name: 'Dự án 1' }]]),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ workTypeName: 'Đổ bê tông', projectName: 'Dự án 1' });
+
+    const bare = toWorkOrderListResponse([makeEntity()], { workTypeRefs: new Map(), projectRefs: new Map() });
+    expect(bare[0].workTypeName).toBeUndefined();
+    expect(bare[0].projectName).toBeUndefined();
   });
 });

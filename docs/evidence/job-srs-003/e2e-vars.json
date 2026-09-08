@@ -1,0 +1,49 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "digits": "087697",
+  "title": "Cải tạo đường ống nước khu KQ-01 087697",
+  "workOrderId": "8c3fb4f0-f0b6-467a-a695-1e1d203c8e01",
+  "workOrderCode": "WO-MTSQMVNYD9K9",
+  "praId": "10000000-0000-4000-8000-000000000001",
+  "auditBaseline": "2810",
+  "auditFinal": "2844",
+  "rest": "0",
+  "notifRest": "0",
+  "results": [
+    {
+      "id": "U1",
+      "ok": true,
+      "note": "200 desc/priority/dueAt đổi, version 1→2, audit UPDATED before/after đủ 3 trường"
+    },
+    {
+      "id": "U2",
+      "ok": true,
+      "note": "UI lịch read-only + text khóa; PATCH → 400 FIELD_LOCKED per-field"
+    },
+    {
+      "id": "U3",
+      "ok": true,
+      "note": "200 version→3, notification cho creator dedup woupd-*, audit before/after đủ 2 trường lịch"
+    },
+    {
+      "id": "U4",
+      "ok": true,
+      "note": "400 REASON_REQUIRED + fieldErrors.reason, version giữ nguyên"
+    },
+    {
+      "id": "U5",
+      "ok": true,
+      "note": "PM ẩn nút + PATCH 400; ADMIN 200 EXCEPTION audit WORK_ORDER_EXCEPTION_EDIT"
+    },
+    {
+      "id": "U6",
+      "ok": true,
+      "note": "API tab2 409 CONFLICT (version hiện tại 6); UI hiện notice + nút Tải lại"
+    },
+    {
+      "id": "U7",
+      "ok": true,
+      "note": "GET ASSIGNED 200 + UI detail render (code WO-MTSQMVNYD9K9, version 6)"
+    }
+  ]
+}

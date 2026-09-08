@@ -3,6 +3,8 @@ import { WorkOrdersController } from './api/rest/controller/work-orders.controll
 import { WorkOrderPublishCheckController } from './api/rest/controller/work-order-publish-check.controller';
 import { CreateWorkOrderUseCase } from './application/use-case/create-work-order.use-case';
 import { GetWorkOrderUseCase } from './application/use-case/get-work-order.use-case';
+import { SearchWorkOrdersUseCase } from './application/use-case/search-work-orders.use-case';
+import { UpdateWorkOrderUseCase } from './application/use-case/update-work-order.use-case';
 import { CheckWorkOrderPublishUseCase } from './application/use-case/check-work-order-publish.use-case';
 import { PgWorkOrderRepository } from './infrastructure/database/pg-work-order.repository';
 import { JOB_WORK_ORDER_REPOSITORY } from './domain/repository/work-order-repository.port';
@@ -24,6 +26,8 @@ import { IamModule } from '../iam/iam.module';
 /**
  * JOB-SRS-001 (issue #41) — job module (clean architecture, mirror prj module).
  * Sở hữu `POST`/`GET /api/v1/work-orders` (tạo nháp + đọc chi tiết).
+ * JOB-SRS-003 (issue #43) — thêm `PATCH /api/v1/work-orders/:id` (state
+ * policy + optimistic lock + audit/notification tx-embedded).
  * Scope qua `ProjectScopeService` dùng chung (import `IamModule` — mirror
  * `PrjModule`): write = ADMIN bypass hoặc ACTIVE member MANAGER/COORDINATOR;
  * read = ADMIN bypass hoặc bất kỳ ACTIVE member nào (kể cả WORKER).
@@ -38,6 +42,8 @@ import { IamModule } from '../iam/iam.module';
   providers: [
     CreateWorkOrderUseCase,
     GetWorkOrderUseCase,
+    SearchWorkOrdersUseCase,
+    UpdateWorkOrderUseCase,
     CheckWorkOrderPublishUseCase,
     JwtAuthGuard,
     JwtTokenService,

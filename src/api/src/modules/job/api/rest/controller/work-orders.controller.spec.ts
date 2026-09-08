@@ -25,6 +25,7 @@ function makeEntity(): WorkOrderEntity {
     status: 'DRAFT',
     plannedStartAt: null,
     plannedEndAt: null,
+    dueAt: null,
     plannedHeadcount: null,
     createdBy: IDS.actor,
     version: 1,
@@ -55,8 +56,20 @@ describe('WorkOrdersController (JOB-SRS-001)', () => {
     const getWorkOrder = {
       execute: jest.fn(async () => ({ entity: makeEntity(), workTypeName: 'Đổ bê tông' })),
     };
-    const controller = new WorkOrdersController(createWorkOrder as never, getWorkOrder as never);
-    return { controller, createWorkOrder, getWorkOrder };
+    const searchWorkOrders = {
+      execute: jest.fn(async () => ({
+        entity: undefined,
+        entities: [makeEntity()],
+        total: 1,
+        workTypeRefs: new Map(),
+        projectRefs: new Map(),
+      })),
+    };
+    const updateWorkOrder = {
+      execute: jest.fn(async () => ({ entity: makeEntity(), workTypeName: 'Đổ bê tông', exceptionEdit: false, noOp: false })),
+    };
+    const controller = new WorkOrdersController(createWorkOrder as never, getWorkOrder as never, searchWorkOrders as never, updateWorkOrder as never);
+    return { controller, createWorkOrder, getWorkOrder, searchWorkOrders, updateWorkOrder };
   }
 
   it('POST create: forward actor server-derived + meta; 201 mặc định', async () => {
@@ -112,5 +125,88 @@ describe('WorkOrdersController (JOB-SRS-001)', () => {
       expect.objectContaining({ workOrderId: IDS.wo, actorUserId: IDS.actor, actorRoles: ['WORKER'] }),
     );
     expect(out).toMatchObject({ id: IDS.wo, status: 'DRAFT' });
+  });
+
+  it('GET list: forward actor + filter, trả { data, total, limit, offset } + no-store shape', async () => {
+    const { controller, searchWorkOrders } = setup();
+    const out = await controller.search(
+      reqWithUser(['WORKER']) as never,
+      IDS.project,
+      'DRAFT',
+      'be tong',
+      '20',
+      '0',
+    );
+    expect(searchWorkOrders.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: IDS.project,
+        status: 'DRAFT',
+        search: 'be tong',
+        limit: 20,
+        offset: 0,
+        actorUserId: IDS.actor,
+        actorRoles: ['WORKER'],
+      }),
+    );
+    expect(out).toMatchObject({ total: 1, limit: 20, offset: 0 });
+    expect((out as { data: unknown[] }).data).toHaveLength(1);
+  });
+
+  it('GET list: query mặc định (không filter) → limit 20 offset 0', async () => {
+    const { controller, searchWorkOrders } = setup();
+    const out = await controller.search(reqWithUser(['ADMIN']) as never, undefined, undefined, undefined, undefined, undefined);
+    expect(searchWorkOrders.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: undefined, status: undefined, actorRoles: ['ADMIN'] }),
+    );
+    expect(out).toMatchObject({ total: 1, limit: 20, offset: 0 });
+  });
+
+  it('GET list: status lạ / projectId sai UUID / limit-offset sai → 400 fieldErrors', async () => {
+    const { controller, searchWorkOrders } = setup();
+    const req = reqWithUser(['WORKER']) as never;
+    await expect(controller.search(req, undefined, 'WRONG', undefined, undefined, undefined)).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ status: expect.any(Array) }) }),
+    });
+    await expect(controller.search(req, 'not-a-uuid', undefined, undefined, undefined, undefined)).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ projectId: expect.any(Array) }) }),
+    });
+    await expect(controller.search(req, undefined, undefined, undefined, '0', undefined)).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ limit: expect.any(Array) }) }),
+    });
+    await expect(controller.search(req, undefined, undefined, undefined, '101', undefined)).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ limit: expect.any(Array) }) }),
+    });
+    await expect(controller.search(req, undefined, undefined, undefined, undefined, '-1')).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ offset: expect.any(Array) }) }),
+    });
+    expect(searchWorkOrders.execute).not.toHaveBeenCalled();
+  });
+
+  it('PATCH :id: forward actor + patch fields + meta (scope/lock ở use case)', async () => {
+    const { controller, updateWorkOrder } = setup();
+    const out = await controller.update(
+      IDS.wo,
+      { description: 'Mô tả mới', expectedVersion: 1 } as never,
+      reqWithUser(['PROJECT_MANAGER'], IDS.corr) as never,
+    );
+    expect(updateWorkOrder.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workOrderId: IDS.wo,
+        description: 'Mô tả mới',
+        expectedVersion: 1,
+        actorUserId: IDS.actor,
+        actorRoles: ['PROJECT_MANAGER'],
+        correlationId: IDS.corr,
+      }),
+    );
+    expect(out).toMatchObject({ id: IDS.wo, status: 'DRAFT' });
+  });
+
+  it('PATCH: X-Correlation-Id sai → 400 (strict như POST)', async () => {
+    const { controller, updateWorkOrder } = setup();
+    await expect(
+      controller.update(IDS.wo, { description: 'X' } as never, reqWithUser(['PROJECT_MANAGER'], 'not-a-uuid') as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(updateWorkOrder.execute).not.toHaveBeenCalled();
   });
 });

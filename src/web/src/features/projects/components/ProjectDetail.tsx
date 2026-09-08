@@ -14,6 +14,7 @@ import {
 import { ProjectMembers } from './ProjectMembers';
 import { ProjectAreas } from './ProjectAreas';
 import { ProjectAttachments } from './ProjectAttachments';
+import { ProjectWorkOrders } from './ProjectWorkOrders';
 import { ProjectEditDialog } from './ProjectEditDialog';
 import { WorkOrderCreateDialog } from '@/features/work-orders';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
@@ -379,6 +380,10 @@ export function ProjectDetail({ id }: { id: string }) {
 
       <Card>
         <ProjectAttachments projectId={project.id} />
+      </Card>
+
+      <Card>
+        <ProjectWorkOrders projectId={project.id} />
       </Card>
 
       <Card>
