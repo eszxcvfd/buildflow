@@ -99,7 +99,33 @@ Các dòng `E2E-DUP-*` đã xóa (đã kiểm tra không còn FK nào từ
   (ex `E2E4-WO-1`), status ASSIGNED; description/instructions tiếng Việt
   thực tế (bản vẽ KC-B1, nghiệm thu cốp pha/cốt thép). Assignment giữ nguyên.
 
-## 7. Reset — rebuild demo data từ scratch
+## 7. Work-order templates
+
+8 mẫu công việc thật cho trang `/work-order-templates` (trước đây trống sau
+driver cleanup). `work_type_id`/`required_trade_id` trỏ tới work types/trades
+có sẵn (§2/§5); `required_skills` 1–2 trade codes; checklist 3–5 mục tiếng
+Việt (`PASS_FAIL`/`TEXT`/`NUMBER`); `version = 1`.
+
+| Code | Tên | Trạng thái | Ưu tiên | Thời lượng (phút) |
+| --- | --- | --- | --- | --- |
+| WOT-BT-COT | Đổ bê tông cột, vách | ACTIVE | HIGH | 240 |
+| WOT-BT-SAN | Đổ bê tông dầm sàn | ACTIVE | NORMAL | 480 |
+| WOT-COT-THEP | Gia công, lắp dựng cốt thép | ACTIVE | HIGH | 360 |
+| WOT-COP-PHA | Lắp dựng cốp pha | ACTIVE | NORMAL | 300 |
+| WOT-SON-NOI-THAT | Sơn nước tường nội thất | ACTIVE | NORMAL | 240 |
+| WOT-OP-LAT-NEN | Ốp lát gạch nền | ACTIVE | NORMAL | 300 |
+| WOT-DIEN-AM | Đi ống điện âm tường | ACTIVE | HIGH | 240 |
+| WOT-CHONG-THAM | Chống thấm sàn vệ sinh | DRAFT | NORMAL | 360 |
+
+Reproduce (idempotent — `ON CONFLICT (code) DO NOTHING`, không đụng row
+của evidence drivers PRJ-SRS-008):
+
+```bash
+docker exec -i buildflow-postgres-1 psql -U buildflow -d buildflow \
+  < docs/evidence/demo-data/demo-work-order-templates.sql
+```
+
+## 8. Reset — rebuild demo data từ scratch
 
 1. Dựng DB từ migration baseline (`src/api`: `scripts/migrate.js` — các file
    `migrations/NNNN_*.sql`), rồi seed fixture gốc theo quy trình seed hiện
@@ -108,6 +134,8 @@ Các dòng `E2E-DUP-*` đã xóa (đã kiểm tra không còn FK nào từ
    ```bash
    docker exec -i buildflow-postgres-1 psql -U buildflow -d buildflow \
      < docs/evidence/demo-data/rename-realistic.sql
+   docker exec -i buildflow-postgres-1 psql -U buildflow -d buildflow \
+     < docs/evidence/demo-data/demo-work-order-templates.sql
    ```
 3. Kiểm tra (kỳ vọng mỗi truy vấn 0 dòng; `audit_logs` được loại trừ có chủ ý):
    ```sql
@@ -117,6 +145,7 @@ Các dòng `E2E-DUP-*` đã xóa (đã kiểm tra không còn FK nào từ
    SELECT code, name FROM contractors WHERE code ~* 'e2e|probe|test' OR name ~* 'e2e|probe|test';
    SELECT code, name FROM crews       WHERE code ~* 'e2e|probe|test' OR name ~* 'e2e|probe|test';
    SELECT code FROM work_types        WHERE code ~* 'e2e|probe|test';
+   SELECT code FROM work_order_templates WHERE code ~* 'e2e|probe|test';
    SELECT code, title FROM work_orders WHERE code ~* 'e2e|probe|test' OR title ~* 'e2e|probe|test';
    SELECT a.code, a.name FROM project_areas a
      WHERE a.code ~* 'e2e|probe|test' OR a.name ~* 'e2e|probe|test';
