@@ -151,7 +151,7 @@ export class CrewsController {
     if (order !== undefined && order !== '' && !['asc', 'desc'].includes(order)) {
       filterError('order', 'Order không hợp lệ (asc|desc)');
     }
-    const { entities, total } = await this.searchCrews.execute({
+    const { entities, total, enrichments } = await this.searchCrews.execute({
       status: status || undefined,
       search: search || undefined,
       limit: parsedLimit,
@@ -160,7 +160,8 @@ export class CrewsController {
       sort: (sort || undefined) as 'name' | 'createdAt' | undefined,
       order: (order || undefined) as 'asc' | 'desc' | undefined,
     });
-    return { data: toCrewListResponse(entities), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
+    // ORG-05 — list kèm leaderName/memberCount (mock cũ thiếu enrichments → null/0).
+    return { data: toCrewListResponse(entities, enrichments), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
   }
 
   @Get(':id')

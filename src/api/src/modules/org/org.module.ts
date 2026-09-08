@@ -29,6 +29,7 @@ import { AddCrewMemberUseCase } from './application/use-case/add-crew-member.use
 import { RemoveCrewMemberUseCase } from './application/use-case/remove-crew-member.use-case';
 import { ListCrewMembersUseCase } from './application/use-case/list-crew-members.use-case';
 import { GetWorkerOpenWorkUseCase } from './application/use-case/get-worker-open-work.use-case';
+import { GetWorkerCrewsUseCase } from './application/use-case/get-worker-crews.use-case';
 import { CheckWorkerEligibilityUseCase } from './application/use-case/check-worker-eligibility.use-case';
 import { CheckCrewEligibilityUseCase } from './application/use-case/check-crew-eligibility.use-case';
 import { GetContractorOpenWorkUseCase } from './application/use-case/get-contractor-open-work.use-case';
@@ -80,6 +81,7 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
     RemoveCrewMemberUseCase,
     ListCrewMembersUseCase,
     GetWorkerOpenWorkUseCase,
+    GetWorkerCrewsUseCase,
     CheckWorkerEligibilityUseCase,
     CheckCrewEligibilityUseCase,
     GetContractorOpenWorkUseCase,

@@ -6,6 +6,7 @@ import { GetWorkerUseCase } from '../../../application/use-case/get-worker.use-c
 import { SearchWorkersUseCase } from '../../../application/use-case/search-workers.use-case';
 import { StatusTransitionWorkerUseCase } from '../../../application/use-case/status-transition-worker.use-case';
 import { GetWorkerOpenWorkUseCase } from '../../../application/use-case/get-worker-open-work.use-case';
+import { GetWorkerCrewsUseCase } from '../../../application/use-case/get-worker-crews.use-case';
 import { WorkerEntity } from '../../../domain/entity/worker.entity';
 import { UserEntity } from '../../../../iam/domain/entity/user.entity';
 
@@ -55,16 +56,18 @@ describe('WorkersController ORG-SRS-001', () => {
   let searchMock: jest.Mocked<SearchWorkersUseCase>;
   let transitionMock: jest.Mocked<StatusTransitionWorkerUseCase>;
   let openWorkMock: jest.Mocked<GetWorkerOpenWorkUseCase>;
+  let crewsMock: jest.Mocked<GetWorkerCrewsUseCase>;
   let controller: WorkersController;
 
   beforeEach(() => {
     createMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1') })) } as unknown as jest.Mocked<CreateWorkerUseCase>;
     updateMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1') })) } as unknown as jest.Mocked<UpdateWorkerUseCase>;
-    getMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1') })) } as unknown as jest.Mocked<GetWorkerUseCase>;
-    searchMock = { execute: jest.fn(async () => ({ entities: [makeWorker('w1'), makeWorker('w2', 'INACTIVE')], total: 2 })) } as unknown as jest.Mocked<SearchWorkersUseCase>;
+    getMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1'), crews: [] })) } as unknown as jest.Mocked<GetWorkerUseCase>;
+    searchMock = { execute: jest.fn(async () => ({ entities: [makeWorker('w1'), makeWorker('w2', 'INACTIVE')], total: 2, crewsByUserId: new Map() })) } as unknown as jest.Mocked<SearchWorkersUseCase>;
     transitionMock = { execute: jest.fn(async () => ({ entity: makeWorker('w1'), alreadyInState: false })) } as unknown as jest.Mocked<StatusTransitionWorkerUseCase>;
     openWorkMock = { execute: jest.fn(async () => ({ openAssignments: 0 })) } as unknown as jest.Mocked<GetWorkerOpenWorkUseCase>;
-    controller = new WorkersController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock);
+    crewsMock = { execute: jest.fn(async () => ({ memberships: [] })) } as unknown as jest.Mocked<GetWorkerCrewsUseCase>;
+    controller = new WorkersController(createMock, updateMock, getMock, searchMock, transitionMock, openWorkMock, crewsMock);
   });
 
   it('ADMIN có thể tạo worker', async () => {
@@ -178,7 +181,6 @@ describe('WorkersController ORG-SRS-001', () => {
     expect((res as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
     expect(getMock.execute).toHaveBeenCalledWith({ workerId: 'w1' });
   });
-
   it('sửa ID/URL không bypass — cần ADMIN', async () => {
     await expect(controller.getOne('w1', workerReq() as never)).rejects.toThrow(ForbiddenException);
   });
@@ -269,6 +271,66 @@ describe('WorkersController ORG-SRS-001', () => {
     it('GET :id/open-work — non-ADMIN bị chặn 403', async () => {
       await expect(controller.openWork('w1', workerReq() as never)).rejects.toThrow(ForbiddenException);
       expect(openWorkMock.execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ORG-03/ORG-05 Worker ↔ Crew link — GET :id/crews', () => {
+    const membership = {
+      crewId: '11111111-1111-4111-8111-111111111111',
+      crewCode: 'CREW-A',
+      crewName: 'Đội A',
+      crewStatus: 'ACTIVE',
+      memberRole: 'MEMBER',
+      effectiveFrom: '2026-09-01',
+      effectiveTo: null,
+    };
+
+    it('ADMIN + PROJECT_MANAGER được đọc (mirror GET /workers/:id), trả { data[] }', async () => {
+      crewsMock.execute.mockResolvedValue({ memberships: [membership] } as never);
+      for (const req of [adminReq(), pmReq()]) {
+        const res = await controller.getCrews('w1', req as never);
+        expect(crewsMock.execute).toHaveBeenCalledWith({ workerId: 'w1' });
+        expect(res.data).toEqual([membership]);
+      }
+    });
+
+    it('WORKER-role → 403, không gọi use case (guard mirror detail)', async () => {
+      await expect(controller.getCrews('w1', workerReq() as never)).rejects.toThrow(ForbiddenException);
+      expect(crewsMock.execute).not.toHaveBeenCalled();
+    });
+
+    it('worker không có membership → { data: [] }', async () => {
+      crewsMock.execute.mockResolvedValue({ memberships: [] });
+      const res = await controller.getCrews('w1', adminReq() as never);
+      expect(res.data).toEqual([]);
+    });
+
+    it('read-only — không ghi audit (không nhận actor/meta, chỉ workerId)', async () => {
+      crewsMock.execute.mockResolvedValue({ memberships: [] });
+      await controller.getCrews('w1', adminReq() as never);
+      expect(crewsMock.execute).toHaveBeenCalledWith({ workerId: 'w1' });
+      expect(Object.keys(crewsMock.execute.mock.calls[0][0])).toEqual(['workerId']);
+    });
+  });
+
+  describe('ORG-05 workers enrichment — crews[] ở list + detail', () => {
+    it('GET search: crewsByUserId được merge vào từng profile', async () => {
+      searchMock.execute.mockResolvedValue({
+        entities: [makeWorker('w1')],
+        total: 1,
+        crewsByUserId: new Map([['w1', [{ crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', memberRole: 'LEAD' }]]]),
+      });
+      const res = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      expect(res.data[0].crews).toEqual([{ crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', memberRole: 'LEAD' }]);
+    });
+
+    it('GET detail: crews từ use case được kèm vào profile', async () => {
+      getMock.execute.mockResolvedValue({
+        entity: makeWorker('w1'),
+        crews: [{ crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', memberRole: 'MEMBER' }],
+      });
+      const res = await controller.getOne('w1', pmReq() as never);
+      expect(res.crews).toEqual([{ crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', memberRole: 'MEMBER' }]);
     });
   });
 });

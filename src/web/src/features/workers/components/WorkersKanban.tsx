@@ -154,6 +154,10 @@ export function WorkersKanban() {
             metas: [
               { icon: 'hash', text: w.employeeCode ?? '—' },
               { icon: 'mail', text: w.email },
+              // ORG-03/ORG-05 — meta dòng đội từ crews[] (API link slice).
+              ...((w.crews?.length ?? 0) > 0
+                ? [{ icon: 'user' as const, text: (w.crews ?? []).map((c) => c.crewCode).join(', ') }]
+                : []),
             ],
             badge: statusLabel(w.status),
             badgeTone: statusTone(w.status),

@@ -237,6 +237,8 @@ export function CrewList() {
                   <th>Mã</th>
                   <th>Trạng thái</th>
                   <th>Điều kiện phân công</th>
+                  <th>Trưởng nhóm</th>
+                  <th>Thành viên</th>
                   <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
@@ -257,6 +259,14 @@ export function CrewList() {
                         {c.eligible ? 'Đủ điều kiện phân công' : 'Không nhận việc mới'}
                       </span>
                     </td>
+                    <td>
+                      {c.leaderUserId ? (
+                        <span style={{ fontSize: '0.88rem' }}>{c.leaderName ?? `${c.leaderUserId.slice(0, 8)}…`}</span>
+                      ) : (
+                        <span className="bf-badge bf-badge-busy">Chưa có Lead</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '0.88rem' }}>{c.memberCount ?? '—'}</td>
                     <td className="bf-cell-actions">
                       <span className="bf-row-actions">
                         <Tooltip content="Xem chi tiết đội">

@@ -291,6 +291,7 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 | Endpoint | ADMIN | PROJECT_MANAGER | WORKER-role | Anon |
 | --- | --- | --- | --- | --- |
 | `GET /api/v1/workers`, `GET /api/v1/workers/:id` | OK | OK (read-only) | `403` | `401` |
+| `GET /api/v1/workers/:workerId/crews` (ORG-03/ORG-05 Worker ↔ Crew link, xem `ENDPOINTS.md` §8.2) | OK | OK (read-only) | `403` | `401` |
 | `GET /api/v1/contractors`, `GET /api/v1/contractors/:id` | OK | OK (read-only) | `403` | `401` |
 | `GET /api/v1/trades`, `GET /api/v1/trades/:id` | OK | OK (read-only) | `403` | `401` |
 | `POST`/`PATCH` workers/contractors/trades, `PATCH .../:id/status`, `GET .../:id/open-work` | OK | `403` | `403` | `401` |
@@ -311,6 +312,7 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 - **Field-level filter errors:** lỗi validation filter trả `400 { statusCode, message, fieldErrors: { <field>: [msg] } }`, `message` giữ nguyên text cũ (web hiện chỉ đọc `message` nên không break).
 - **Current data:** các GET search + detail trả `Cache-Control: no-store` (qua `@Header`).
 - **Eligibility (ORG-SRS-008, `#31`):** endpoint điều kiện nhận việc thuộc [`ENDPOINTS.md`](ENDPOINTS.md) §9 — read-only, không ghi audit.
+- **Liên kết Worker ↔ Crew (ORG-03/ORG-05, BR-06 — xem `ENDPOINTS.md` §8.2, W1–W6):** `GET /api/v1/workers/:workerId/crews` (`GetWorkerCrewsUseCase`, pattern read-only `GetWorkerOpenWorkUseCase` — không tx, không audit; chỉ active memberships kèm `crewStatus`/`memberRole`/dates) với guard mirror `GET /workers/:id` (`ADMIN` + `PROJECT_MANAGER` read-only). Enrichment: worker list/detail kèm `crews[]` (`{ crewId, crewCode, crewName, memberRole }`, batch 1 query `findMembershipsByUserIds` tránh N+1); crews list kèm `leaderName` (join `users` qua LEAD active) + `memberCount` (COUNT `crew_members` active, batch 1 query `findListEnrichments`). KHÔNG đổi add/remove member, leader-swap (D1) hay eligibility.
 - **Khu vực dự án (PRJ-SRS-003, `#34`, xem `ENDPOINTS.md` §13):** `GET`/`POST /api/v1/projects/:projectId/areas` và `PATCH /api/v1/projects/:projectId/areas/:areaId` trong module `prj` (reads `GET /projects` ở lại iam). Writes = `PROJECT_WRITE_ROLES` + ACTIVE membership scope (ADMIN bypass, non-member PM → `403`); reads mở mọi ACTIVE member (kể cả WORKER — WO picker tương lai). Một cấp (không `parent_id`); trùng tên active → `409 AREA_DUPLICATE`, trùng mã → `409 AREA_CODE_DUPLICATE` (constraint-cụ-thể-trước, bare `23505` rethrow); double-deactivate idempotent `alreadyInactive`; audit `PRJ_PROJECT_AREA_ADDED`/`PRJ_PROJECT_AREA_UPDATED` tx-embedded (`entityType` `PROJECT`).
 - **Bounded decisions** (chi tiết ở `ENDPOINTS.md` §7): team filter defer `#29` đã resolved cho crews; team filter workers defer `#30` (D9) đã đóng; project scope N/A (org-level directory, enforcement = role scope); PII giữ `email`/`phone` phục vụ điều phối, mapper không đổi.
 

@@ -7,6 +7,7 @@ import { USER_REPOSITORY } from '../src/modules/iam/domain/repository/user-repos
 import { HASHER_PORT } from '../src/modules/iam/application/port/hasher.port';
 import { AUDIT_PORT } from '../src/modules/iam/application/port/audit.port';
 import { WORKER_REPOSITORY } from '../src/modules/org/domain/repository/worker-repository.port';
+import { CREW_REPOSITORY } from '../src/modules/org/domain/repository/crew-repository.port';
 import { CONTRACTOR_REPOSITORY } from '../src/modules/org/domain/repository/contractor-repository.port';
 import { TRADE_REPOSITORY } from '../src/modules/org/domain/repository/trade-repository.port';
 import { TRANSACTION_PORT } from '../src/modules/iam/application/port/transaction.port';
@@ -167,6 +168,14 @@ describe('ORG-SRS-005 resource directory (e2e HTTP contract)', () => {
       countActiveUsage: jest.fn(async () => 0),
     };
 
+    // ORG-05 (Worker ↔ Crew link) — worker search/detail use-case nay batch
+    // memberships qua CREW_REPOSITORY (mock rỗng: workers không thuộc đội nào).
+    const mockCrewRepo = {
+      findMembershipsByUser: jest.fn(async () => []),
+      findMembershipsByUserIds: jest.fn(async () => []),
+      findListEnrichments: jest.fn(async () => new Map()),
+    };
+
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(USER_REPOSITORY).useValue(mockUserRepo)
       .overrideProvider(HASHER_PORT).useValue(mockHasher)
@@ -175,6 +184,7 @@ describe('ORG-SRS-005 resource directory (e2e HTTP contract)', () => {
       .overrideProvider(WORKER_REPOSITORY).useValue(mockWorkerRepo)
       .overrideProvider(CONTRACTOR_REPOSITORY).useValue(mockContractorRepo)
       .overrideProvider(TRADE_REPOSITORY).useValue(mockTradeRepo)
+      .overrideProvider(CREW_REPOSITORY).useValue(mockCrewRepo)
       .compile();
 
     app = moduleRef.createNestApplication();

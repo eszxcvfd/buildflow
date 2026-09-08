@@ -1,11 +1,11 @@
 {
-  "digits": "RMA8OZ",
-  "crewA": "67befa98-6432-42b4-b3cd-77790c93b3ce",
-  "crewB": "2d2b5662-2b7a-45b6-9d89-6ba905a93bf3",
-  "crewCodeA": "DTA-RMA8OZ",
-  "crewCodeB": "DTB-RMA8OZ",
-  "memberB": "43955393-2418-431e-832f-f439a1d28273",
-  "today": "2026-09-07",
+  "digits": "S6N5ZL",
+  "crewA": "a4faee4a-3fb1-4f1e-87af-96c14ff1eb12",
+  "crewB": "5e9a9fad-1be6-4ac4-bb10-115c840aea91",
+  "crewCodeA": "DTA-S6N5ZL",
+  "crewCodeB": "DTB-S6N5ZL",
+  "memberB": "6ddf205e-bfb8-4162-ad87-0e8ad41d9789",
+  "today": "2026-09-08",
   "worker1": "33333333-3333-4333-8333-333333333333",
   "worker2": "44444444-4444-4444-8444-444444444444",
   "worker3": "55555555-5555-4555-8555-555555555555",
@@ -16,7 +16,7 @@
     {
       "id": "S1",
       "ok": true,
-      "note": "UI 201 + list hiện Lê Văn Hậu; DB MEMBER|true|2026-09-07; audit ORG_CREW_MEMBER_ADDED=1"
+      "note": "UI 201 + list hiện Lê Văn Hậu; DB MEMBER|true|2026-09-08; audit ORG_CREW_MEMBER_ADDED=1"
     },
     {
       "id": "S2",
@@ -26,12 +26,12 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "UI success + banner overlap; audit có _warning; memberB=43955393…"
+      "note": "UI success + banner overlap; audit có _warning; memberB=6ddf205e…"
     },
     {
       "id": "S4",
       "ok": true,
-      "note": "UI Đã rời; DB false|2026-09-07; audit REMOVED +1 có reason"
+      "note": "UI Đã rời; DB false|2026-09-08; audit REMOVED +1 có reason"
     },
     {
       "id": "S5",
@@ -41,7 +41,7 @@
     {
       "id": "S6",
       "ok": true,
-      "note": "at=2026-09-07 thấy worker2; row 2026-09-07|2026-09-07|false nguyên vẹn"
+      "note": "at=2026-09-08 thấy worker2; row 2026-09-08|2026-09-08|false nguyên vẹn"
     },
     {
       "id": "S7",
@@ -56,7 +56,7 @@
     {
       "id": "S9",
       "ok": true,
-      "note": "URL tab=workers&crew=67befa98-6432-42b4-b3cd-77790c93b3ce&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
+      "note": "URL tab=workers&crew=a4faee4a-3fb1-4f1e-87af-96c14ff1eb12&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
     },
     {
       "id": "S10",

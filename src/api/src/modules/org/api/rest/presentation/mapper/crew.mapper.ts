@@ -1,5 +1,5 @@
 import { CrewEntity } from '../../../../domain/entity/crew.entity';
-import { CrewMemberRow } from '../../../../domain/repository/crew-repository.port';
+import { CrewListEnrichment, CrewMemberRow } from '../../../../domain/repository/crew-repository.port';
 import { CrewResponseDto, CrewMemberResponseDto } from '../dto/crew.dto';
 
 export function toCrewResponse(entity: CrewEntity): CrewResponseDto {
@@ -19,8 +19,19 @@ export function toCrewResponse(entity: CrewEntity): CrewResponseDto {
   };
 }
 
-export function toCrewListResponse(entities: CrewEntity[]): CrewResponseDto[] {
-  return entities.map(toCrewResponse);
+/** ORG-05 — GET /crews: profile kèm leaderName/memberCount (thiếu map → null/0). */
+export function toCrewListResponse(
+  entities: CrewEntity[],
+  enrichments?: Map<string, CrewListEnrichment>,
+): CrewResponseDto[] {
+  return entities.map((e) => {
+    const enrichment = enrichments?.get(e.id);
+    return {
+      ...toCrewResponse(e),
+      leaderName: enrichment?.leaderName ?? null,
+      memberCount: enrichment?.memberCount ?? 0,
+    };
+  });
 }
 
 /** ORG-SRS-007 (issue #30) — map CrewMemberRow sang response DTO. */

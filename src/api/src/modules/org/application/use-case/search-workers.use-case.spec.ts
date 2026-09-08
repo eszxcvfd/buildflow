@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { SearchWorkersUseCase } from './search-workers.use-case';
 import { WorkerRepositoryPort } from '../../domain/repository/worker-repository.port';
+import { CrewRepositoryPort } from '../../domain/repository/crew-repository.port';
 import { WorkerEntity } from '../../domain/entity/worker.entity';
 import { UserEntity } from '../../../iam/domain/entity/user.entity';
 
@@ -31,6 +32,7 @@ function makeWorker(id: string, status: string, tradeId?: string): WorkerEntity 
 describe('SearchWorkersUseCase ORG-SRS-001', () => {
   const TRADE_ID = '11111111-1111-4111-8111-111111111111';
   let workerRepo: jest.Mocked<WorkerRepositoryPort>;
+  let crewRepo: jest.Mocked<CrewRepositoryPort>;
   let useCase: SearchWorkersUseCase;
 
   beforeEach(() => {
@@ -50,8 +52,11 @@ describe('SearchWorkersUseCase ORG-SRS-001', () => {
       save: jest.fn(),
       findActiveTradesByUserId: jest.fn(),
     } as unknown as jest.Mocked<WorkerRepositoryPort>;
+    crewRepo = {
+      findMembershipsByUserIds: jest.fn(async () => []),
+    } as unknown as jest.Mocked<CrewRepositoryPort>;
 
-    useCase = new SearchWorkersUseCase(workerRepo);
+    useCase = new SearchWorkersUseCase(workerRepo, crewRepo);
   });
 
   it('CRUD/search và filter đúng', async () => {
@@ -127,6 +132,30 @@ describe('SearchWorkersUseCase ORG-SRS-001', () => {
       statusCode: 400,
       message: 'Crew ID không hợp lệ',
       fieldErrors: { crewId: ['Crew ID không hợp lệ'] },
+    });
+  });
+
+  describe('ORG-05 workers enrichment — crewsByUserId (1 query batch)', () => {
+    it('batch memberships 1 lần cho cả trang và nhóm theo userId', async () => {
+      crewRepo.findMembershipsByUserIds.mockResolvedValue([
+        { userId: 'w1', crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', crewStatus: 'ACTIVE', memberRole: 'LEAD', effectiveFrom: '2026-09-01', effectiveTo: null },
+        { userId: 'w1', crewId: 'c2', crewCode: 'CREW-B', crewName: 'Đội B', crewStatus: 'INACTIVE', memberRole: 'MEMBER', effectiveFrom: '2026-08-01', effectiveTo: null },
+      ]);
+      const out = await useCase.execute({ status: 'ACTIVE' });
+      expect(crewRepo.findMembershipsByUserIds).toHaveBeenCalledTimes(1);
+      expect(crewRepo.findMembershipsByUserIds).toHaveBeenCalledWith(['w1', 'w3']);
+      expect(out.crewsByUserId.get('w1')).toEqual([
+        { crewId: 'c1', crewCode: 'CREW-A', crewName: 'Đội A', memberRole: 'LEAD' },
+        { crewId: 'c2', crewCode: 'CREW-B', crewName: 'Đội B', memberRole: 'MEMBER' },
+      ]);
+      expect(out.crewsByUserId.get('w3')).toBeUndefined();
+    });
+
+    it('trang rỗng → không query memberships', async () => {
+      const out = await useCase.execute({ search: 'no-such-worker-xyz' });
+      expect(out.entities).toEqual([]);
+      expect(crewRepo.findMembershipsByUserIds).not.toHaveBeenCalled();
+      expect(out.crewsByUserId.size).toBe(0);
     });
   });
 });

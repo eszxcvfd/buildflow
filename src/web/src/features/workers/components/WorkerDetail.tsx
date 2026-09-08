@@ -14,6 +14,7 @@ import {
   RESOURCE_ACTION_LABEL,
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline, statusTimelineHref, TimelineExternalIcon } from '@/features/resources/components/StatusTimeline';
+import { WorkerCrews } from './WorkerCrews';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -312,6 +313,8 @@ export function WorkerDetail({ id }: { id: string }) {
           onRefresh={() => void loadEligibility()}
         />
       </Card>
+
+      <WorkerCrews workerId={worker.id} workerName={worker.fullName} />
 
       <Card>
         <div className="bf-card-head">

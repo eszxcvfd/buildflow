@@ -107,6 +107,13 @@ describe('CrewDetail ORG-SRS-006', () => {
     expect(listMembersMock).toHaveBeenCalledWith('crew-1', {});
   });
 
+  it('ORG-03/ORG-05: trưởng nhóm profile link sang /workers/:id', async () => {
+    render(<CrewDetail id="crew-1" />);
+    await waitFor(() => expect(screen.getByText('Doi ket cau')).not.toBeNull());
+    const leadLink = (await screen.findAllByRole('link', { name: 'Nguyen Van Lead · NV-001' }))[0] as HTMLAnchorElement;
+    expect(leadLink.getAttribute('href')).toBe('/workers/11111111-1111-4111-8111-111111111111');
+  });
+
   it('404 hiển thị not-found + retry', async () => {
     getCrewMock.mockRejectedValue({ status: 404, message: 'Not found' });
     render(<CrewDetail id="missing" />);

@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WorkerDetail } from './WorkerDetail';
-import { getWorker } from '@/lib/api/workers';
+import { getWorker, getWorkerCrews } from '@/lib/api/workers';
 import { checkWorkerEligibility } from '@/lib/api/eligibility';
 import { listTrades } from '@/lib/api/trades';
 import { listAuditLogs } from '@/lib/api/audit-logs';
@@ -10,6 +10,13 @@ jest.mock('@/lib/api/workers', () => ({
   updateWorker: jest.fn(),
   changeWorkerLifecycleStatus: jest.fn(),
   getWorkerOpenWork: jest.fn(),
+  getWorkerCrews: jest.fn(),
+}));
+jest.mock('@/lib/api/crews', () => ({
+  listCrews: jest.fn(),
+  listCrewMembers: jest.fn(),
+  addCrewMember: jest.fn(),
+  removeCrewMember: jest.fn(),
 }));
 jest.mock('@/lib/api/eligibility', () => ({
   checkWorkerEligibility: jest.fn(),
@@ -20,6 +27,7 @@ jest.mock('@/lib/api/trades', () => ({ listTrades: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
 
 const getWorkerMock = getWorker as jest.Mock;
+const getWorkerCrewsMock = getWorkerCrews as jest.Mock;
 const checkEligibilityMock = checkWorkerEligibility as jest.Mock;
 const listTradesMock = listTrades as jest.Mock;
 const listAuditLogsMock = listAuditLogs as jest.Mock;
@@ -65,6 +73,9 @@ function eligibility(overrides = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   getWorkerMock.mockResolvedValue(worker());
+  // ORG-03/ORG-05 — section 'Đội thi công' mặc định rỗng để không nhiễu
+  // các assert eligibility (tránh thêm nút 'Thử lại' thứ hai khi lỗi).
+  getWorkerCrewsMock.mockResolvedValue([]);
   checkEligibilityMock.mockResolvedValue(eligibility());
   listTradesMock.mockResolvedValue({ data: [], total: 0, limit: 100, offset: 0 });
   listAuditLogsMock.mockResolvedValue({ data: [], total: 0, limit: 10, offset: 0 });

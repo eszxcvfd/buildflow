@@ -108,6 +108,31 @@ describe('WorkerList (ORG-SRS-001 + #27)', () => {
     expect(await screen.findByText(/Chưa có worker nào phù hợp bộ lọc/)).toBeTruthy();
   });
 
+  it('ORG-03/ORG-05: cột Đội hiển thị tối đa 2 code + +n, title đầy đủ; trống → —', async () => {
+    listMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...workerA,
+          crews: [
+            { crewId: 'c-1', crewCode: 'TEAM-001', crewName: 'Doi ket cau', memberRole: 'LEAD' },
+            { crewId: 'c-2', crewCode: 'TEAM-002', crewName: 'Doi hoan thien', memberRole: 'MEMBER' },
+            { crewId: 'c-3', crewCode: 'TEAM-003', crewName: 'Doi dien nuoc', memberRole: 'MEMBER' },
+          ],
+        },
+        workerB,
+      ],
+      total: 2,
+      limit: 20,
+      offset: 0,
+    });
+    render(<WorkerList />);
+    expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
+    const cell = screen.getByText('TEAM-001, TEAM-002 +1');
+    expect((cell as HTMLElement).getAttribute('title')).toBe(
+      'TEAM-001 — Doi ket cau, TEAM-002 — Doi hoan thien, TEAM-003 — Doi dien nuoc',
+    );
+  });
+
   it('shows 401 login link on session expiry', async () => {
     listMock.mockRejectedValueOnce({ status: 401, message: 'Phiên hết hạn' });
     render(<WorkerList />);

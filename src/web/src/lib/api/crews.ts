@@ -16,6 +16,12 @@ export interface Crew {
   status: 'ACTIVE' | 'INACTIVE' | string;
   eligible: boolean;
   leaderUserId: string | null;
+  /**
+   * ORG-05 (link-api slice) — chỉ có ở GET list: tên trưởng nhóm
+   * (join users qua LEAD active, null khi chưa có LEAD) + số thành viên active.
+   */
+  leaderName?: string | null;
+  memberCount?: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

@@ -24,9 +24,10 @@ import { GetWorkerUseCase } from '../../../application/use-case/get-worker.use-c
 import { SearchWorkersUseCase } from '../../../application/use-case/search-workers.use-case';
 import { StatusTransitionWorkerUseCase } from '../../../application/use-case/status-transition-worker.use-case';
 import { GetWorkerOpenWorkUseCase } from '../../../application/use-case/get-worker-open-work.use-case';
+import { GetWorkerCrewsUseCase } from '../../../application/use-case/get-worker-crews.use-case';
 import { CreateWorkerDto, UpdateWorkerDto } from '../presentation/dto/worker.dto';
 import { ChangeResourceStatusDto } from '../presentation/dto/resource-status.dto';
-import { toWorkerResponse, toWorkerListResponse } from '../presentation/mapper/worker.mapper';
+import { toWorkerResponse, toWorkerDetailResponse, toWorkerListResponse, toWorkerCrewMembershipListResponse } from '../presentation/mapper/worker.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
 function assertAdmin(req: Request): TokenPayload {
@@ -76,6 +77,7 @@ export class WorkersController {
     private readonly searchWorkers: SearchWorkersUseCase,
     private readonly transitionWorkerStatus: StatusTransitionWorkerUseCase,
     private readonly getWorkerOpenWork: GetWorkerOpenWorkUseCase,
+    private readonly getWorkerCrews: GetWorkerCrewsUseCase,
   ) {}
 
   @Post()
@@ -162,7 +164,9 @@ export class WorkersController {
     if (order !== undefined && order !== '' && !['asc', 'desc'].includes(order)) {
       filterError('order', 'Order không hợp lệ (asc|desc)');
     }
-    const { entities, total } = await this.searchWorkers.execute({
+    // ORG-05 — use-case đã batch crews (1 query, tránh N+1); mock cũ thiếu
+    // crewsByUserId → mapper mặc định [].
+    const { entities, total, crewsByUserId } = await this.searchWorkers.execute({
       status: status || undefined,
       search: search || undefined,
       tradeId: tradeId || undefined,
@@ -173,15 +177,30 @@ export class WorkersController {
       limit: parsedLimit,
       offset: parsedOffset,
     });
-    return { data: toWorkerListResponse(entities), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
+    return { data: toWorkerListResponse(entities, crewsByUserId), total, limit: parsedLimit ?? 20, offset: parsedOffset ?? 0 };
   }
 
   @Get(':id')
   @Header('Cache-Control', 'no-store')
   async getOne(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     requireRoles(req as unknown as { user?: { roles?: string[] } }, DIRECTORY_READ_ROLES);
-    const { entity } = await this.getWorker.execute({ workerId: id });
-    return toWorkerResponse(entity);
+    // ORG-05 — detail kèm active memberships (mock cũ thiếu crews → []).
+    const { entity, crews } = await this.getWorker.execute({ workerId: id });
+    return toWorkerDetailResponse(entity, crews ?? []);
+  }
+
+  /**
+   * ORG-03/ORG-05 (Worker ↔ Crew link) — tra cứu đội của worker.
+   * Guard mirror GET /workers/:id (ADMIN + PROJECT_MANAGER read-only);
+   * read-only như open-work: không ghi audit. Chỉ active memberships
+   * (is_active); lịch sử cũ (is_active=false) KHÔNG trả.
+   */
+  @Get(':id/crews')
+  @Header('Cache-Control', 'no-store')
+  async getCrews(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    requireRoles(req as unknown as { user?: { roles?: string[] } }, DIRECTORY_READ_ROLES);
+    const { memberships } = await this.getWorkerCrews.execute({ workerId: id });
+    return { data: toWorkerCrewMembershipListResponse(memberships) };
   }
 
   @Patch(':id')

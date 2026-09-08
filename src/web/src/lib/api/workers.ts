@@ -5,6 +5,13 @@ export interface WorkerTrade {
   isActive?: boolean;
 }
 
+export interface WorkerCrewRef {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+  memberRole: 'LEAD' | 'MEMBER' | string;
+}
+
 export interface Worker {
   id: string;
   email: string;
@@ -17,8 +24,27 @@ export interface Worker {
   status: 'ACTIVE' | 'INACTIVE' | 'LOCKED' | string;
   trades: WorkerTrade[];
   eligible: boolean;
+  /**
+   * ORG-03/ORG-05 (link-api slice) — active memberships, chỉ có ở
+   * GET list/detail; create/update/status không trả key này.
+   */
+  crews?: WorkerCrewRef[];
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * ORG-03/ORG-05 — item của `GET /api/v1/workers/:workerId/crews`
+ * (active only; lịch sử is_active=false KHÔNG trả).
+ */
+export interface WorkerCrewMembership {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+  crewStatus: 'ACTIVE' | 'INACTIVE' | string;
+  memberRole: 'LEAD' | 'MEMBER' | string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
 }
 
 /**
@@ -215,6 +241,28 @@ export async function getWorker(id: string): Promise<Worker> {
     await parseError(res, `Lấy worker thất bại (${res.status})`);
   }
   return (await res.json()) as Worker;
+}
+
+/**
+ * ORG-03/ORG-05 (Worker ↔ Crew link) — đội hiện tại của worker.
+ * Guard mirror GET /workers/:id (ADMIN + PROJECT_MANAGER); read-only,
+ * chỉ active memberships. Reads dùng `cache: 'no-store'`.
+ */
+export async function getWorkerCrews(id: string): Promise<WorkerCrewMembership[]> {
+  const base = getApiBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/v1/workers/${encodeURIComponent(id)}/crews`, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    await parseError(res, `Danh sách đội của worker thất bại (${res.status})`);
+  }
+  const body = (await res.json()) as { data: WorkerCrewMembership[] };
+  return body.data ?? [];
 }
 
 export async function createWorker(payload: CreateWorkerPayload): Promise<Worker> {

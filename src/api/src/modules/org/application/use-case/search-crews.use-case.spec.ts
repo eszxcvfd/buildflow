@@ -29,6 +29,7 @@ describe('SearchCrewsUseCase ORG-SRS-006 (issue #29)', () => {
       insertLeadWithClient: jest.fn(),
       deactivateActiveLeadWithClient: jest.fn(),
       countOpenAssignments: jest.fn(async () => 0),
+      findListEnrichments: jest.fn(async () => new Map()),
     } as unknown as jest.Mocked<CrewRepositoryPort>;
     useCase = new SearchCrewsUseCase(repo);
   });
@@ -71,5 +72,22 @@ describe('SearchCrewsUseCase ORG-SRS-006 (issue #29)', () => {
       expect(res.fieldErrors).toBeDefined();
     }
     expect(repo.findMany).not.toHaveBeenCalled();
+  });
+
+  describe('ORG-05 crews list enrichment — leaderName + memberCount', () => {
+    it('batch enrichments 1 lần cho cả trang và forward kèm output', async () => {
+      const enrichments = new Map([['11111111-1111-4111-8111-111111111111', { leaderName: 'Nguyen Van A', memberCount: 3 }]]);
+      (repo.findListEnrichments as jest.Mock).mockResolvedValue(enrichments);
+      const out = await useCase.execute({ status: 'ACTIVE' });
+      expect(repo.findListEnrichments).toHaveBeenCalledTimes(1);
+      expect(repo.findListEnrichments).toHaveBeenCalledWith(['11111111-1111-4111-8111-111111111111']);
+      expect(out.enrichments).toBe(enrichments);
+      expect(out.total).toBe(1);
+    });
+
+    it('validation lỗi → không gọi findMany lẫn findListEnrichments', async () => {
+      await expect(useCase.execute({ status: 'LOCKED' })).rejects.toThrow(BadRequestException);
+      expect(repo.findListEnrichments).not.toHaveBeenCalled();
+    });
   });
 });

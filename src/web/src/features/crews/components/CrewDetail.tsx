@@ -226,9 +226,13 @@ export function CrewDetail({ id }: { id: string }) {
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
             <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trưởng nhóm</dt>
             <dd style={{ margin: 0 }}>
-              {crew.leaderUserId
-                ? (leaderName ?? `${crew.leaderUserId.slice(0, 8)}…`)
-                : '— chưa chỉ định —'}
+              {crew.leaderUserId ? (
+                <a href={`/workers/${crew.leaderUserId}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
+                  {leaderName ?? `${crew.leaderUserId.slice(0, 8)}…`}
+                </a>
+              ) : (
+                '— chưa chỉ định —'
+              )}
             </dd>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>

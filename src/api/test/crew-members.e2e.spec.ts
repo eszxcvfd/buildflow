@@ -11,6 +11,7 @@ import { CREW_REPOSITORY, CrewMemberRow } from '../src/modules/org/domain/reposi
 import { TRANSACTION_PORT } from '../src/modules/iam/application/port/transaction.port';
 import { UserEntity } from '../src/modules/iam/domain/entity/user.entity';
 import { CrewEntity } from '../src/modules/org/domain/entity/crew.entity';
+import { WorkerEntity } from '../src/modules/org/domain/entity/worker.entity';
 
 // ORG-SRS-007 (issue #30) — crew members HTTP contract (supertest, in-process,
 // mocks qua overrideProvider như resource-directory.e2e.spec.ts):
@@ -219,11 +220,45 @@ describe('ORG-SRS-007 crew members (e2e HTTP contract)', () => {
         if (!crew) return null;
         return { id: crew.id, code: crew.code, name: crew.name, status: crew.status };
       }),
+      // ORG-03/ORG-05 (Worker ↔ Crew link) + ORG-05 enrichments — mock theo
+      // cùng `members` seed (chỉ active; lịch sử is_active=false KHÔNG trả).
+      findMembershipsByUser: jest.fn(async (userId: string) =>
+        members
+          .filter((m) => m.userId === userId && m.isActive)
+          .map((m) => {
+            const crew = crewsById.get(m.crewId);
+            return { crewId: m.crewId, crewCode: crew?.code ?? '', crewName: crew?.name ?? '', crewStatus: crew?.status ?? 'ACTIVE', memberRole: m.memberRole, effectiveFrom: m.effectiveFrom, effectiveTo: m.effectiveTo };
+          })),
+      findMembershipsByUserIds: jest.fn(async (userIds: string[]) =>
+        members
+          .filter((m) => userIds.includes(m.userId) && m.isActive)
+          .map((m) => {
+            const crew = crewsById.get(m.crewId);
+            return { userId: m.userId, crewId: m.crewId, crewCode: crew?.code ?? '', crewName: crew?.name ?? '', crewStatus: crew?.status ?? 'ACTIVE', memberRole: m.memberRole, effectiveFrom: m.effectiveFrom, effectiveTo: m.effectiveTo };
+          })),
+      findListEnrichments: jest.fn(async (crewIds: string[]) => {
+        const map = new Map<string, { leaderName: string | null; memberCount: number }>();
+        for (const crewId of crewIds) {
+          const active = members.filter((m) => m.crewId === crewId && m.isActive);
+          const lead = active.find((m) => m.memberRole === 'LEAD');
+          map.set(crewId, {
+            leaderName: lead ? (usersById.get(lead.userId)?.fullName ?? lead.userName ?? null) : null,
+            memberCount: active.length,
+          });
+        }
+        return map;
+      }),
     };
 
     workerFindMany = jest.fn(async () => ({ entities: [], total: 0 }));
     const mockWorkerRepo = {
-      findById: jest.fn(async () => null),
+      // ORG-03/ORG-05 — GET /workers/:id/crews resolve worker từ users seed
+      // (user_type WORKER mới có hồ sơ; còn lại null → 404).
+      findById: jest.fn(async (id: string) => {
+        const u = usersById.get(id);
+        if (!u || u.userType !== 'WORKER') return null;
+        return new WorkerEntity({ user: u, trades: [] });
+      }),
       findMany: workerFindMany,
       findByEmployeeCode: jest.fn(async () => null),
       save: jest.fn(async () => {}),
@@ -456,5 +491,41 @@ describe('ORG-SRS-007 crew members (e2e HTTP contract)', () => {
       message: 'Crew ID không hợp lệ',
       fieldErrors: { crewId: ['Crew ID không hợp lệ'] },
     });
+  });
+
+  it('GET workers/:id/crews: ADMIN+PM 200 active-only; WORKER 403; anon 401; unknown 404', async () => {
+    // U2 seed active MEMBER ở CREW_B từ đầu suite; U1 đã rời CREW_A (inactive)
+    // nên data của U1 không chứa membership CREW_A nào active.
+    const pmToken = await login('pm-e2e@example.com');
+    const adminToken = await login('admin-e2e@example.com');
+    const workerToken = await login('worker-e2e@example.com');
+
+    await request(app.getHttpServer()).get(`/api/v1/workers/${U2}/crews`).expect(401);
+    await request(app.getHttpServer())
+      .get(`/api/v1/workers/${U2}/crews`)
+      .set('Authorization', `Bearer ${workerToken}`)
+      .expect(403);
+
+    for (const token of [pmToken, adminToken]) {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/workers/${U2}/crews`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.body.data).toEqual(expect.arrayContaining([
+        expect.objectContaining({ crewId: CREW_B, crewCode: 'CREW-B', crewName: 'Đội CREW-B', crewStatus: 'ACTIVE', memberRole: 'MEMBER', effectiveFrom: '2026-08-20', effectiveTo: null }),
+      ]));
+    }
+
+    const u1 = await request(app.getHttpServer())
+      .get(`/api/v1/workers/${U1}/crews`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .expect(200);
+    expect((u1.body.data as Array<{ crewId: string }>).some((m) => m.crewId === CREW_A)).toBe(false);
+
+    await request(app.getHttpServer())
+      .get('/api/v1/workers/99999999-9999-4999-8999-999999999999/crews')
+      .set('Authorization', `Bearer ${pmToken}`)
+      .expect(404);
   });
 });

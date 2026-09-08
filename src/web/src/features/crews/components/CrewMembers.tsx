@@ -327,7 +327,12 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
               >
                 <div>
                   <div style={{ fontWeight: 600 }}>
-                    {memberDisplayName(m, workerNames)}{' '}
+                    <a
+                      href={`/workers/${m.userId}`}
+                      style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}
+                    >
+                      {memberDisplayName(m, workerNames)}
+                    </a>{' '}
                     <span
                       className={m.memberRole === 'LEAD' ? 'bf-badge-info' : 'bf-badge-neutral'}
                       style={{ fontWeight: 500, fontSize: '0.75rem' }}

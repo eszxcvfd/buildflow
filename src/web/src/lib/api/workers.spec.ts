@@ -1,6 +1,7 @@
 import {
   listWorkers,
   getWorker,
+  getWorkerCrews,
   type Worker,
 } from './workers';
 
@@ -122,5 +123,15 @@ describe('web worker API client ORG-SRS-005 (issue #28)', () => {
     const res = await listWorkers({});
     expect(res.data).toHaveLength(1);
     expect(res.total).toBe(1);
+  });
+
+  it('ORG-03/ORG-05 — getWorkerCrews gọi GET /workers/:id/crews no-store + trả data', async () => {
+    fetchMock.mockResolvedValue(response(200, { data: [{ crewId: 'c-1', crewCode: 'TEAM-001' }] }));
+    const res = await getWorkerCrews('11111111-1111-4111-8111-111111111111');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.example.test/api/v1/workers/11111111-1111-4111-8111-111111111111/crews',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+    expect(res).toHaveLength(1);
   });
 });

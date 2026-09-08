@@ -56,6 +56,12 @@ export class CrewResponseDto {
   createdBy!: string;
   createdAt!: string;
   updatedAt!: string;
+  /**
+   * ORG-05 — chỉ có ở GET list (search): tên trưởng nhóm (join users qua
+   * LEAD active, null khi chưa có LEAD) + số thành viên active.
+   */
+  leaderName?: string | null;
+  memberCount?: number;
 }
 
 /**

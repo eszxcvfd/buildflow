@@ -41,6 +41,42 @@ export interface CrewMemberFilter {
   includeInactive?: boolean;
 }
 
+/**
+ * ORG-03/ORG-05 (Worker ↔ Crew link) — active membership (is_active) của một
+ * user trên mọi đội, kèm crew status + role + ngày hiệu lực. Lịch sử cũ
+ * (is_active=false) KHÔNG trả. Pool read thuần SELECT, không transaction.
+ */
+export interface WorkerCrewMembership {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+  crewStatus: 'ACTIVE' | 'INACTIVE';
+  memberRole: 'LEAD' | 'MEMBER';
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+/**
+ * ORG-05 — slim ref cho worker list/detail enrichment
+ * (`crews[]` kèm profile, active only).
+ */
+export interface WorkerCrewRef {
+  crewId: string;
+  crewCode: string;
+  crewName: string;
+  memberRole: 'LEAD' | 'MEMBER';
+}
+
+/**
+ * ORG-05 — enrichment cho crews list: tên trưởng nhóm (join users qua LEAD
+ * đang hiệu lực, null khi đội chưa có LEAD) + số thành viên active
+ * (COUNT crew_members is_active, mọi role LEAD/MEMBER đều tính).
+ */
+export interface CrewListEnrichment {
+  leaderName: string | null;
+  memberCount: number;
+}
+
 export interface CrewRepositoryPort {
   findById(id: string): Promise<CrewEntity | null>;
   findByCode(code: string): Promise<CrewEntity | null>;
@@ -109,6 +145,26 @@ export interface CrewRepositoryPort {
     effectiveFrom: string;
     effectiveTo: string | null;
   }>>;
+  /**
+   * ORG-03/ORG-05 (Worker ↔ Crew link) — active memberships (is_active) của
+   * user trên mọi đội, kèm crew status + role + ngày hiệu lực. Lịch sử cũ
+   * (is_active=false) KHÔNG trả. Pool read thuần SELECT (pattern
+   * findActiveMembershipsByUserId), không transaction, không audit.
+   * Dùng cho `GET /api/v1/workers/:workerId/crews` và worker detail enrichment.
+   */
+  findMembershipsByUser(userId: string): Promise<WorkerCrewMembership[]>;
+  /**
+   * ORG-05 — batch cho worker list enrichment: MỘT query duy nhất cho mọi
+   * userId (`user_id = ANY($1::uuid[])`), tránh N+1. Chỉ active memberships.
+   */
+  findMembershipsByUserIds(userIds: string[]): Promise<Array<WorkerCrewMembership & { userId: string }>>;
+  /**
+   * ORG-05 — batch cho crews list enrichment: MỘT query duy nhất cho mọi
+   * crewId (LEFT JOIN LEAD active → users.full_name + COUNT crew_members
+   * active), tránh N+1. Đội không có trong map → `{ leaderName: null,
+   * memberCount: 0 }` ở use-case layer.
+   */
+  findListEnrichments(crewIds: string[]): Promise<Map<string, CrewListEnrichment>>;
   /**
    * ORG-SRS-008 (issue #31) — trades hiệu lực của đội
    * (`resource_trades` resource_type='CREW', is_active) cho

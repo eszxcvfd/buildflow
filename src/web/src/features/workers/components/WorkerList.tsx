@@ -45,6 +45,17 @@ function statusTone(status: string): { label: string; color: string } {
 
 const PAGE_SIZE = 20;
 
+function crewCell(w: Worker): { text: string; title?: string } {
+  const crews = w.crews ?? [];
+  if (crews.length === 0) return { text: '—' };
+  const full = crews.map((c) => `${c.crewCode} — ${c.crewName}`).join(', ');
+  const shown = crews.slice(0, 2).map((c) => c.crewCode).join(', ');
+  return {
+    text: crews.length > 2 ? `${shown} +${crews.length - 2}` : shown,
+    title: full,
+  };
+}
+
 /**
  * ORG-SRS-004 (issue #27) — lifecycle status worker:
  * - ACTIVE: nút 'Tạm ngừng' (SUSPEND) và 'Chấm dứt' (TERMINATE) — mở confirm dialog
@@ -323,6 +334,7 @@ export function WorkerList() {
                   <th>Trạng thái</th>
                   <th>Điều kiện phân công</th>
                   <th>Ngành nghề</th>
+                  <th>Đội</th>
                   <th style={{ textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
@@ -361,6 +373,9 @@ export function WorkerList() {
                               })
                               .join(', ')
                           : '—'}
+                      </td>
+                      <td style={{ color: '#6b7280', maxWidth: 200 }} title={crewCell(w).title}>
+                        {crewCell(w).text}
                       </td>
                       <td className="bf-cell-actions">
                         <span className="bf-row-actions">

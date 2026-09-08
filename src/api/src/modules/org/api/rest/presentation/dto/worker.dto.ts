@@ -91,4 +91,23 @@ export class WorkerResponseDto {
   eligible!: boolean;
   createdAt!: string;
   updatedAt!: string;
+  /**
+   * ORG-05 — active memberships của worker (chỉ có ở GET list/detail;
+   * create/update/status dùng toWorkerResponse nên không có key này).
+   */
+  crews?: Array<{ crewId: string; crewCode: string; crewName: string; memberRole: 'LEAD' | 'MEMBER' }>;
+}
+
+/**
+ * ORG-03/ORG-05 — item của `GET /api/v1/workers/:workerId/crews`
+ * (active only; lịch sử is_active=false KHÔNG trả).
+ */
+export class WorkerCrewMembershipDto {
+  crewId!: string;
+  crewCode!: string;
+  crewName!: string;
+  crewStatus!: 'ACTIVE' | 'INACTIVE';
+  memberRole!: 'LEAD' | 'MEMBER';
+  effectiveFrom!: string;
+  effectiveTo!: string | null;
 }

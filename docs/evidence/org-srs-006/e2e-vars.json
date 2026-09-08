@@ -1,9 +1,9 @@
 {
-  "digits": "RM9JJR",
-  "crewId": "eb6d6a5f-a337-4348-b642-5e609e2bf4f2",
-  "crewCode": "DCD-RM9JJR",
-  "dsCrewId": "f20d0017-7ed6-44d4-92f5-6a8e8d36ec2e",
-  "dsCode": "DCT-RM9JJR",
+  "digits": "S6NWP4",
+  "crewId": "84fdc59d-9b1a-4f29-a298-684e2f2c8a68",
+  "crewCode": "DCD-S6NWP4",
+  "dsCrewId": "97cafb85-643f-49ae-8b3e-6f2c0a4e65b8",
+  "dsCode": "DCT-S6NWP4",
   "woCode": "PRD-B1-006",
   "woId": "e2e6b300-0000-4000-8000-0000000000b4",
   "asnId": "e2e6c100-0000-4000-8000-0000000000c2",
@@ -13,7 +13,7 @@
     {
       "id": "S1",
       "ok": true,
-      "note": "crewId=eb6d6a5f-a337-4348-b642-5e609e2bf4f2 UI list thấy DCD-RM9JJR; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
+      "note": "crewId=84fdc59d-9b1a-4f29-a298-684e2f2c8a68 UI list thấy DCD-S6NWP4; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
     },
     {
       "id": "S2",
@@ -23,7 +23,7 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "LEAD cũ off false|2026-09-07; LEAD mới LEAD|true|-; audit +1 có before/after leader"
+      "note": "LEAD cũ off false|2026-09-08; LEAD mới LEAD|true|-; audit +1 có before/after leader"
     },
     {
       "id": "S4",
@@ -58,7 +58,7 @@
     {
       "id": "S10",
       "ok": true,
-      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=25732bfc…)"
+      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=0a752699…)"
     },
     {
       "id": "S11",

@@ -201,4 +201,11 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     await waitFor(() => expect(listMembersMock).toHaveBeenCalledTimes(2));
   });
+
+  it('ORG-03/ORG-05: row thành viên link sang /workers/:id', async () => {
+    render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
+    await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    const link = screen.getByRole('link', { name: /Nguyen Van M/ }) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe(`/workers/${USER_ID}`);
+  });
 });

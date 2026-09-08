@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { CrewEntity } from '../../domain/entity/crew.entity';
-import { CrewFilter, CrewMemberFilter, CrewMemberRow, CrewRepositoryPort } from '../../domain/repository/crew-repository.port';
+import { CrewFilter, CrewListEnrichment, CrewMemberFilter, CrewMemberRow, CrewRepositoryPort, WorkerCrewMembership } from '../../domain/repository/crew-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -177,6 +177,81 @@ export class PgCrewRepository implements CrewRepositoryPort {
         ? null
         : toDateOnly(row['effective_to']),
     }));
+  }
+
+  async findMembershipsByUser(userId: string): Promise<WorkerCrewMembership[]> {
+    // ORG-03/ORG-05 (Worker ↔ Crew link) — mirror findActiveMembershipsByUserId
+    // nhưng kèm crew status (join crews). Chỉ active (is_active); lịch sử cũ
+    // (is_active=false) KHÔNG trả. Pool read, không transaction.
+    const r = await this.pool().query(
+      `SELECT m.crew_id AS crew_id, c.code AS crew_code, c.name AS crew_name, c.status AS crew_status,
+        m.member_role AS member_role, m.effective_from AS effective_from, m.effective_to AS effective_to
+       FROM public.crew_members m JOIN public.crews c ON c.id = m.crew_id
+       WHERE m.user_id = $1 AND m.is_active ORDER BY m.effective_from DESC`,
+      [userId],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => ({
+      crewId: String(row['crew_id']),
+      crewCode: String(row['crew_code']),
+      crewName: String(row['crew_name']),
+      crewStatus: row['crew_status'] as 'ACTIVE' | 'INACTIVE',
+      memberRole: row['member_role'] as 'LEAD' | 'MEMBER',
+      effectiveFrom: toDateOnly(row['effective_from']),
+      effectiveTo: row['effective_to'] === null || row['effective_to'] === undefined
+        ? null
+        : toDateOnly(row['effective_to']),
+    }));
+  }
+
+  async findMembershipsByUserIds(userIds: string[]): Promise<Array<WorkerCrewMembership & { userId: string }>> {
+    // ORG-05 — batch cho worker list enrichment: MỘT query cho mọi user
+    // (`= ANY($1::uuid[])`), tránh N+1. userIds rỗng → [] (không query).
+    if (userIds.length === 0) return [];
+    const r = await this.pool().query(
+      `SELECT m.user_id AS user_id, m.crew_id AS crew_id, c.code AS crew_code, c.name AS crew_name,
+        c.status AS crew_status, m.member_role AS member_role,
+        m.effective_from AS effective_from, m.effective_to AS effective_to
+       FROM public.crew_members m JOIN public.crews c ON c.id = m.crew_id
+       WHERE m.user_id = ANY($1::uuid[]) AND m.is_active ORDER BY m.effective_from DESC`,
+      [userIds],
+    );
+    return (r.rows as Record<string, unknown>[]).map((row) => ({
+      userId: String(row['user_id']),
+      crewId: String(row['crew_id']),
+      crewCode: String(row['crew_code']),
+      crewName: String(row['crew_name']),
+      crewStatus: row['crew_status'] as 'ACTIVE' | 'INACTIVE',
+      memberRole: row['member_role'] as 'LEAD' | 'MEMBER',
+      effectiveFrom: toDateOnly(row['effective_from']),
+      effectiveTo: row['effective_to'] === null || row['effective_to'] === undefined
+        ? null
+        : toDateOnly(row['effective_to']),
+    }));
+  }
+
+  async findListEnrichments(crewIds: string[]): Promise<Map<string, CrewListEnrichment>> {
+    // ORG-05 — batch cho crews list enrichment: MỘT query cho mọi đội —
+    // leaderName join users qua LEAD active (partial unique
+    // `ux_crew_one_active_lead` bảo đảm tối đa 1 row) + COUNT crew_members
+    // active (mọi role). Tránh N+1.
+    const enrichments = new Map<string, CrewListEnrichment>();
+    if (crewIds.length === 0) return enrichments;
+    const r = await this.pool().query(
+      `SELECT c.id AS crew_id, lu.full_name AS leader_name,
+        (SELECT COUNT(*)::int FROM public.crew_members mc WHERE mc.crew_id = c.id AND mc.is_active) AS member_count
+       FROM public.crews c
+       LEFT JOIN public.crew_members lead ON lead.crew_id = c.id AND lead.is_active AND lead.member_role = 'LEAD'
+       LEFT JOIN public.users lu ON lu.id = lead.user_id
+       WHERE c.id = ANY($1::uuid[])`,
+      [crewIds],
+    );
+    for (const row of r.rows as Record<string, unknown>[]) {
+      enrichments.set(String(row['crew_id']), {
+        leaderName: (row['leader_name'] as string | null) ?? null,
+        memberCount: Number(row['member_count'] ?? 0),
+      });
+    }
+    return enrichments;
   }
 
   async findActiveTradesByCrewId(crewId: string): Promise<Array<{ tradeId: string; skillLevel: number }>> {

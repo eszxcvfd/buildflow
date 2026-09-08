@@ -81,4 +81,27 @@ describe('CrewList ORG-SRS-006', () => {
       expect(listCrewsMock).toHaveBeenCalledWith(expect.objectContaining({ eligibleOnly: true })),
     );
   });
+
+  it('ORG-03/ORG-05: cột Trưởng nhóm (leaderName) + Thành viên (memberCount)', async () => {
+    listCrewsMock.mockResolvedValue({
+      data: [crew({ leaderName: 'Nguyen Van Lead · NV-001', memberCount: 5 })],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    render(<CrewList />);
+    await waitFor(() => expect(screen.getByText('Nguyen Van Lead · NV-001')).not.toBeNull());
+    expect(screen.getByText('5')).not.toBeNull();
+  });
+
+  it('ORG-03/ORG-05/BR-06: chưa có Lead → badge cảnh báo Chưa có Lead', async () => {
+    listCrewsMock.mockResolvedValue({
+      data: [crew({ leaderUserId: null, leaderName: null, memberCount: 0 })],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    render(<CrewList />);
+    await waitFor(() => expect(screen.getByText('Chưa có Lead')).not.toBeNull());
+  });
 });

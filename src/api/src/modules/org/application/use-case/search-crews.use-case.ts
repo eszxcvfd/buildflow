@@ -1,5 +1,5 @@
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
-import { CREW_REPOSITORY, CrewRepositoryPort, CrewFilter } from '../../domain/repository/crew-repository.port';
+import { CREW_REPOSITORY, CrewRepositoryPort, CrewFilter, CrewListEnrichment } from '../../domain/repository/crew-repository.port';
 import { CrewEntity } from '../../domain/entity/crew.entity';
 
 export interface SearchCrewsInput {
@@ -15,6 +15,12 @@ export interface SearchCrewsInput {
 export interface SearchCrewsOutput {
   entities: CrewEntity[];
   total: number;
+  /**
+   * ORG-05 — enrichment cho list: leaderName + memberCount theo crew id
+   * (batch 1 query, tránh N+1). Đội không có trong map → mapper mặc định
+   * `{ leaderName: null, memberCount: 0 }`.
+   */
+  enrichments: Map<string, CrewListEnrichment>;
 }
 
 function fieldError(field: string, message: string): never {
@@ -25,6 +31,7 @@ function fieldError(field: string, message: string): never {
  * ORG-SRS-006 (issue #29) — tìm kiếm đội (pattern search-workers/contractors +
  * fieldErrors shape). `eligibleOnly` = chỉ đội ACTIVE (đội ngừng hoạt động
  * không nhận phân công mới).
+ * ORG-05 — kèm enrichment leaderName/memberCount (1 query batch).
  */
 @Injectable()
 export class SearchCrewsUseCase {
@@ -59,6 +66,8 @@ export class SearchCrewsUseCase {
       offset: input.offset,
     };
 
-    return this.crewRepo.findMany(filter);
+    const { entities, total } = await this.crewRepo.findMany(filter);
+    const enrichments = await this.crewRepo.findListEnrichments(entities.map((e) => e.id));
+    return { entities, total, enrichments };
   }
 }

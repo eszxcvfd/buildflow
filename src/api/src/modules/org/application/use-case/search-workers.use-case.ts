@@ -1,5 +1,6 @@
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { WORKER_REPOSITORY, WorkerRepositoryPort, WorkerFilter } from '../../domain/repository/worker-repository.port';
+import { CREW_REPOSITORY, CrewRepositoryPort, WorkerCrewRef } from '../../domain/repository/crew-repository.port';
 import { WorkerEntity } from '../../domain/entity/worker.entity';
 
 export interface SearchWorkersInput {
@@ -17,11 +18,16 @@ export interface SearchWorkersInput {
 export interface SearchWorkersOutput {
   entities: WorkerEntity[];
   total: number;
+  /** ORG-05 — active memberships theo worker id (batch 1 query, tránh N+1). */
+  crewsByUserId: Map<string, WorkerCrewRef[]>;
 }
 
 @Injectable()
 export class SearchWorkersUseCase {
-  constructor(@Inject(WORKER_REPOSITORY) private readonly workerRepo: WorkerRepositoryPort) {}
+  constructor(
+    @Inject(WORKER_REPOSITORY) private readonly workerRepo: WorkerRepositoryPort,
+    @Inject(CREW_REPOSITORY) private readonly crewRepo: CrewRepositoryPort,
+  ) {}
 
   async execute(input: SearchWorkersInput): Promise<SearchWorkersOutput> {
     // ORG-SRS-005 (issue #28) — filter errors carry fieldErrors alongside the
@@ -65,6 +71,24 @@ export class SearchWorkersUseCase {
       offset: input.offset,
     };
 
-    return this.workerRepo.findMany(filter);
+    const { entities, total } = await this.workerRepo.findMany(filter);
+    // ORG-05 — enrichment crews cho list: MỘT query batch cho cả trang
+    // (findMembershipsByUserIds), tránh N+1. Trang rỗng → không query.
+    const crewsByUserId = new Map<string, WorkerCrewRef[]>();
+    if (entities.length > 0) {
+      const rows = await this.crewRepo.findMembershipsByUserIds(entities.map((e) => e.id));
+      for (const row of rows) {
+        const ref: WorkerCrewRef = {
+          crewId: row.crewId,
+          crewCode: row.crewCode,
+          crewName: row.crewName,
+          memberRole: row.memberRole,
+        };
+        const list = crewsByUserId.get(row.userId);
+        if (list) list.push(ref);
+        else crewsByUserId.set(row.userId, [ref]);
+      }
+    }
+    return { entities, total, crewsByUserId };
   }
 }

@@ -21,8 +21,9 @@
 | Method | Path | Auth | Body | Response | Lỗi |
 | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/workers` | ADMIN-only | `{ email, password, fullName, phone?, avatarUrl?, employeeCode?, contractorId?, trades?: [{ tradeId, skillLevel 1-5 }] }` | `200` worker profile | `400`/`409` trùng email hoặc employeeCode; `400` trade inactive/không tồn tại |
-| GET | `/api/v1/workers` | **ADMIN + PROJECT_MANAGER** | query `status` (`ACTIVE`/`INACTIVE`/`LOCKED`), `search`, `tradeId`, `skillLevel`, `crewId` (uuid — workers có ACTIVE membership trong đội, `#30` D9), `sort` (`name`→`full_name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
-| GET | `/api/v1/workers/:id` | **ADMIN + PROJECT_MANAGER** | — | `200` worker profile + header `Cache-Control: no-store` | `400` id sai; `404` |
+| GET | `/api/v1/workers` | **ADMIN + PROJECT_MANAGER** | query `status` (`ACTIVE`/`INACTIVE`/`LOCKED`), `search`, `tradeId`, `skillLevel`, `crewId` (uuid — workers có ACTIVE membership trong đội, `#30` D9), `sort` (`name`→`full_name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` (mỗi profile kèm `crews[]` active — xem §8.2) + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
+| GET | `/api/v1/workers/:id` | **ADMIN + PROJECT_MANAGER** | — | `200` worker profile (kèm `crews[]` active — xem §8.2) + header `Cache-Control: no-store` | `400` id sai; `404` |
+| GET | `/api/v1/workers/:workerId/crews` | **ADMIN + PROJECT_MANAGER** | — | `200 { data[] }` liên kết đội (active only — xem §8.2) + header `Cache-Control: no-store` | `400` id sai; `404` worker |
 | PATCH | `/api/v1/workers/:id` | ADMIN-only | `{ fullName?, phone?, avatarUrl?, employeeCode?, contractorId?, trades? }` | `200` worker profile | `400`/`409`; `404` |
 
 - Audit actions: `ORG_WORKER_CREATED`, `ORG_WORKER_UPDATED` (xem 8.2 API.md). Worker trong org module quản lý profile + trades; account IAM lifecycle (LOCKED/security) nằm ở `/api/v1/admin/users/:id/status`, còn lifecycle nghiệp vụ (ACTIVATE/SUSPEND/TERMINATE) nằm ở `PATCH /api/v1/workers/:id/status` (ORG-SRS-004, mục 5).
@@ -139,7 +140,7 @@ Quản lý đội thi công. Bảng `public.crews` (migration 0001): `code varch
 | Method | Path | Auth | Body | Response | Lỗi |
 | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/crews` | **ADMIN + PROJECT_MANAGER** | `{ code, name, leaderUserId, contractorId?, description? }` | `200` crew profile (`eligible` = ACTIVE, kèm `leaderUserId`) | `400` validation/leader invalid (fieldErrors `{leaderUserId}`); `409` trùng code |
-| GET | `/api/v1/crews` | **ADMIN + PROJECT_MANAGER** | query `status`, `search` (ILIKE code/name/description), `eligibleOnly`, `sort` (`name`→`name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
+| GET | `/api/v1/crews` | **ADMIN + PROJECT_MANAGER** | query `status`, `search` (ILIKE code/name/description), `eligibleOnly`, `sort` (`name`→`name`, `createdAt`→`created_at`; default `createdAt`), `order` (`asc`/`desc`; default `desc`), `limit` (1-100, default 20), `offset` (≥0) | `200 { data[], total, limit, offset }` (mỗi profile kèm `leaderName` + `memberCount` — xem §8.2) + header `Cache-Control: no-store` | `400` query sai (`{ statusCode, message, fieldErrors }`) |
 | GET | `/api/v1/crews/:id` | **ADMIN + PROJECT_MANAGER** | — | `200` crew profile + header `Cache-Control: no-store` | `400` id sai; `404` |
 | PATCH | `/api/v1/crews/:id` | **ADMIN + PROJECT_MANAGER** | `{ name?, description?, leaderUserId?, contractorId? }` (không đổi `code`) | `200` crew profile | `400`; `404` |
 | PATCH | `/api/v1/crews/:id/status` | **ADMIN + PROJECT_MANAGER** | `{ action: 'ACTIVATE' \| 'SUSPEND' \| 'TERMINATE', reason? }` | `200` crew profile + `alreadyInState` + `warning?` | `400` action sai/thiếu reason; `404`; `400` X-Correlation-Id sai |
@@ -152,7 +153,7 @@ Rules:
 - **Leader validation:** `leaderUserId` bắt buộc khi tạo; user phải tồn tại + `user_type='WORKER'` + `status='ACTIVE` — ngược lại `400` fieldErrors `{leaderUserId}`. `contractorId` (nếu gửi) phải tồn tại — ngược lại `400` fieldErrors `{contractorId}`.
 - **Leader change trong PATCH:** chỉ chạy khi `leaderUserId` khác LEAD đang hiệu lực → soft-deactivate row cũ (`is_active=false`, `effective_to=CURRENT_DATE` — thỏa `revocation_ck`) + insert LEAD mới, cùng tx; audit riêng `ORG_CREW_LEAD_CHANGED` (before/afterData chứa leader cũ/mới qua `leaderUserId`). Gửi đúng leader hiện tại → no-op, không audit lead. Race vi phạm `ux_crew_one_active_lead` → `409` `'Đội đã có trưởng nhóm đang hiệu lực'`.
 - Lifecycle reuse `resource-status.policy` (mục 5): reason bắt buộc 1-500 cho `SUSPEND`/`TERMINATE`; idempotent repeat → `alreadyInState`, không audit; khi rời ACTIVE đếm open assignments của đội → `warning` + `_warning` audit, fail-closed (lỗi đếm → `500`).
-- Response crew profile: `{ id, code, name, description, contractorId, status, eligible, leaderUserId, createdBy, createdAt, updatedAt, warning? }` (`eligible` = đang ACTIVE; `warning` chỉ xuất hiện khi deactivate có open work).
+- Response crew profile: `{ id, code, name, description, contractorId, status, eligible, leaderUserId, createdBy, createdAt, updatedAt, warning? }` (`eligible` = đang ACTIVE; `warning` chỉ xuất hiện khi deactivate có open work). **GET list (§8.2, ORG-05)** kèm thêm `leaderName` (tên LEAD active, null khi chưa có LEAD) + `memberCount` (số member active); detail/create/update/status giữ nguyên shape (không có hai key này).
 - Audit actions: `ORG_CREW_CREATED`, `ORG_CREW_UPDATED`, `ORG_CREW_LEAD_CHANGED`, `ORG_CREW_SUSPENDED`, `ORG_CREW_TERMINATED`, `ORG_CREW_REACTIVATED` (tx-embedded, correlation strict).
 - **Hai shape 400 trên crews** (giống các slice trước, client parse cả hai): (a) body thiếu/rỗng field bị `ValidationPipe` chặn trước use-case → shape mặc định `{ message: string[], error, statusCode: 400 }` KHÔNG có `fieldErrors`; (b) field hợp lệ về format nhưng business-invalid (leader không tồn tại/inactive, contractor 404, query sai, thiếu reason) → shape `{ statusCode, message, fieldErrors }`.
 - **Uniqueness policy cho `code`:** pre-check `findByCode` case-insensitive (chặt hơn DB — `ux_crews_code` là btree case-sensitive); giới hạn đã biết: hai create đồng thời với code chỉ khác chữ hoa/thường (`ABC`/`abc`) đều qua pre-check và DB chấp nhận cả hai.
@@ -176,6 +177,27 @@ Quản lý thành viên đội (bảng `public.crew_members`, migration 0001 —
 - **D7 — roles:** đọc + ghi dùng chung `CREW_ROLES` (`ADMIN` + `PROJECT_MANAGER`; SRS actor Điều phối viên — như crews `#29`).
 - **D8 — audit:** `ORG_CREW_MEMBER_ADDED` (before `null`, after member row + `crew code`) / `ORG_CREW_MEMBER_REMOVED` (before/after + `crew code`, `reason` ở cột `audit_logs.reason`), `entityType` `CREW`, `entityId` = crewId, tx-embedded `logWithClient`; audit thất bại → `500` rollback.
 - Hai shape `400` như crews mục 8 (ValidationPipe shape không `fieldErrors` cho body sai format; business-invalid có `fieldErrors`).
+
+### 8.2. Liên kết Worker ↔ Crew — ORG-03/ORG-05, BR-06 (BRD C2)
+
+Nối liên kết Worker ↔ Crew phục vụ điều phối (tra cứu đội của worker + enrichment hai chiều). KHÔNG đổi nghiệp vụ add/remove member và leader-swap (D1 `#30` giữ nguyên: member mới luôn `MEMBER`, `LEAD` chỉ qua `PATCH /crews/:id` `leaderUserId`). KHÔNG đụng eligibility (§9).
+
+| Method | Path | Auth | Response | Lỗi |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/workers/:workerId/crews` | **ADMIN + PROJECT_MANAGER** (mirror `GET /workers/:id`) | `200 { data[] }` — xem W1 + header `Cache-Control: no-store` | `400` id sai; `404` worker |
+
+`data[]` item: `{ crewId, crewCode, crewName, crewStatus ('ACTIVE'│'INACTIVE'), memberRole ('LEAD'│'MEMBER'), effectiveFrom ('YYYY-MM-DD'), effectiveTo ('YYYY-MM-DD'│null) }`.
+
+Worker profile (`GET /workers` list + `GET /workers/:id` detail) kèm `crews[]`: `[{ crewId, crewCode, crewName, memberRole }]` (active only).
+
+Crews list (`GET /crews`) kèm `leaderName` (`string`│null — tên LEAD đang hiệu lực, null khi đội chưa có LEAD) + `memberCount` (`number` — COUNT `crew_members` active, mọi role LEAD/MEMBER đều tính).
+
+- **W1 — endpoint mới read-only:** `GET /api/v1/workers/:workerId/crews` qua `GetWorkerCrewsUseCase` (pattern `GetWorkerOpenWorkUseCase`): worker không tồn tại → `404 'Không tìm thấy hồ sơ worker'` (không gọi memberships); worker chưa thuộc đội nào → `200 { data: [] }`. Chỉ active memberships (`is_active`); lịch sử cũ (`is_active=false`) KHÔNG trả. KHÔNG transaction, KHÔNG ghi `audit_logs`.
+- **W2 — guard mirror detail:** `requireRoles(req, ['ADMIN','PROJECT_MANAGER'])` như `GET /workers/:id` (WORKER-role → `403`, anon → `401` via `JwtAuthGuard`). `X-Correlation-Id` miễn (read-only, không audit — như open-work).
+- **W3 — repo method mới `findMembershipsByUser`** (mirror `findActiveMembershipsOfUserWithClient` nhưng bỏ `excludeCrewId`, thêm `role`/`dates`/`crew status`): pool read `crew_members is_active JOIN crews` (lấy `c.status`), `ORDER BY effective_from DESC`. Detail enrichment (`GetWorkerUseCase`) dùng lại method này rồi rút gọn còn `{ crewId, crewCode, crewName, memberRole }`.
+- **W4 — list tránh N+1:** `SearchWorkersUseCase` batch MỘT query `findMembershipsByUserIds(ids)` (`user_id = ANY($1::uuid[])`) cho cả trang rồi nhóm theo userId (trang rỗng → không query); `SearchCrewsUseCase` batch MỘT query `findListEnrichments(ids)` (`LEFT JOIN` LEAD active → `users.full_name` + scalar `COUNT` member active). Đội thiếu enrichment → `{ leaderName: null, memberCount: 0 }`; worker thiếu map → `crews: []`.
+- **W5 — mapper/DTO:** `toWorkerDetailResponse` (detail) + `toWorkerListResponse(entities, crewsByUserId?)` (list) — `create`/`update`/`status` giữ `toWorkerResponse` cũ (không có key `crews`); `toCrewListResponse(entities, enrichments?)` — `detail`/`create`/`update`/`status` giữ `toCrewResponse` cũ (không có `leaderName`/`memberCount`). Enrichment đi kèm entity (precedent `managerName` PRJ-SRS-001 P8), KHÔNG đổi `CrewEntity`/`WorkerEntity`.
+- **W6 — BR-06 bảo toàn:** endpoint và enrichment chỉ ĐỌC `crew_members`/`crews`; add/remove member, leader-swap và lifecycle giữ nguyên (D1 `#30`, lifecycle `#29`). Đội `INACTIVE` vẫn liệt kê trong `data[]` (kèm `crewStatus`) — assignment gate thuộc slice JOB tương lai, không chặn ở đây.
 
 ## References
 

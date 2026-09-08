@@ -18,6 +18,15 @@ jest.mock('@/lib/api/workers', () => ({
   updateWorker: jest.fn(),
   changeWorkerLifecycleStatus: jest.fn(),
   getWorkerOpenWork: jest.fn(),
+  getWorkerCrews: jest.fn(),
+}));
+
+jest.mock('@/lib/api/crews', () => ({
+  __esModule: true,
+  listCrews: jest.fn(),
+  listCrewMembers: jest.fn(),
+  addCrewMember: jest.fn(),
+  removeCrewMember: jest.fn(),
 }));
 
 jest.mock('@/lib/api/audit-logs', () => ({
@@ -40,11 +49,17 @@ jest.mock('@/features/workers/hooks/useTradeNames', () => ({
   useTradeNames: () => ({ names: tradeNames, loading: false, failed: false }),
 }));
 
-import { getWorker, updateWorker, changeWorkerLifecycleStatus, getWorkerOpenWork } from '@/lib/api/workers';
+import { getWorker, updateWorker, changeWorkerLifecycleStatus, getWorkerOpenWork, getWorkerCrews } from '@/lib/api/workers';
+import { listCrews, listCrewMembers, addCrewMember, removeCrewMember } from '@/lib/api/crews';
 import { listAuditLogs } from '@/lib/api/audit-logs';
 import { checkWorkerEligibility } from '@/lib/api/eligibility';
 
 const getMock = getWorker as jest.Mock;
+const getCrewsMock = getWorkerCrews as jest.Mock;
+const listCrewsMock = listCrews as jest.Mock;
+const listCrewMembersMock = listCrewMembers as jest.Mock;
+const addCrewMemberMock = addCrewMember as jest.Mock;
+const removeCrewMemberMock = removeCrewMember as jest.Mock;
 const updateMock = updateWorker as jest.Mock;
 const lifecycleMock = changeWorkerLifecycleStatus as jest.Mock;
 const openWorkMock = getWorkerOpenWork as jest.Mock;
@@ -103,6 +118,11 @@ function makeAuditLog(overrides: Partial<Record<string, unknown>> = {}) {
 describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
   beforeEach(() => {
     getMock.mockReset();
+    getCrewsMock.mockReset();
+    listCrewsMock.mockReset();
+    listCrewMembersMock.mockReset();
+    addCrewMemberMock.mockReset();
+    removeCrewMemberMock.mockReset();
     updateMock.mockReset();
     lifecycleMock.mockReset();
     openWorkMock.mockReset();
@@ -119,6 +139,10 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
       conditions: [],
       crews: [],
     });
+    // ORG-03/ORG-05 (Worker ↔ Crew link) — section 'Đội thi công' mặc định
+    // rỗng để các flow lifecycle/timeline không bị nhiễu.
+    getCrewsMock.mockResolvedValue([]);
+    listCrewsMock.mockResolvedValue({ data: [], total: 0, limit: 100, offset: 0 });
     // ORG-SRS-005 (#28): lifecycle buttons/edit/timeline là admin-only — seed
     // ADMIN để giữ intent admin-flow của suite này.
     seedAdminAuth();
@@ -301,5 +325,96 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     expect(screen.getByText(/cần quyền ADMIN — tài khoản hiện tại chỉ xem/)).toBeTruthy();
     expect(screen.getByText(/Lịch sử trạng thái chỉ dành cho ADMIN/)).toBeTruthy();
     expect(auditMock).not.toHaveBeenCalled();
+  });
+
+  it('ORG-03/ORG-05: section Đội thi công render memberships kèm link/vai trò/hiệu lực', async () => {
+    getMock.mockResolvedValueOnce(worker);
+    getCrewsMock.mockResolvedValueOnce([
+      {
+        crewId: 'c-lead',
+        crewCode: 'TEAM-001',
+        crewName: 'Doi ket cau',
+        crewStatus: 'ACTIVE',
+        memberRole: 'LEAD',
+        effectiveFrom: '2026-02-01',
+        effectiveTo: null,
+      },
+      {
+        crewId: 'c-mem',
+        crewCode: 'TEAM-002',
+        crewName: 'Doi hoan thien',
+        crewStatus: 'INACTIVE',
+        memberRole: 'MEMBER',
+        effectiveFrom: '2026-01-05',
+        effectiveTo: '2026-03-01',
+      },
+    ]);
+    render(<WorkerDetail id="w-1" />);
+    expect(await screen.findByText('Đội thi công')).toBeTruthy();
+    await waitFor(() => expect(getCrewsMock).toHaveBeenCalledWith('w-1'));
+    const leadLink = screen.getByRole('link', { name: 'TEAM-001 — Doi ket cau' }) as HTMLAnchorElement;
+    expect(leadLink.getAttribute('href')).toBe('/crews/c-lead');
+    expect(screen.getByText('Trưởng nhóm')).toBeTruthy();
+    expect(screen.getByText('Thành viên')).toBeTruthy();
+    expect(screen.getByText('2026-02-01 → đến nay')).toBeTruthy();
+    expect(screen.getByText('2026-01-05 → 2026-03-01')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thêm vào đội' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Kết thúc' })).toHaveLength(2);
+  });
+
+  it('ORG-03/ORG-05: empty state khi chưa tham gia đội nào + lỗi có retry', async () => {
+    getMock.mockResolvedValueOnce(worker);
+    render(<WorkerDetail id="w-1" />);
+    expect(await screen.findByText('Chưa tham gia đội nào')).toBeTruthy();
+  });
+
+  it('ORG-03/ORG-05: dialog Thêm vào đội tải đội ACTIVE + note vai trò Thành viên', async () => {
+    getMock.mockResolvedValueOnce(worker);
+    listCrewsMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'c-new',
+          code: 'TEAM-009',
+          name: 'Doi moi',
+          description: null,
+          contractorId: null,
+          status: 'ACTIVE',
+          eligible: true,
+          leaderUserId: 'u-lead',
+          createdBy: 'u-admin',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    render(<WorkerDetail id="w-1" />);
+    await waitFor(() => expect(getCrewsMock).toHaveBeenCalledWith('w-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
+    await waitFor(() =>
+      expect(listCrewsMock).toHaveBeenCalledWith(expect.objectContaining({ status: 'ACTIVE' })),
+    );
+    expect(screen.getByText(/Thành viên mới vào với vai trò Thành viên/)).toBeTruthy();
+    expect(screen.getByText(/Trưởng nhóm được đổi tại trang đội/)).toBeTruthy();
+  });
+
+  it('ORG-03/ORG-05: PROJECT_MANAGER vẫn thấy nút Thêm vào đội (crews write ADMIN+PM)', async () => {
+    window.localStorage.setItem(
+      'buildflow.auth.v1',
+      JSON.stringify({
+        accessToken: 'jwt-test',
+        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+        user: { id: 'u-pm', email: 'pm@example.com', fullName: 'PM', status: 'ACTIVE', userType: 'STAFF' },
+        roles: [{ id: 'r-2', code: 'PROJECT_MANAGER', name: 'PM' }],
+        projectIds: [],
+      }),
+    );
+    getMock.mockResolvedValueOnce(worker);
+    render(<WorkerDetail id="w-1" />);
+    expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
+    await waitFor(() => expect(getCrewsMock).toHaveBeenCalledWith('w-1'));
+    expect(await screen.findByRole('button', { name: 'Thêm vào đội' })).toBeTruthy();
   });
 });

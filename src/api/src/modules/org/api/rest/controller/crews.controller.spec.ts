@@ -77,7 +77,7 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
     createMock = { execute: jest.fn(async () => ({ entity: makeCrew(CID) })) } as unknown as jest.Mocked<CreateCrewUseCase>;
     updateMock = { execute: jest.fn(async () => ({ entity: makeCrew(CID) })) } as unknown as jest.Mocked<UpdateCrewUseCase>;
     getMock = { execute: jest.fn(async () => ({ entity: makeCrew(CID) })) } as unknown as jest.Mocked<GetCrewUseCase>;
-    searchMock = { execute: jest.fn(async () => ({ entities: [makeCrew(CID)], total: 1 })) } as unknown as jest.Mocked<SearchCrewsUseCase>;
+    searchMock = { execute: jest.fn(async () => ({ entities: [makeCrew(CID)], total: 1, enrichments: new Map() })) } as unknown as jest.Mocked<SearchCrewsUseCase>;
     transitionMock = { execute: jest.fn(async () => ({ entity: makeCrew(CID), alreadyInState: false })) } as unknown as jest.Mocked<StatusTransitionCrewUseCase>;
     openWorkMock = { execute: jest.fn(async () => ({ openAssignments: 0 })) } as unknown as jest.Mocked<GetCrewOpenWorkUseCase>;
     addMemberMock = { execute: jest.fn(async () => ({ member: makeMember('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') })) } as unknown as jest.Mocked<AddCrewMemberUseCase>;
@@ -246,6 +246,24 @@ describe('CrewsController ORG-SRS-006 (issue #29)', () => {
       expect(addMemberMock.execute).not.toHaveBeenCalled();
       await expect(controller.removeMember(CID, MID, reqWithCorr(['PROJECT_MANAGER'], 'bad') as never)).rejects.toThrow(BadRequestException);
       expect(removeMemberMock.execute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ORG-05 crews list enrichment — leaderName + memberCount', () => {
+    it('enrichments được merge vào từng profile (1 query batch ở use case)', async () => {
+      searchMock.execute.mockResolvedValue({
+        entities: [makeCrew(CID)],
+        total: 1,
+        enrichments: new Map([[CID, { leaderName: 'Nguyen Van A', memberCount: 4 }]]),
+      });
+      const res = await controller.search(adminReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      expect(res.data[0]).toEqual(expect.objectContaining({ leaderName: 'Nguyen Van A', memberCount: 4 }));
+    });
+
+    it('đội thiếu enrichment → leaderName null, memberCount 0', async () => {
+      searchMock.execute.mockResolvedValue({ entities: [makeCrew(CID)], total: 1, enrichments: new Map() });
+      const res = await controller.search(pmReq() as never, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+      expect(res.data[0]).toEqual(expect.objectContaining({ leaderName: null, memberCount: 0 }));
     });
   });
 });
