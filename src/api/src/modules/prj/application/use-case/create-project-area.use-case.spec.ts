@@ -117,12 +117,27 @@ describe('CreateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     );
     (areaRepo.insertAreaWithClient as jest.Mock).mockClear();
     (audit.logWithClient as jest.Mock).mockClear();
+    (projectRepo.findById as jest.Mock).mockClear();
     const err = await useCase
       .execute({ projectId: PID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ForbiddenException);
+    expect(projectRepo.findById).not.toHaveBeenCalled();
     expect(areaRepo.insertAreaWithClient).not.toHaveBeenCalled();
     expect(audit.logWithClient).not.toHaveBeenCalled();
+  });
+
+  it('scope-first (review P1-1): non-member 403 kể cả project missing, findById không gọi; admin giữ 404', async () => {
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    (projectRepo.findById as jest.Mock).mockClear();
+    const denied = await useCase
+      .execute({ projectId: PID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['WORKER'] })
+      .catch((e: unknown) => e);
+    expect(denied).toBeInstanceOf(ForbiddenException);
+    expect(projectRepo.findById).not.toHaveBeenCalled();
+    expect(areaRepo.insertAreaWithClient).not.toHaveBeenCalled();
   });
 
   it('duplicate tên active (pre-check) → 409 AREA_DUPLICATE, không insert/audit', async () => {

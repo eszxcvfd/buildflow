@@ -266,15 +266,17 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     expect(err2).toBe(bare);
   });
 
-  it('scope: non-member PM → 403; area sai project → 404; project 404', async () => {
+  it('scope: non-member PM → 403 (scope-first, không tới area lookup); area sai project → 404; project 404', async () => {
     (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
       new ForbiddenException('Không có quyền truy cập dự án này'),
     );
+    (areaRepo.findAreaById as jest.Mock).mockClear();
     const forbidden = await useCase
       .execute({ projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })
       .catch((e: unknown) => e);
     expect(forbidden).toBeInstanceOf(ForbiddenException);
     expect(areaRepo.saveAreaWithClient).not.toHaveBeenCalled();
+    expect(areaRepo.findAreaById).not.toHaveBeenCalled();
 
     areaRepo.findAreaById.mockResolvedValue(makeArea({ projectId: '99999999-9999-4999-8999-999999999999' }));
     const tampered = await useCase
@@ -287,6 +289,23 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
       .execute({ projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['ADMIN'] })
       .catch((e: unknown) => e);
     expect(missing).toBeInstanceOf(NotFoundException);
+  });
+
+  it('scope-first (review P1-1): non-member 403 kể cả project/area missing (không leak 404)', async () => {
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValue(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    projectRepo.findById.mockResolvedValue(null);
+    areaRepo.findAreaById.mockResolvedValue(null);
+    const missingProject = await useCase
+      .execute({ projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['WORKER'] })
+      .catch((e: unknown) => e);
+    expect(missingProject).toBeInstanceOf(ForbiddenException);
+    const missingArea = await useCase
+      .execute({ projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['WORKER'] })
+      .catch((e: unknown) => e);
+    expect(missingArea).toBeInstanceOf(ForbiddenException);
+    expect(areaRepo.saveAreaWithClient).not.toHaveBeenCalled();
   });
 
   it('closed project vẫn cho update (A5 — không check status)', async () => {

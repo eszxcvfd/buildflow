@@ -47,8 +47,9 @@ function duplicateCode409(): ConflictException {
 
 /**
  * PRJ-SRS-003 (issue #34, A1/A3/A4/A6) — tạo khu vực trong dự án.
- * - Project phải tồn tại (404). Scope A4: ADMIN bypass, còn lại phải là
- *   ACTIVE member (403) — kể cả PROJECT_MANAGER.
+ * - Scope A4 TRƯỚC existence (review P1-1): ADMIN bypass, còn lại phải là
+ *   ACTIVE member (403) — kể cả PROJECT_MANAGER; non-admin luôn 403 kể cả
+ *   project không tồn tại (không leak 404), ADMIN giữ 404 khi project missing.
  * - Trùng tên active cùng project → 409 `AREA_DUPLICATE` (pre-check
  *   case-insensitive + race guard 23505/`ux_project_areas_active_name_ci`
  *   (0006, DB-enforced case-insensitive),
@@ -87,8 +88,9 @@ export class CreateProjectAreaUseCase {
       throw fieldError('code', e instanceof Error ? e.message : 'Mã khu vực không hợp lệ');
     }
 
-    const project = await this.projectRepo.findById(input.projectId);
-    if (!project) throw new NotFoundException('Không tìm thấy dự án');
+    // PRJ-SRS-006 review P1-1: scope TRƯỚC existence (anti existence-oracle:
+    // non-admin luôn 403 kể cả project không tồn tại; ADMIN được
+    // `assertProjectMemberScope` check exists() trước → project missing vẫn 404).
     const { isAdminBypass } = await assertProjectAreaScope(this.scope, {
       projectId: input.projectId,
       actorUserId: input.actorUserId,
@@ -97,6 +99,8 @@ export class CreateProjectAreaUseCase {
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
     });
+    const project = await this.projectRepo.findById(input.projectId);
+    if (!project) throw new NotFoundException('Không tìm thấy dự án');
 
     const projectCode = project.code;
     let area: ProjectAreaRow | null = null;

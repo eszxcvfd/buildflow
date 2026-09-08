@@ -157,9 +157,11 @@ export function ProjectDetailScreen({ token, projectId }: { token: string; proje
         ) : (
           <View style={styles.membersFallback}>
             <Text style={styles.hint}>
-              {membersError?.status === 403
-                ? 'Bạn không còn quyền xem thành viên dự án này'
-                : 'Không tải được danh sách thành viên'}
+              {membersError?.status === 401
+                ? 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại'
+                : membersError?.status === 403
+                  ? 'Bạn không còn quyền xem thành viên dự án này'
+                  : 'Không tải được danh sách thành viên'}
             </Text>
             <Pressable
               accessibilityRole="button" accessibilityLabel="retry project members"

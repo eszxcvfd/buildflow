@@ -97,4 +97,15 @@ describe('ProjectDetailScreen (PRJ-SRS-006, issue #37)', () => {
     expect(await screen.findByText('Bạn không còn quyền xem thành viên dự án này')).toBeTruthy();
     expect(screen.getByLabelText('retry project members')).toBeTruthy();
   });
+
+  it('members 401 after detail 200 (session expired): session-expired copy + retry, detail intact', async () => {
+    jest.spyOn(client, 'getProject').mockResolvedValueOnce(projectFixture);
+    jest.spyOn(client, 'listProjectMembers').mockRejectedValueOnce(
+      new client.LoginError('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại', 401),
+    );
+    render(<ProjectDetailScreen token="tok-1" projectId={projectFixture.id} />);
+    expect(await screen.findByLabelText('project name')).toBeTruthy();
+    expect(await screen.findByText('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại')).toBeTruthy();
+    expect(screen.getByLabelText('retry project members')).toBeTruthy();
+  });
 });

@@ -304,6 +304,7 @@ Tra cứu nguồn lực (issue `#28`, API slice; UI Web thuộc web slice riêng
 | `POST /api/v1/projects/:id/members`, `DELETE /api/v1/projects/:id/members/:memberId` (PRJ-SRS-005 + PRJ-SRS-006 `#37`, module `prj`) | OK (bypass, audited) | OK chỉ khi ACTIVE member MANAGER/COORDINATOR (non-member → `403`) | `403` (trừ khi là project MANAGER/COORDINATOR) | `401` |
 | `POST /api/v1/projects/:projectId/areas`, `PATCH /api/v1/projects/:projectId/areas/:areaId` (PRJ-SRS-003, `#34`, module `prj`) | OK | OK (write; + ACTIVE membership scope, xem `ENDPOINTS.md` §13 A4) | `403` | `401` |
 | `GET /api/v1/projects/:projectId/areas` (PRJ-SRS-003, `#34`, module `prj`) | OK (bypass) | OK (member) | OK (**member** — mọi ACTIVE member, kể cả WORKER; non-member → `403`) | `401` |
+- **Areas writes guard (PRJ-SRS-006 review P2-1):** `POST`/`PATCH` areas giữ thêm controller guard toàn cục `ADMIN` + `PROJECT_MANAGER` (`PROJECT_WRITE_ROLES`) ngoài membership scope ở use-case — fail-closed (role lạ → `403` trước khi tới scope; không đổi behavior).
 | `GET /api/v1/work-types`, `GET /api/v1/work-types/active`, `GET /api/v1/work-types/:id` (PRJ-SRS-004, `#35`, module `prj`) | OK | OK (read) | `403` | `401` |
 | `POST /api/v1/work-types`, `PATCH /api/v1/work-types/:id`, `POST /api/v1/work-types/:id/status` (PRJ-SRS-004, `#35`, module `prj`) | OK | OK (write) | `403` | `401` |
 

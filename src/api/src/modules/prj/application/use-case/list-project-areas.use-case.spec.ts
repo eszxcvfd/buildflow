@@ -80,15 +80,30 @@ describe('ListProjectAreasUseCase PRJ-SRS-003 (issue #34)', () => {
       new ForbiddenException('Không có quyền truy cập dự án này'),
     );
     (areaRepo.listAreas as jest.Mock).mockClear();
+    (projectRepo.findById as jest.Mock).mockClear();
     const err = await useCase
       .execute({ projectId: PID, actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ForbiddenException);
     expect(areaRepo.listAreas).not.toHaveBeenCalled();
+    expect(projectRepo.findById).not.toHaveBeenCalled();
     projectRepo.findById.mockResolvedValue(null);
     const missing = await useCase
       .execute({ projectId: PID, actorUserId: ACTOR, actorRoles: ['ADMIN'] })
       .catch((e: unknown) => e);
     expect(missing).toBeInstanceOf(NotFoundException);
+  });
+
+  it('scope-first (review P1-1): non-member 403 kể cả project missing (không leak 404)', async () => {
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    projectRepo.findById.mockResolvedValue(null);
+    (areaRepo.listAreas as jest.Mock).mockClear();
+    const err = await useCase
+      .execute({ projectId: PID, actorUserId: ACTOR, actorRoles: ['WORKER'] })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(areaRepo.listAreas).not.toHaveBeenCalled();
   });
 });

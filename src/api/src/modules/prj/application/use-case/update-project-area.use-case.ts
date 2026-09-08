@@ -124,14 +124,11 @@ export class UpdateProjectAreaUseCase {
       throw fieldError('isActive', 'Trạng thái hoạt động không hợp lệ');
     }
 
-    const project = await this.projectRepo.findById(input.projectId);
-    if (!project) throw new NotFoundException('Không tìm thấy dự án');
-
-    const existing = await this.areaRepo.findAreaById(input.areaId);
-    if (!existing || existing.projectId !== input.projectId) {
-      throw new NotFoundException('Không tìm thấy khu vực trong dự án');
-    }
-
+    // PRJ-SRS-006 review P1-1: scope TRƯỚC mọi existence 404 (anti
+    // existence-oracle: non-admin luôn 403 kể cả project/area không tồn tại —
+    // non-member không bao giờ tới được area lookup; ADMIN được
+    // `assertProjectMemberScope` check exists() trước → missing vẫn 404, sau đó
+    // admin exists-checks bên dưới vẫn giữ).
     const { isAdminBypass } = await assertProjectAreaScope(this.scope, {
       projectId: input.projectId,
       actorUserId: input.actorUserId,
@@ -140,6 +137,14 @@ export class UpdateProjectAreaUseCase {
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
     });
+
+    const project = await this.projectRepo.findById(input.projectId);
+    if (!project) throw new NotFoundException('Không tìm thấy dự án');
+
+    const existing = await this.areaRepo.findAreaById(input.areaId);
+    if (!existing || existing.projectId !== input.projectId) {
+      throw new NotFoundException('Không tìm thấy khu vực trong dự án');
+    }
 
     const projectCode = project.code;
 

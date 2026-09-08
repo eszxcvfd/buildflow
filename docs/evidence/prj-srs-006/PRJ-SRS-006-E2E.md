@@ -66,7 +66,7 @@ Seed memberships bổ sung (ngoài bảng trên): `dong.trinh` COORDINATOR của
 | T3 | Admin (không member) `GET /projects/<B>` → **200** đủ data; `GET /audit-logs?action=PROJECT_SCOPE_ADMIN_BYPASS` có row (actor admin, entity B); UI admin mở detail B thấy tên | 🟢 PASS | `T3-adminbypass.png` + §5 |
 | T4 | Members read: WORKER A `GET /projects/<A>/members` → **200**, thấy đồng đội (Trịnh Văn Đông COORDINATOR…); hau.le (∉ A) → **403** + audit `PROJECT_SCOPE_DENIED` scope READ | 🟢 PASS | HTTP §5 |
 | T5 | Revoke mid-flight: MANAGER (quoc.tran) `DELETE /projects/<A>/members/<thang>` → 200 (lý do tiếng Việt); request kế tiếp của thang `GET A` → **403**, `PATCH A` → **403**; psql tên A giữ nguyên (không partial write); list loại A | 🟢 PASS | HTTP/DB §5 |
-| T6 | Mobile (hau.le, ∈ B ∉ A): list `/projects` hiện `DA-SONG-HONG`, không `DA-AN-PHU`; tap → detail B (tên + section `Thành viên` đủ MANAGER/WORKER/VIEWER từ API thật); deep-link `/projects/<A>` → `Bạn không phải thành viên dự án này (403)` + nút về danh sách, không leak tên A | 🟢 PASS | `T6-mobilelist/mbiledetail/mobile403.png` + §5 |
+| T6 | Mobile (hau.le, ∈ B ∉ A): list `/projects` hiện `DA-SONG-HONG`, không `DA-AN-PHU`; tap → detail B (tên + section `Thành viên` đủ MANAGER/WORKER/VIEWER từ API thật); deep-link `/projects/<A>` → `Bạn không phải thành viên dự án này (403)` + nút về danh sách, không leak tên A | 🟢 PASS | `T6-mobilelist/mobiledetail/mobile403.png` + §5 |
 | T7 | Area regression: MANAGER `POST /projects/<A>/areas` (`KHU-THAP-A` Khu tháp A – Tầng trệt) → **201**, persist psql; revoked-worker `POST /projects/<B>/areas` → **403**, không bản ghi lạ | 🟢 PASS | HTTP/DB §5 |
 
 **Tổng: 7 PASS / 0 FAIL / 7 mục.**

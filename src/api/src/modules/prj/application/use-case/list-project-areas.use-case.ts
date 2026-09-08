@@ -23,8 +23,9 @@ export interface ListProjectAreasOutput {
 
 /**
  * PRJ-SRS-003 (issue #34, A1/A4) — tra cứu khu vực theo dự án.
- * - Project phải tồn tại (404). Scope A4: ADMIN bypass, còn lại phải là
- *   ACTIVE member (mọi role — WO picker tương lai phục vụ cả worker).
+ * - Scope A4 TRƯỚC existence (review P1-1): ADMIN bypass, còn lại phải là
+ *   ACTIVE member (mọi role — WO picker tương lai phục vụ cả worker);
+ *   non-admin luôn 403 kể cả project không tồn tại, ADMIN giữ 404.
  * - Default kèm inactive (flag qua `isActive`); `?activeOnly=true` chỉ active.
  * - Thuần SELECT → pool read trực tiếp, không mở write transaction (mirror #30 fix F7).
  * - PRJ-SRS-006 (issue #37): scope qua `ProjectScopeService` (API chung);
@@ -39,15 +40,18 @@ export class ListProjectAreasUseCase {
   ) {}
 
   async execute(input: ListProjectAreasInput): Promise<ListProjectAreasOutput> {
-    const project = await this.projectRepo.findById(input.projectId);
-    if (!project) throw new NotFoundException('Không tìm thấy dự án');
-
+    // PRJ-SRS-006 review P1-1: scope TRƯỚC existence (anti existence-oracle:
+    // non-admin luôn 403 kể cả project không tồn tại; ADMIN được
+    // `assertProjectMemberScope` check exists() trước → project missing vẫn 404).
     await assertProjectAreaScope(this.scope, {
       projectId: input.projectId,
       actorUserId: input.actorUserId,
       actorRoles: input.actorRoles,
       auditBypass: false,
     });
+
+    const project = await this.projectRepo.findById(input.projectId);
+    if (!project) throw new NotFoundException('Không tìm thấy dự án');
 
     const areas = await this.areaRepo.listAreas({
       projectId: input.projectId,
