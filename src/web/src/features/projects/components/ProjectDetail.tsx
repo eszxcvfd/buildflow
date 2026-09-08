@@ -14,7 +14,6 @@ import {
 import { ProjectMembers } from './ProjectMembers';
 import { ProjectAreas } from './ProjectAreas';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
-import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -233,62 +232,65 @@ export function ProjectDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <PageHeader
-        title={project.name}
-        subtitle={`${project.code} · ${statusLabel(project.status)}`}
-        actions={
-          canManage ? (
-            <a className="bf-btn bf-btn-secondary" href={`/projects/${project.id}/edit`}>
-              Sửa hồ sơ
-            </a>
-          ) : undefined
-        }
-      />
-
       <Card>
-        <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mã dự án</dt>
-            <dd style={{ margin: 0 }}>{project.code}</dd>
+        <div className="bf-profile-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{project.name}</h1>
+              <span className="bf-chip">{project.code}</span>
+              <StatusBadge status={project.status} />
+              <span style={{ color: 'var(--bf-muted)', fontSize: '0.85rem' }}>{statusLabel(project.status)}</span>
+            </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tên dự án</dt>
-            <dd style={{ margin: 0 }}>{project.name}</dd>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {canManage ? (
+              <a className="bf-btn bf-btn-secondary" href={`/projects/${project.id}/edit`}>
+                Sửa hồ sơ
+              </a>
+            ) : null}
+            {canManage && allowedActions.length > 0 ? (
+              <>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Chuyển trạng thái:</span>
+                {allowedActions.map((action) => (
+                  <Button
+                    key={action}
+                    variant={action === 'PAUSE' || action === 'CLOSE' ? 'secondary' : 'primary'}
+                    onClick={() => openDialog(action)}
+                    disabled={actionLoading}
+                  >
+                    {PROJECT_ACTION_LABEL[action]}
+                  </Button>
+                ))}
+              </>
+            ) : null}
+            <a href="/projects" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Địa chỉ</dt>
-            <dd style={{ margin: 0 }}>—</dd>
+        </div>
+
+        <dl className="bf-def-grid">
+          <div>
+            <dt>Mô tả</dt>
+            <dd style={{ whiteSpace: 'pre-wrap' }}>—</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Múi giờ</dt>
-            <dd style={{ margin: 0 }}>—</dd>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Ngày kế hoạch</dt>
-            <dd style={{ margin: 0 }}>—</dd>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Quản lý dự án</dt>
-            <dd style={{ margin: 0 }}>
+          <div>
+            <dt>Quản lý dự án</dt>
+            <dd>
               {project.managerId
                 ? (managerName ?? `${project.managerId.slice(0, 8)}…`)
                 : '— chưa chỉ định —'}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trạng thái</dt>
-            <dd style={{ margin: 0 }}>
-              <StatusBadge status={project.status} />{' '}
-              <span style={{ color: 'var(--bf-muted)', fontSize: '0.85rem' }}>{statusLabel(project.status)}</span>
-            </dd>
+          <div>
+            <dt>Ngày kế hoạch</dt>
+            <dd>—</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Ngày tạo</dt>
-            <dd style={{ margin: 0 }}>{new Date(project.createdAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Ngày tạo</dt>
+            <dd>{new Date(project.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Cập nhật</dt>
-            <dd style={{ margin: 0 }}>{new Date(project.updatedAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Cập nhật</dt>
+            <dd>{new Date(project.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
 
@@ -302,22 +304,6 @@ export function ProjectDetail({ id }: { id: string }) {
               Dự án Đóng không nhận Work Order mới (áp dụng từ JOB slices); lịch sử và dữ liệu
               đã phát sinh được giữ nguyên.
             </Alert>
-          </div>
-        ) : null}
-
-        {canManage && allowedActions.length > 0 ? (
-          <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Chuyển trạng thái:</span>
-            {allowedActions.map((action) => (
-              <Button
-                key={action}
-                variant={action === 'PAUSE' || action === 'CLOSE' ? 'secondary' : 'primary'}
-                onClick={() => openDialog(action)}
-                disabled={actionLoading}
-              >
-                {PROJECT_ACTION_LABEL[action]}
-              </Button>
-            ))}
           </div>
         ) : null}
 

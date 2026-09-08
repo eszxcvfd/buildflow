@@ -111,6 +111,8 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     addMemberMock.mockResolvedValue({ ...member(), warning: null });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    // Form thêm nằm trong Ark Dialog mở từ nút 'Thêm thành viên'.
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm thành viên' }));
     await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(() =>
@@ -124,6 +126,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     addMemberMock.mockRejectedValue({ status: 409, code: 'MEMBER_DUPLICATE', message: 'Thành viên đã thuộc đội' });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm thành viên' }));
     await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(() => expect(screen.getByText('Thành viên đã trong đội')).not.toBeNull());
@@ -139,6 +142,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
     });
     render(<CrewMembers crewId={CREW_ID} crewStatus="ACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm thành viên' }));
     await chooseOption('Công nhân', 'Tran Thi Moi · NV-009');
     fireEvent.click(screen.getByRole('button', { name: 'Thêm vào đội' }));
     await waitFor(
@@ -178,6 +182,7 @@ describe('CrewMembers ORG-SRS-007 (issue #30)', () => {
   it('đội INACTIVE disable form thêm + báo không thể thêm', async () => {
     render(<CrewMembers crewId={CREW_ID} crewStatus="INACTIVE" />);
     await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm thành viên' }));
     expect(screen.getByText('Đội đang không hoạt động nên không thể thêm thành viên.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Thêm vào đội' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('combobox', { name: 'Công nhân' }).hasAttribute('disabled')).toBe(true);

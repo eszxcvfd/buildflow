@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { getTrade, changeTradeStatus, type Trade } from '@/lib/api/trades';
 import type { ApiError } from '@/lib/api/trades';
-import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -88,47 +87,50 @@ export function TradeDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <PageHeader
-        title={trade.name}
-        subtitle={`${trade.code} · ${isActive ? 'Đang hoạt động' : 'Ngừng hoạt động'}`}
-        actions={
-          <a className="bf-btn bf-btn-secondary" href={`/trades/${trade.id}/edit`}>
-            Sửa danh mục
-          </a>
-        }
-      />
-
       <Card>
-        <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mã</dt>
-            <dd style={{ margin: 0 }}>{trade.code}</dd>
+        <div className="bf-profile-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{trade.name}</h1>
+              <span className="bf-chip">{trade.code}</span>
+              <span className={`bf-badge bf-badge-${isActive ? 'ok' : 'busy'}`}>
+                {isActive ? 'Hoạt động' : 'Ngừng hoạt động'}
+              </span>
+            </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mô tả</dt>
-            <dd style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{trade.description || '—'}</dd>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <a className="bf-btn bf-btn-secondary" href={`/trades/${trade.id}/edit`}>
+              Sửa danh mục
+            </a>
+            {!showConfirm ? (
+              <Button variant={isActive ? 'secondary' : 'primary'} onClick={() => setShowConfirm(true)}>
+                {isActive ? 'Chuyển sang Ngừng hoạt động' : 'Kích hoạt lại'}
+              </Button>
+            ) : null}
+            <a href="/trades" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trạng thái</dt>
-            <dd style={{ margin: 0, fontWeight: 600, color: isActive ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
-              {isActive ? 'Hoạt động' : 'Ngừng hoạt động'}
-            </dd>
+        </div>
+
+        <dl className="bf-def-grid">
+          <div>
+            <dt>Mô tả</dt>
+            <dd style={{ whiteSpace: 'pre-wrap' }}>{trade.description || '—'}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Dùng cho phân công</dt>
-            <dd style={{ margin: 0, color: trade.assignable ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
+          <div>
+            <dt>Dùng cho phân công</dt>
+            <dd style={{ color: trade.assignable ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
               {trade.assignable
                 ? 'Được phép — chọn được cho worker/loại công việc/work order mới'
                 : 'Bị chặn — danh mục ngừng hiệu lực không dùng cho phân công/tự nhận mới'}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tạo</dt>
-            <dd style={{ margin: 0 }}>{new Date(trade.createdAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Tạo</dt>
+            <dd>{new Date(trade.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Cập nhật</dt>
-            <dd style={{ margin: 0 }}>{new Date(trade.updatedAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Cập nhật</dt>
+            <dd>{new Date(trade.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
 
@@ -140,15 +142,6 @@ export function TradeDetail({ id }: { id: string }) {
             </Alert>
           </div>
         ) : null}
-
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {!showConfirm ? (
-            <Button variant={isActive ? 'secondary' : 'primary'} onClick={() => setShowConfirm(true)}>
-              {isActive ? 'Chuyển sang Ngừng hoạt động' : 'Kích hoạt lại'}
-            </Button>
-          ) : null}
-          <a href="/trades" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
-        </div>
 
         {showConfirm ? (
           <div style={{ marginTop: '1rem', border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: 8, padding: '0.75rem' }}>

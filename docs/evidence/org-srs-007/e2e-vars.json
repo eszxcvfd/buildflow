@@ -1,10 +1,10 @@
 {
-  "digits": "S6N5ZL",
-  "crewA": "a4faee4a-3fb1-4f1e-87af-96c14ff1eb12",
-  "crewB": "5e9a9fad-1be6-4ac4-bb10-115c840aea91",
-  "crewCodeA": "DTA-S6N5ZL",
-  "crewCodeB": "DTB-S6N5ZL",
-  "memberB": "6ddf205e-bfb8-4162-ad87-0e8ad41d9789",
+  "digits": "S7ZY6S",
+  "crewA": "72ee1804-c64d-44b6-b2eb-508dbfa307d7",
+  "crewB": "3c2f08f6-5166-4005-889f-a5df57137d86",
+  "crewCodeA": "DTA-S7ZY6S",
+  "crewCodeB": "DTB-S7ZY6S",
+  "memberB": "9ad9913b-88da-4fd9-a0f0-96a0ef2ae1ea",
   "today": "2026-09-08",
   "worker1": "33333333-3333-4333-8333-333333333333",
   "worker2": "44444444-4444-4444-8444-444444444444",
@@ -26,7 +26,7 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "UI success + banner overlap; audit có _warning; memberB=6ddf205e…"
+      "note": "UI success + banner overlap; audit có _warning; memberB=9ad9913b…"
     },
     {
       "id": "S4",
@@ -56,7 +56,7 @@
     {
       "id": "S9",
       "ok": true,
-      "note": "URL tab=workers&crew=a4faee4a-3fb1-4f1e-87af-96c14ff1eb12&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
+      "note": "URL tab=workers&crew=72ee1804-c64d-44b6-b2eb-508dbfa307d7&sort=createdAt&order=desc; API total=2; UI chỉ members crew A; crewId ảo 400"
     },
     {
       "id": "S10",

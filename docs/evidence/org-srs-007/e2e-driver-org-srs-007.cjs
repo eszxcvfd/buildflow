@@ -251,12 +251,17 @@ async function selectWorkerToAdd(page, userId) {
       await page.locator('tr', { hasText: CREW_A }).locator('a').first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Thành viên'), { timeout: 20000 });
       await snap(page, id + '-detail', 'Chi tiết crew A trước khi thêm (panel Thành viên)');
+      // Form thêm nằm trong Ark Dialog — mở từ nút 'Thêm thành viên' ở card hiện tại.
+      await page.locator('button', { hasText: 'Thêm thành viên' }).first().click();
       await selectWorkerToAdd(page, WORKER2_ID);
       await page.fill('#member-add-effective-from', TODAY);
       await snap(page, id + '-form', 'Form thêm đã điền worker2 + effectiveFrom today');
       await page.locator('button', { hasText: 'Thêm vào đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Đã thêm'), { timeout: 20000 });
       await page.waitForTimeout(1500);
+      // Đóng dialog thêm (giữ intent: success đã assert) để các bước sau thao tác bảng.
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
       const t = await bodyText(page);
       await snap(page, id + '-added', 'Thêm worker2 thành công (list hiện THÀNH VIÊN)');
       if (!t.includes('Lê Văn Hậu')) return fail(id, 'list không hiện Lê Văn Hậu sau khi thêm');
@@ -270,6 +275,7 @@ async function selectWorkerToAdd(page, userId) {
 
     // ============ S2: trùng thành viên → 409 ============
     await step('S2', 'Thêm lại worker2 vào crew A → 409 field Thành viên đã trong đội, không thêm row', async (id) => {
+      await page.locator('button', { hasText: 'Thêm thành viên' }).first().click();
       await selectWorkerToAdd(page, WORKER2_ID);
       await page.locator('button', { hasText: 'Thêm vào đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Thành viên đã trong đội'), { timeout: 20000 });
@@ -285,6 +291,7 @@ async function selectWorkerToAdd(page, userId) {
     await step('S3', 'Thêm worker2 vào crew B → 201 + banner MEMBER_IN_OTHER_CREW; audit afterData có _warning', async (id) => {
       await page.goto(`${WEB}/crews/${crewB}`, { waitUntil: 'networkidle' });
       await page.waitForFunction(() => (document.body.textContent || '').includes('Thành viên'), { timeout: 20000 });
+      await page.locator('button', { hasText: 'Thêm thành viên' }).first().click();
       await selectWorkerToAdd(page, WORKER2_ID);
       await page.fill('#member-add-effective-from', TODAY);
       await page.locator('button', { hasText: 'Thêm vào đội' }).first().click();
@@ -293,6 +300,9 @@ async function selectWorkerToAdd(page, userId) {
       const t = await bodyText(page);
       await snap(page, id + '-warning', 'Thêm vào crew B: success + banner overlap đội khác');
       if (!t.includes('đang thuộc đội khác')) return fail(id, 'thiếu banner overlap MEMBER_IN_OTHER_CREW');
+      // Đóng dialog sau khi đã assert banner để S4 thao tác bảng.
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
       const au = psqlT(`SELECT after_data::text FROM audit_logs WHERE entity_type='CREW' AND entity_id='${crewB}' AND action='ORG_CREW_MEMBER_ADDED' AND after_data::text LIKE '%${WORKER2_ID}%' ORDER BY created_at DESC LIMIT 1`);
       if (!au.includes('_warning')) return fail(id, `audit afterData thiếu _warning: ${au.slice(0, 300)}`);
       const m = await api('GET', `/api/v1/crews/${crewB}/members?includeInactive=true`, adminToken);
@@ -365,6 +375,9 @@ async function selectWorkerToAdd(page, userId) {
       await page.locator('button', { hasText: 'Xác nhận tạm ngừng' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Tạm ngừng thành công'), { timeout: 20000 });
       await page.waitForTimeout(1500);
+      // Form thêm nằm trong Dialog — mở dialog rồi mới kiểm tra notice + disabled.
+      await page.locator('button', { hasText: 'Thêm thành viên' }).first().click();
+      await page.waitForSelector('#member-add-user', { timeout: 15000 });
       const t = await bodyText(page);
       await snap(page, id + '-suspended', 'Crew B INACTIVE: form thêm báo đội không hoạt động');
       if (!t.includes('Đội đang không hoạt động')) return fail(id, 'thiếu notice đội không hoạt động ở form thêm');
@@ -451,16 +464,19 @@ async function selectWorkerToAdd(page, userId) {
       await login(page, PM_EMAIL, PM_PASS);
       await page.goto(`${WEB}/crews/${crewA}`, { waitUntil: 'networkidle' });
       await page.waitForFunction(() => (document.body.textContent || '').includes('Thành viên'), { timeout: 20000 });
+      await page.locator('button', { hasText: 'Thêm thành viên' }).first().click();
       await selectWorkerToAdd(page, WORKER4_ID);
       await page.locator('button', { hasText: 'Thêm vào đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Đã thêm'), { timeout: 20000 });
       await page.waitForTimeout(1500);
       await snap(page, id + '-pm-added', 'PM thêm worker4 thành công');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
       const m = await api('GET', `/api/v1/crews/${crewA}/members`, pmToken);
       const hit = (m.body.data || []).find((x) => x.userId === WORKER4_ID && x.isActive);
       if (!hit) return fail(id, 'API members thiếu worker4 sau PM add');
-      // PM xóa worker4 qua UI
-      const rows = page.locator('li', { hasText: WORKER4_NAME });
+      // PM xóa worker4 qua UI (bảng .bf-table — row <tr> chứa tên worker4)
+      const rows = page.locator('tr', { hasText: WORKER4_NAME });
       await rows.locator('button', { hasText: 'Xóa khỏi đội' }).first().click();
       await page.waitForFunction(() => (document.body.textContent || '').includes('Xác nhận xóa'), { timeout: 10000 });
       await page.fill('#member-remove-effective-to', TODAY);

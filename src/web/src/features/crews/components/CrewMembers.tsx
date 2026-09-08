@@ -13,6 +13,7 @@ import { RESOURCE_REASON_MAX_LENGTH } from '@/features/resources/components/Reso
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
+import { Dialog } from '@/components/ui/dialog/Dialog';
 import { EmptyState } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
 import { Select } from '@/components/ui/select/Select';
@@ -50,12 +51,15 @@ function effectivePeriod(m: CrewMember): string {
 /**
  * ORG-SRS-007 (issue #30) — quản lý thành viên đội (role MEMBER).
  * LEAD chỉ đọc ở đây; đổi trưởng nhóm qua form sửa hồ sơ đội (D1).
- * - Danh sách active (+ worker-name lookup fallback khi API không join tên).
- * - Thêm: worker ACTIVE select + lọc text client, effectiveFrom (type=date).
+ * - Card 'Thành viên hiện tại': header title trái + nút 'Thêm thành viên' phải;
+ *   body bảng .bf-table (Công nhân link /workers/:id, Vai trò, Hiệu lực, Hành động).
+ *   Form thêm nằm trong Ark Dialog (Tìm công nhân + Công nhân + Ngày hiệu lực
+ *   + 'Thêm vào đội'), lỗi per-field giữ nguyên.
  *   API POST chỉ nhận { userId, effectiveFrom? } (theo CreateCrewMemberDto thực tế).
+ * - Card 'Lịch sử thành viên' (riêng, dưới): checkbox 'Xem toàn bộ lịch sử' +
+ *   'Danh sách tại ngày' + bảng kết quả; mặc định thu gọn khi trống.
  * - Xóa mềm từng MEMBER active: confirm inline + effectiveTo (default today,
  *   min = effectiveFrom) + reason optional (max 500, counter).
- * - Lịch sử: includeInactive=true (toàn bộ) + at point-in-time roster.
  */
 export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
   const [members, setMembers] = React.useState<CrewMember[]>([]);
@@ -68,7 +72,8 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
 
   const [workerNames, setWorkerNames] = React.useState<Map<string, string>>(new Map());
 
-  // Add form
+  // Add form (Ark Dialog, mở từ nút 'Thêm thành viên' ở card hiện tại).
+  const [addOpen, setAddOpen] = React.useState(false);
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [userId, setUserId] = React.useState('');
   const [userSearch, setUserSearch] = React.useState('');
@@ -211,6 +216,14 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
     }
   }
 
+  function openAdd() {
+    setAddFieldErrors({});
+    setAddGlobalError(null);
+    setAddSuccess(null);
+    setAddWarning(null);
+    setAddOpen(true);
+  }
+
   function openRemoveConfirm(m: CrewMember) {
     setConfirmMemberId(m.id);
     setRemoveEffectiveTo(todayDateOnly());
@@ -292,79 +305,93 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
 
   const confirming = confirmMemberId ? members.find((m) => m.id === confirmMemberId) ?? null : null;
 
-  return (
-    <div style={{ display: 'grid', gap: '1rem' }}>
-      <div className="bf-card-head">
-        <span className="bf-card-title">Thành viên</span>
-      </div>
+  const historyVisible = showHistory || at.trim() !== '';
 
-      {removeNotice ? <Alert tone="info">{removeNotice}</Alert> : null}
-      {removeSuccess ? <Alert tone="success">{removeSuccess}</Alert> : null}
-
-      {loading ? (
-        <p aria-busy="true">Đang tải danh sách thành viên…</p>
-      ) : (
-        renderListError() ??
-        (activeMembers.length === 0 && !showHistory && !at.trim() ? (
-          <EmptyState title="Chưa có thành viên — thêm thành viên đầu tiên">
-            Chọn công nhân đang hoạt động ở form bên dưới để thêm vào đội.
-          </EmptyState>
-        ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.5rem' }}>
-            {(showHistory || at.trim() ? members : activeMembers).map((m) => (
-              <li
-                key={m.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: '0.75rem',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  border: '1px solid var(--bf-line)',
-                  borderRadius: '0.5rem',
-                  padding: '0.5rem 0.75rem',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600 }}>
-                    <a
-                      href={`/workers/${m.userId}`}
-                      style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}
-                    >
-                      {memberDisplayName(m, workerNames)}
-                    </a>{' '}
-                    <span
-                      className={m.memberRole === 'LEAD' ? 'bf-badge-info' : 'bf-badge-neutral'}
-                      style={{ fontWeight: 500, fontSize: '0.75rem' }}
-                    >
-                      {roleLabel(m.memberRole)}
-                    </span>{' '}
-                    {!m.isActive ? (
-                      <span className="bf-badge-neutral" style={{ fontSize: '0.75rem' }}>
-                        Đã rời
-                      </span>
-                    ) : null}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
-                    Hiệu lực: {effectivePeriod(m)} · Thêm ngày{' '}
-                    {new Date(m.createdAt).toLocaleDateString('vi-VN')}
-                  </div>
+  function renderMemberTable(rows: CrewMember[]) {
+    return (
+      <div className="bf-table-wrap">
+        <table className="bf-table">
+          <thead>
+            <tr>
+              <th>Công nhân</th>
+              <th>Vai trò</th>
+              <th>Hiệu lực</th>
+              <th style={{ textAlign: 'right' }}>Hành động</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  <a
+                    href={`/workers/${m.userId}`}
+                    style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}
+                  >
+                    {memberDisplayName(m, workerNames)}
+                  </a>{' '}
+                  {!m.isActive ? (
+                    <span className="bf-badge-neutral" style={{ fontSize: '0.75rem' }}>
+                      Đã rời
+                    </span>
+                  ) : null}
+                </td>
+                <td>
+                  <span
+                    className={m.memberRole === 'LEAD' ? 'bf-badge-info' : 'bf-badge-neutral'}
+                    style={{ fontWeight: 500, fontSize: '0.75rem' }}
+                  >
+                    {roleLabel(m.memberRole)}
+                  </span>
                   {m.memberRole === 'LEAD' ? (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--bf-muted)', marginTop: '0.2rem' }}>
                       Đổi trưởng nhóm qua form sửa hồ sơ đội.
                     </div>
                   ) : null}
-                </div>
-                {m.isActive && m.memberRole !== 'LEAD' ? (
-                  <Button variant="secondary" onClick={() => openRemoveConfirm(m)} disabled={removePendingId === m.id}>
-                    Xóa khỏi đội
-                  </Button>
-                ) : null}
-              </li>
+                </td>
+                <td style={{ fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+                  Hiệu lực: {effectivePeriod(m)} · Thêm ngày{' '}
+                  {new Date(m.createdAt).toLocaleDateString('vi-VN')}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  {m.isActive && m.memberRole !== 'LEAD' ? (
+                    <Button variant="secondary" size="sm" onClick={() => openRemoveConfirm(m)} disabled={removePendingId === m.id}>
+                      Xóa khỏi đội
+                    </Button>
+                  ) : null}
+                </td>
+              </tr>
             ))}
-          </ul>
-        ))
-      )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: '1rem' }}>
+      <Card>
+        <div className="bf-card-head">
+          <span className="bf-card-title">Thành viên hiện tại</span>
+          <Button variant="primary" size="sm" onClick={openAdd}>
+            Thêm thành viên
+          </Button>
+        </div>
+
+        {removeNotice ? <Alert tone="info">{removeNotice}</Alert> : null}
+        {removeSuccess ? <Alert tone="success">{removeSuccess}</Alert> : null}
+
+        {loading ? (
+          <p aria-busy="true">Đang tải danh sách thành viên…</p>
+        ) : (
+          renderListError() ??
+          (activeMembers.length === 0 ? (
+            <EmptyState title="Chưa có thành viên — thêm thành viên đầu tiên">
+              Bấm nút Thêm thành viên ở trên để chọn công nhân đang hoạt động vào đội.
+            </EmptyState>
+          ) : (
+            renderMemberTable(activeMembers)
+          ))
+        )}
 
       {confirming ? (
         <div
@@ -432,9 +459,11 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
           </div>
         </div>
       ) : null}
+      </Card>
 
-      <form onSubmit={(e) => void handleAdd(e)} style={{ display: 'grid', gap: '0.5rem' }}>
-        <p style={{ margin: 0, fontWeight: 600 }}>Thêm thành viên</p>
+      {addOpen ? (
+        <Dialog title="Thêm thành viên" open onClose={() => (addPending ? null : setAddOpen(false))}>
+          <form onSubmit={(e) => void handleAdd(e)} style={{ display: 'grid', gap: '0.75rem' }}>
         {!isCrewActive ? (
           <Alert tone="info">Đội đang không hoạt động nên không thể thêm thành viên.</Alert>
         ) : null}
@@ -492,43 +521,69 @@ export function CrewMembers({ crewId, crewStatus, onChanged }: Props) {
             </p>
           ) : null}
         </div>
-        <div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Button variant="primary" type="submit" disabled={!isCrewActive || addPending || !userId}>
             {addPending ? 'Đang thêm…' : 'Thêm vào đội'}
           </Button>
+          <Button variant="secondary" type="button" onClick={() => setAddOpen(false)} disabled={addPending}>
+            Hủy
+          </Button>
         </div>
-      </form>
+        </form>
+        </Dialog>
+      ) : null}
 
-      <div style={{ display: 'grid', gap: '0.5rem' }}>
-        <p style={{ margin: 0, fontWeight: 600 }}>Lịch sử thành viên</p>
-        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.9rem' }}>
-          <input
-            type="checkbox"
-            checked={showHistory}
-            onChange={(e) => setShowHistory(e.target.checked)}
-          />
-          Xem toàn bộ lịch sử (kể cả thành viên đã rời)
-        </label>
-        <div className="bf-field" style={{ minWidth: 150, maxWidth: 240 }}>
-          <label className="bf-label" htmlFor="member-history-at">
-            Danh sách tại ngày
-          </label>
-          <Input
-            id="member-history-at"
-            type="date"
-            value={at}
-            onChange={(e) => setAt(e.target.value)}
-            placeholder="YYYY-MM-DD"
-          />
+      <Card>
+        <div className="bf-card-head">
+          <span className="bf-card-title">Lịch sử thành viên</span>
         </div>
-        {at.trim() ? (
-          <div>
-            <Button variant="secondary" onClick={() => setAt('')}>
-              Xóa mốc thời gian
-            </Button>
+        <div style={{ display: 'grid', gap: '0.5rem' }}>
+          <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.9rem' }}>
+            <input
+              type="checkbox"
+              checked={showHistory}
+              onChange={(e) => setShowHistory(e.target.checked)}
+            />
+            Xem toàn bộ lịch sử (kể cả thành viên đã rời)
+          </label>
+          <div className="bf-field" style={{ minWidth: 150, maxWidth: 240 }}>
+            <label className="bf-label" htmlFor="member-history-at">
+              Danh sách tại ngày
+            </label>
+            <Input
+              id="member-history-at"
+              type="date"
+              value={at}
+              onChange={(e) => setAt(e.target.value)}
+              placeholder="YYYY-MM-DD"
+            />
           </div>
-        ) : null}
-      </div>
+          {at.trim() ? (
+            <div>
+              <Button variant="secondary" onClick={() => setAt('')}>
+                Xóa mốc thời gian
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        <div style={{ marginTop: '0.75rem' }}>
+          {historyVisible ? (
+            loading ? (
+              <p aria-busy="true" style={{ margin: 0 }}>Đang tải lịch sử thành viên…</p>
+            ) : members.length === 0 ? (
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+                Không có bản ghi thành viên cho phạm vi đang xem.
+              </p>
+            ) : (
+              renderMemberTable(members)
+            )
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+              Lịch sử đang thu gọn — bật Xem toàn bộ lịch sử hoặc chọn Danh sách tại ngày để tra cứu.
+            </p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

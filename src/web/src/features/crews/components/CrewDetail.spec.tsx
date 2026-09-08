@@ -100,7 +100,7 @@ describe('CrewDetail ORG-SRS-006', () => {
     render(<CrewDetail id="crew-1" />);
     await waitFor(() => expect(screen.getByText('Doi ket cau')).not.toBeNull());
     expect(screen.getByText('TEAM-001')).not.toBeNull();
-    expect(screen.getByText('Thành viên')).not.toBeNull();
+    expect(screen.getByText('Thành viên hiện tại')).not.toBeNull();
     // Trưởng nhóm ở profile + option trong form thêm thành viên (cùng worker ACTIVE).
     await waitFor(() => expect(screen.getAllByText('Nguyen Van Lead · NV-001').length).toBeGreaterThanOrEqual(1));
     expect(screen.getByText('Chưa có thành viên — thêm thành viên đầu tiên')).not.toBeNull();

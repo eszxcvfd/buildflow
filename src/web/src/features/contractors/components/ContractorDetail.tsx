@@ -11,7 +11,6 @@ import {
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { useIsAdmin } from '@/lib/auth/roles';
-import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -142,55 +141,88 @@ export function ContractorDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <PageHeader
-        title={contractor.name}
-        subtitle={`${contractor.code} · ${statusLabel(contractor.status)}`}
-        actions={
-          isAdmin ? (
-            <a className="bf-btn bf-btn-secondary" href={`/contractors/${contractor.id}/edit`}>
-              Sửa hồ sơ
-            </a>
-          ) : undefined
-        }
-      />
-
       <Card>
-        <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Liên hệ</dt>
-            <dd style={{ margin: 0 }}>{contractor.contactName ?? '—'}</dd>
+        <div className="bf-profile-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{contractor.name}</h1>
+              <span className="bf-chip">{contractor.code}</span>
+              <span className={`bf-badge bf-badge-${isActive ? 'ok' : 'busy'}`}>{statusLabel(contractor.status)}</span>
+            </div>
+            <p style={{ margin: '0.3rem 0 0', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+              {contractor.email ?? contractor.phone ?? '—'}
+            </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>SĐT</dt>
-            <dd style={{ margin: 0 }}>{contractor.phone ?? '—'}</dd>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {isAdmin ? (
+              <>
+                <a className="bf-btn bf-btn-secondary" href={`/contractors/${contractor.id}/edit`}>
+                  Sửa hồ sơ
+                </a>
+                {isActive ? (
+                  <>
+                    <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
+                      Tạm ngừng
+                    </Button>
+                    <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
+                      Chấm dứt
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
+                    Kích hoạt lại
+                  </Button>
+                )}
+              </>
+            ) : (
+              <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
+                Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
+              </span>
+            )}
+            <a href="/contractors" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Email</dt>
-            <dd style={{ margin: 0 }}>{contractor.email ?? '—'}</dd>
+        </div>
+
+        <dl className="bf-def-grid">
+          <div>
+            <dt>Mã</dt>
+            <dd>{contractor.code}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Phạm vi</dt>
-            <dd style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{contractor.scope ?? '—'}</dd>
+          <div>
+            <dt>Liên hệ</dt>
+            <dd>{contractor.contactName ?? '—'}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trạng thái</dt>
-            <dd style={{ margin: 0, fontWeight: 600, color: isActive ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
+          <div>
+            <dt>SĐT</dt>
+            <dd>{contractor.phone ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Email</dt>
+            <dd>{contractor.email ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Phạm vi</dt>
+            <dd style={{ whiteSpace: 'pre-wrap' }}>{contractor.scope ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Trạng thái</dt>
+            <dd style={{ fontWeight: 600, color: isActive ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
               {statusLabel(contractor.status)}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Điều kiện phân công</dt>
-            <dd style={{ margin: 0, color: contractor.eligible ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
+          <div>
+            <dt>Điều kiện phân công</dt>
+            <dd style={{ color: contractor.eligible ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
               {contractor.eligible ? 'Đủ điều kiện — cho phép phân công' : 'Không đủ điều kiện — chặn phân công mới, lịch sử vẫn giữ'}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tạo bởi</dt>
-            <dd style={{ margin: 0 }}>{contractor.createdBy.slice(0, 8)}… · {new Date(contractor.createdAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Tạo bởi</dt>
+            <dd>{contractor.createdBy.slice(0, 8)}… · {new Date(contractor.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Cập nhật</dt>
-            <dd style={{ margin: 0 }}>{new Date(contractor.updatedAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Cập nhật</dt>
+            <dd>{new Date(contractor.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
 
@@ -202,34 +234,6 @@ export function ContractorDetail({ id }: { id: string }) {
             </Alert>
           </div>
         ) : null}
-
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {isActive ? (
-            isAdmin ? (
-              <>
-                <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
-                  Tạm ngừng
-                </Button>
-                <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
-                  Chấm dứt
-                </Button>
-              </>
-            ) : (
-              <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
-                Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
-              </span>
-            )
-          ) : isAdmin ? (
-            <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
-              Kích hoạt lại
-            </Button>
-          ) : (
-            <span style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>
-              Thay đổi trạng thái cần quyền ADMIN — tài khoản hiện tại chỉ xem.
-            </span>
-          )}
-          <a href="/contractors" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
-        </div>
 
         {confirmAction && contractor ? (
           <div style={{ marginTop: '1rem' }}>

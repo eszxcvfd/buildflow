@@ -14,11 +14,9 @@ import {
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { CrewMembers } from './CrewMembers';
-import { PageHeader } from '@/components/ui/page-header/PageHeader';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
-import { StatusBadge } from '@/components/ui/badge/StatusBadge';
 import { toast } from '@/components/ui/toast/Toaster';
 
 function statusLabel(status: string): string {
@@ -193,39 +191,56 @@ export function CrewDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'grid', gap: '1rem' }}>
-      <PageHeader
-        title={crew.name}
-        subtitle={`${crew.code} · ${statusLabel(crew.status)}`}
-        actions={
-          <a className="bf-btn bf-btn-secondary" href={`/crews/${crew.id}/edit`}>
-            Sửa hồ sơ
-          </a>
-        }
-      />
-      {loading ? (
-        <p aria-busy="true" style={{ margin: 0, fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
-          Đang tải lại chi tiết đội thi công…
-        </p>
-      ) : null}
-      {error ? (
-        <Alert tone="error">
-          Tải lại thất bại{error.message ? `: ${error.message}` : ''} — đang hiện dữ liệu trước đó.
-        </Alert>
-      ) : null}
-
       <Card>
-        <dl style={{ margin: 0, display: 'grid', gap: '0.6rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mã đội</dt>
-            <dd style={{ margin: 0 }}>{crew.code}</dd>
+        <div className="bf-profile-head">
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700 }}>{crew.name}</h1>
+              <span className="bf-chip">{crew.code}</span>
+              <span className={`bf-badge bf-badge-${isActive ? 'ok' : 'busy'}`}>{statusLabel(crew.status)}</span>
+            </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Mô tả</dt>
-            <dd style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{crew.description ?? '—'}</dd>
+          <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <a className="bf-btn bf-btn-secondary" href={`/crews/${crew.id}/edit`}>
+              Sửa hồ sơ
+            </a>
+            {isActive ? (
+              <>
+                <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
+                  Tạm ngừng
+                </Button>
+                <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
+                  Chấm dứt
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
+                Kích hoạt lại
+              </Button>
+            )}
+            <a href="/crews" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trưởng nhóm</dt>
-            <dd style={{ margin: 0 }}>
+        </div>
+        {loading ? (
+          <p aria-busy="true" style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--bf-muted)' }}>
+            Đang tải lại chi tiết đội thi công…
+          </p>
+        ) : null}
+        {error ? (
+          <div style={{ marginBottom: '0.75rem' }}>
+            <Alert tone="error">
+              Tải lại thất bại{error.message ? `: ${error.message}` : ''} — đang hiện dữ liệu trước đó.
+            </Alert>
+          </div>
+        ) : null}
+        <dl className="bf-def-grid">
+          <div>
+            <dt>Mô tả</dt>
+            <dd style={{ whiteSpace: 'pre-wrap' }}>{crew.description ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Trưởng nhóm</dt>
+            <dd>
               {crew.leaderUserId ? (
                 <a href={`/workers/${crew.leaderUserId}`} style={{ color: '#111827', fontWeight: 600, textDecoration: 'none' }}>
                   {leaderName ?? `${crew.leaderUserId.slice(0, 8)}…`}
@@ -235,29 +250,23 @@ export function CrewDetail({ id }: { id: string }) {
               )}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Nhà thầu</dt>
-            <dd style={{ margin: 0 }}>{crew.contractorId ? `${crew.contractorId.slice(0, 8)}…` : '—'}</dd>
+          <div>
+            <dt>Nhà thầu</dt>
+            <dd>{crew.contractorId ? `${crew.contractorId.slice(0, 8)}…` : '—'}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Trạng thái</dt>
-            <dd style={{ margin: 0 }}>
-              <StatusBadge status={crew.status} />
-            </dd>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Điều kiện phân công</dt>
-            <dd style={{ margin: 0, color: crew.eligible ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
+          <div>
+            <dt>Điều kiện phân công</dt>
+            <dd style={{ color: crew.eligible ? 'var(--bf-ok)' : 'var(--bf-risk)' }}>
               {crew.eligible ? 'Đủ điều kiện — cho phép phân công' : 'Không đủ điều kiện — chặn phân công mới, lịch sử vẫn giữ'}
             </dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Tạo bởi</dt>
-            <dd style={{ margin: 0 }}>{crew.createdBy.slice(0, 8)}… · {new Date(crew.createdAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Tạo bởi</dt>
+            <dd>{crew.createdBy.slice(0, 8)}… · {new Date(crew.createdAt).toLocaleString('vi-VN')}</dd>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '0.5rem' }}>
-            <dt style={{ color: 'var(--bf-muted)', fontWeight: 500 }}>Cập nhật</dt>
-            <dd style={{ margin: 0 }}>{new Date(crew.updatedAt).toLocaleString('vi-VN')}</dd>
+          <div>
+            <dt>Cập nhật</dt>
+            <dd>{new Date(crew.updatedAt).toLocaleString('vi-VN')}</dd>
           </div>
         </dl>
 
@@ -269,24 +278,6 @@ export function CrewDetail({ id }: { id: string }) {
             </Alert>
           </div>
         ) : null}
-
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          {isActive ? (
-            <>
-              <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
-                Tạm ngừng
-              </Button>
-              <Button variant="secondary" onClick={() => openDialog('TERMINATE')} disabled={actionLoading}>
-                Chấm dứt
-              </Button>
-            </>
-          ) : (
-            <Button variant="primary" onClick={() => openDialog('ACTIVATE')} disabled={actionLoading}>
-              Kích hoạt lại
-            </Button>
-          )}
-          <a href="/crews" style={{ color: 'var(--bf-muted)', fontSize: '0.9rem' }}>Về danh sách</a>
-        </div>
 
         {confirmAction && crew ? (
           <div style={{ marginTop: '1rem' }}>
@@ -326,16 +317,14 @@ export function CrewDetail({ id }: { id: string }) {
         />
       </Card>
 
-      <Card>
-        <CrewMembers
-          crewId={crew.id}
-          crewStatus={crew.status}
-          onChanged={() => {
-            void load();
-            setTimelineKey((k) => k + 1);
-          }}
-        />
-      </Card>
+      <CrewMembers
+        crewId={crew.id}
+        crewStatus={crew.status}
+        onChanged={() => {
+          void load();
+          setTimelineKey((k) => k + 1);
+        }}
+      />
 
       <Card>
         <div className="bf-card-head">

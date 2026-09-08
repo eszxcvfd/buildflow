@@ -1,9 +1,9 @@
 {
-  "digits": "S6NWP4",
-  "crewId": "84fdc59d-9b1a-4f29-a298-684e2f2c8a68",
-  "crewCode": "DCD-S6NWP4",
-  "dsCrewId": "97cafb85-643f-49ae-8b3e-6f2c0a4e65b8",
-  "dsCode": "DCT-S6NWP4",
+  "digits": "S7TQRV",
+  "crewId": "e6cb04d5-54bc-4bac-bc4e-08e09d665166",
+  "crewCode": "DCD-S7TQRV",
+  "dsCrewId": "6858fe42-2e1d-4bdd-bcb3-b92efd8eb428",
+  "dsCode": "DCT-S7TQRV",
   "woCode": "PRD-B1-006",
   "woId": "e2e6b300-0000-4000-8000-0000000000b4",
   "asnId": "e2e6c100-0000-4000-8000-0000000000c2",
@@ -13,7 +13,7 @@
     {
       "id": "S1",
       "ok": true,
-      "note": "crewId=84fdc59d-9b1a-4f29-a298-684e2f2c8a68 UI list thấy DCD-S6NWP4; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
+      "note": "crewId=e6cb04d5-54bc-4bac-bc4e-08e09d665166 UI list thấy DCD-S7TQRV; DB status=ACTIVE + 1 LEAD active + audit CREATED=1"
     },
     {
       "id": "S2",
@@ -58,7 +58,7 @@
     {
       "id": "S10",
       "ok": true,
-      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=0a752699…)"
+      "note": "req1 201 → req2 409; rows=1 audits=1 (corr=532298c6…)"
     },
     {
       "id": "S11",

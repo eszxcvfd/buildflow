@@ -11,7 +11,7 @@
     {
       "id": "B1",
       "ok": true,
-      "note": "warning '1 công việc/lịch mở' + field error 'Lý do là bắt buộc khi tạm ngừng/chấm dứt'; audit giữ 21"
+      "note": "warning '1 công việc/lịch mở' + field error 'Lý do là bắt buộc khi tạm ngừng/chấm dứt'; audit giữ 23"
     },
     {
       "id": "B2",
@@ -21,7 +21,7 @@
     {
       "id": "B3",
       "ok": true,
-      "note": "UI info alreadyInState; audit giữ 10; status ACTIVE (đúng thiết kế: không tạo audit trùng)"
+      "note": "UI info alreadyInState; audit giữ 11; status ACTIVE (đúng thiết kế: không tạo audit trùng)"
     },
     {
       "id": "B4",
