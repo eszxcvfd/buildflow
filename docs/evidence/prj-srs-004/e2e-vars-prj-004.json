@@ -1,0 +1,93 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker": "thang.nguyen@vinacons.vn",
+  "digits": "650616",
+  "codes": {
+    "T1": "WT-E2E-650616",
+    "TX": "WT-E2E-X650616",
+    "PM": "WT-E2E-P650616",
+    "A4": "WT-E2E-V650616"
+  },
+  "ids": {
+    "T1": "43e62f11-a2f6-4509-95a4-9b4c19594a3c",
+    "TX": "e87b3ff8-0ff0-45cb-9326-6ca11cfa3b74",
+    "PM": "7d589196-1b88-4a61-8be7-abdf3237e685"
+  },
+  "tradeId": "11111111-1111-4111-8111-111111111111",
+  "auditBaseline": "2201",
+  "auditFinal": "2211",
+  "rest": "0",
+  "dbExcerpts": {
+    "workTypes": "WT-E2E-650616|Ốp lát tường vệ sinh 650616 (cập nhật)|2|t\nWT-E2E-P650616|Sơn nước mặt tiền 650616|1|t\nWT-E2E-X650616|Đổ bê tông lót 650616|1|f",
+    "auditLogs": "PRJ_WORK_TYPE_CREATED|WORK_TYPE|\nPRJ_WORK_TYPE_STATUS_CHANGED|WORK_TYPE|Giữ mẫu kiểm chứng picker loại trừ inactive\nPRJ_WORK_TYPE_CREATED|WORK_TYPE|\nPRJ_WORK_TYPE_STATUS_CHANGED|WORK_TYPE|Mở lại sau E2E\nPRJ_WORK_TYPE_STATUS_CHANGED|WORK_TYPE|Tạm ngừng cho E2E\nPRJ_WORK_TYPE_UPDATED|WORK_TYPE|\nPRJ_WORK_TYPE_CREATED|WORK_TYPE|\nPRJ_WORK_TYPE_STATUS_CHANGED|WORK_TYPE|Giữ mẫu kiểm chứng picker loại trừ inactive\nPRJ_WORK_TYPE_CREATED|WORK_TYPE|\nPRJ_WORK_TYPE_UPDATED|WORK_TYPE|"
+  },
+  "results": [
+    {
+      "id": "A1",
+      "ok": true,
+      "note": "login admin → list loads (toolbar Tổng + table)"
+    },
+    {
+      "id": "A2",
+      "ok": true,
+      "note": "preview 120 phút/Cao/chips đủ; tạo WT-E2E-650616 v1 duration=120 priority=HIGH; audit CREATED admin"
+    },
+    {
+      "id": "A3",
+      "ok": true,
+      "note": "UI field error Mã + API 409 WORK_TYPE_CODE_DUPLICATE; rows=1, dialog không crash"
+    },
+    {
+      "id": "A4",
+      "ok": true,
+      "note": "client error Thời lượng…số nguyên dương; dialog ở lại; không bản ghi"
+    },
+    {
+      "id": "A5",
+      "ok": true,
+      "note": "detail v1 + usage.workOrders=0; prefill+preview đủ; đổi tên → v2; psql WT-E2E-650616|…|2|true"
+    },
+    {
+      "id": "B1",
+      "ok": true,
+      "note": "UI badge Ngừng hoạt động; psql is_active=false; audit reason đủ"
+    },
+    {
+      "id": "B2",
+      "ok": true,
+      "note": "API alreadyInState=true; audit 1→1 (không dòng mới)"
+    },
+    {
+      "id": "B3",
+      "ok": true,
+      "note": "UI Đã kích hoạt lại + badge Hoạt động; API status=ACTIVE"
+    },
+    {
+      "id": "B4",
+      "ok": true,
+      "note": "?status=ACTIVE total=5: loại trừ WT-E2E-X650616, giữ WT-E2E-650616 (forward-ref JOB-SRS-001/002)"
+    },
+    {
+      "id": "C1",
+      "ok": true,
+      "note": "PM đọc list + tạo WT-E2E-P650616; audit CREATED actor PM"
+    },
+    {
+      "id": "C2",
+      "ok": true,
+      "note": "API 403 + UI alert 403 kèm Thử lại"
+    },
+    {
+      "id": "C3",
+      "ok": true,
+      "note": "anon GET /work-types → 401 đúng contract"
+    },
+    {
+      "id": "D1",
+      "ok": true,
+      "note": "UI đủ CREATED/STATUS_CHANGED + actor admin(11111111)/PM(22222222)"
+    }
+  ]
+}
