@@ -15,6 +15,7 @@ import {
   SearchField,
 } from '@/components/ui/list/ListKit';
 import { AdminUserEditDialog } from './AdminUserEditDialog';
+import { AdminUserRolesDialog } from './AdminUserRolesDialog';
 
 export function AdminUserList() {
   const [users, setUsers] = React.useState<AdminUser[]>([]);
@@ -29,6 +30,9 @@ export function AdminUserList() {
   // CRUD popup (Pinback /admin/users/:id/edit): nút 'Sửa' mở AdminUserEditDialog
   // (không điều hướng /edit); route /edit giữ hoạt động độc lập cho E2E drivers.
   const [editId, setEditId] = React.useState<string | null>(null);
+  // CRUD popup (Pinback /admin/users/:id/roles): nút 'Vai trò' mở AdminUserRolesDialog
+  // (không điều hướng /roles); route /roles giữ hoạt động độc lập.
+  const [rolesId, setRolesId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -250,7 +254,14 @@ export function AdminUserList() {
                           </button>
                         </Tooltip>
                         <Tooltip content="Gán vai trò">
-                          <a className="bf-detail-link" href={`/admin/users/${u.id}/roles`}>Vai trò</a>
+                          <button
+                            type="button"
+                            className="bf-detail-link"
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                            onClick={() => setRolesId(u.id)}
+                          >
+                            Vai trò
+                          </button>
                         </Tooltip>
                       </span>
                     </td>
@@ -267,6 +278,15 @@ export function AdminUserList() {
           id={editId}
           open
           onClose={() => setEditId(null)}
+          onUpdated={() => void load()}
+        />
+      ) : null}
+
+      {rolesId ? (
+        <AdminUserRolesDialog
+          id={rolesId}
+          open
+          onClose={() => setRolesId(null)}
           onUpdated={() => void load()}
         />
       ) : null}

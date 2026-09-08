@@ -16,7 +16,15 @@ import { toast } from '@/components/ui/toast/Toaster';
 // Approved role catalog per SRS. Server re-validates; client shows only known roles.
 const APPROVED_ROLE_CODES = ['ADMIN', 'WORKER'];
 
-export function AdminUserRoleAssign({ userId }: { userId: string }) {
+export function AdminUserRoleAssign({
+  userId,
+  onSuccess,
+  onCancel,
+}: {
+  userId: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}) {
   const [user, setUser] = React.useState<AdminUser | null>(null);
   const [currentRoles, setCurrentRoles] = React.useState<AdminRole[]>([]);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -91,6 +99,7 @@ export function AdminUserRoleAssign({ userId }: { userId: string }) {
       setInitialRoleIds(result.afterRoleIds);
       setSelected(new Set(result.afterRoleIds));
       setReason('');
+      onSuccess?.();
     } catch (e) {
       setGlobalError((e as AdminRolesError).message);
     } finally {
@@ -205,7 +214,11 @@ export function AdminUserRoleAssign({ userId }: { userId: string }) {
         <Button onClick={() => void handleSave()} loading={saving} aria-busy={saving} disabled={!hasChanges || saving}>
           Lưu vai trò
         </Button>
-        <a href="/admin/users">Về danh sách</a>
+        {onCancel ? (
+          <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+        ) : (
+          <a href="/admin/users">Về danh sách</a>
+        )}
       </div>
     </Card>
   );
