@@ -4,3 +4,5 @@ export * from './services/worker.service';
 export { WorkerList } from './components/WorkerList';
 export { WorkerForm } from './components/WorkerForm';
 export { WorkerDetail } from './components/WorkerDetail';
+export { WorkerCreateDialog } from './components/WorkerCreateDialog';
+export { WorkersView } from './components/WorkersView';

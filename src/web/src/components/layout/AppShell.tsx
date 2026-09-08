@@ -419,14 +419,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="bf-profile-menu">
               <Menu
                 triggerLabel={
-                  <span className="bf-profile-trigger">
-                    <span className="bf-avatar bf-avatar-sm" aria-hidden="true" style={{ width: 32, height: 32 }}>
-                      {initials(auth.user.fullName)}
-                    </span>
-                    <span className="bf-profile-name">{auth.user.fullName}</span>
+                  <span className="bf-avatar-btn-label" aria-hidden="true">
+                    {initials(auth.user.fullName)}
                   </span>
                 }
                 triggerAriaLabel="Mở menu tài khoản"
+                triggerClassName="bf-avatar-btn"
                 header={
                   <>
                     <div className="bf-menu-header-name">{auth.user.fullName}</div>

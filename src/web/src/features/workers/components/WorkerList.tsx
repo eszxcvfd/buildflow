@@ -56,7 +56,7 @@ const PAGE_SIZE = 20;
  * - `alreadyInState: true` từ API (request lặp) → thông tin 'đã ở trạng thái này',
  *   không báo lỗi, không tạo audit trùng.
  */
-export function WorkerList() {
+export function WorkerList({ onCreateRequest }: { onCreateRequest?: () => void }) {
   const tradeNames = useTradeNames();
   const [workers, setWorkers] = React.useState<Worker[]>([]);
   const [total, setTotal] = React.useState(0);
@@ -311,9 +311,15 @@ export function WorkerList() {
           <EmptyState
             title="Chưa có worker nào phù hợp bộ lọc"
             action={
-              <a className="bf-btn bf-btn-primary" href="/workers/new">
-                Thêm công nhân
-              </a>
+              onCreateRequest ? (
+                <Button onClick={onCreateRequest}>
+                  Thêm công nhân
+                </Button>
+              ) : (
+                <a className="bf-btn bf-btn-primary" href="/workers/new">
+                  Thêm công nhân
+                </a>
+              )
             }
           >
             Thử thay đổi từ khóa hoặc tạo hồ sơ mới.

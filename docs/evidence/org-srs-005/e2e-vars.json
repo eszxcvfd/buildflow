@@ -13,17 +13,17 @@
     {
       "id": "S3",
       "ok": true,
-      "note": "API full n=6 asc[0..2]=Lê Văn Hậu / Nguyễn Văn Ba / Nguyễn Văn Thắng; desc đảo đúng, cùng tập id; UI khớp cả 2 chiều"
+      "note": "API full n=9 asc[0..2]=Bùi Văn Lực S396SI Mới / Dialog Probe 772021 / Lê Văn Hậu; desc đảo đúng, cùng tập id; UI khớp cả 2 chiều"
     },
     {
       "id": "S4",
       "ok": true,
-      "note": "API limit=2: trang1=[Lê Văn Hậu, Nguyễn Văn Ba] trang2=[Nguyễn Văn Thắng, Phạm Văn Tuấn] total=6 khớp; UI page=2 Tổng=6 (empty vì PAGE_SIZE=20 > dataset — đúng thiết kế)"
+      "note": "API limit=2: trang1=[Bùi Văn Lực S396SI Mới, Dialog Probe 772021] trang2=[Lê Văn Hậu, Nguyễn Văn Ba] total=9 khớp; UI page=2 Tổng=9 (empty vì PAGE_SIZE=20 > dataset — đúng thiết kế)"
     },
     {
       "id": "S5",
       "ok": true,
-      "note": "empty state đúng + clear → Tổng=6 = DB 6; URL giữ filter sau refresh (true) và back (true)"
+      "note": "empty state đúng + clear → Tổng=9 = DB 9; URL giữ filter sau refresh (true) và back (true)"
     },
     {
       "id": "S6",
@@ -38,7 +38,7 @@
     {
       "id": "S8",
       "ok": true,
-      "note": "profile 'Lê Văn Hậu' hiện; ghi chú chỉ-xem + history admin-only; không nút lifecycle; PM open-work=403"
+      "note": "profile 'Bùi Văn Lực S396SI Mới' hiện; ghi chú chỉ-xem + history admin-only; không nút lifecycle; PM open-work=403"
     },
     {
       "id": "S9",

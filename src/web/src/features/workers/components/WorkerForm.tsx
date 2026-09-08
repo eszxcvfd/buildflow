@@ -17,9 +17,17 @@ import { toast } from '@/components/ui/toast/Toaster';
 interface Props {
   mode: 'create' | 'edit';
   initial?: Worker | null;
+  /**
+   * Dùng trong dialog (vd: WorkerCreateDialog trên /workers): submit thành
+   * công gọi onSuccess thay vì tự điều hướng; nút Hủy gọi onCancel (đóng
+   * dialog) thay vì push /workers. Route standalone (/workers/new) giữ
+   * hành vi cũ khi omit cả hai.
+   */
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
-export function WorkerForm({ mode, initial }: Props) {
+export function WorkerForm({ mode, initial, onSuccess, onCancel }: Props) {
   const router = useRouter();
   const tradeNames = useTradeNames();
   const initialTradeId = initial?.trades?.[0]?.tradeId ?? '';
@@ -136,7 +144,8 @@ export function WorkerForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Tạo worker thành công');
         toast.success({ title: 'Tạo worker thành công' });
-        setTimeout(() => router.push('/workers'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/workers'), 800);
       } else if (initial) {
         await updateWorker(initial.id, {
           fullName: fullName.trim() || undefined,
@@ -146,7 +155,8 @@ export function WorkerForm({ mode, initial }: Props) {
         });
         setGlobalSuccess('Cập nhật worker thành công');
         toast.success({ title: 'Cập nhật worker thành công' });
-        setTimeout(() => router.push('/workers'), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push('/workers'), 800);
       }
     } catch (err) {
       setFormError(err);
@@ -298,7 +308,7 @@ export function WorkerForm({ mode, initial }: Props) {
           <Button type="submit" loading={loading} aria-busy={loading}>
             {mode === 'create' ? 'Tạo worker' : 'Lưu thay đổi'}
           </Button>
-          <Button type="button" variant="secondary" onClick={() => router.push('/workers')}>
+          <Button type="button" variant="secondary" onClick={() => (onCancel ? onCancel() : router.push('/workers'))}>
             Hủy
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.refresh()} disabled={loading}>

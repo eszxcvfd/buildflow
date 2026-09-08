@@ -57,7 +57,10 @@ async function arkOpen(page, triggerId) {
   return cid;
 }
 async function arkSelectOption(page, triggerId, value) {
-  const cid = await arkOpen(page, triggerId);
+  await arkOpen(page, triggerId);
+  // Re-resolve cid SAU khi mở: Ark useId có thể remount (cid mới) giữa lúc
+  // đọc aria-controls và lúc click option — locator giữ cid cũ sẽ timeout.
+  const cid = await arkContentId(page, triggerId);
   await page.locator(`[id="${cid}"] [role="option"][data-value="${value}"]`).click();
 }
 async function arkOptionCount(page, triggerId) {
@@ -312,7 +315,9 @@ async function apiGet(urlPath, token) {
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`a[href="/workers/${wId}"]`, { timeout: 15000 });
       await page.waitForTimeout(800);
-      const card = page.locator(`a[href="/workers/${wId}"]`).first().locator('xpath=ancestor::div[contains(@style,"space-between")][1]');
+      // DashCode redesign (table .bf-table, không còn card div space-between):
+      // nút lifecycle nằm cùng hàng <tr> với link detail worker.
+      const card = page.locator(`tr:has(a[href="/workers/${wId}"])`).first();
       await card.locator('button:has-text("Tạm ngừng")').click();
       await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
       await page.fill('#lifecycle-reason', W_SUSPEND_REASON);
@@ -336,7 +341,8 @@ async function apiGet(urlPath, token) {
       await page.click('button:has-text("Tìm")');
       await page.waitForSelector(`a[href="/workers/${wId}"]`, { timeout: 15000 });
       await page.waitForTimeout(800);
-      const card = page.locator(`a[href="/workers/${wId}"]`).first().locator('xpath=ancestor::div[contains(@style,"space-between")][1]');
+      // Như A7: hàng <tr> thay cho card div space-between cũ.
+      const card = page.locator(`tr:has(a[href="/workers/${wId}"])`).first();
       await card.locator('button:has-text("Kích hoạt lại")').click();
       await page.waitForSelector('#lifecycle-reason', { timeout: 15000 });
       await page.fill('#lifecycle-reason', W_REACT_REASON);

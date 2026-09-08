@@ -1,15 +1,15 @@
 {
-  "uniq": "RLXNBI",
-  "tradeCode": "NK-RLXNBI",
-  "tradeCode2": "NK2-RLXNBI",
-  "workerEmail": "luc.tran.rlxnbi@vinacons.vn",
-  "workerName": "Bùi Văn Lực RLXNBI",
-  "workerCode": "TXW-RLXNBI",
-  "tradeId": "a3964b26-d30c-4610-b444-b0ba517a092d",
-  "workerId": "d16be924-1667-4226-9a84-54f252e5b71a",
-  "dupCode": "XT-RLXNBI",
-  "dupTradeId": "5129cd3e-a98f-46f2-973a-ea95027da9c3",
-  "correlationId": "b1f00000-0000-4000-8000-372141821622",
+  "uniq": "S396SI",
+  "tradeCode": "NK-S396SI",
+  "tradeCode2": "NK2-S396SI",
+  "workerEmail": "luc.tran.s396si@vinacons.vn",
+  "workerName": "Bùi Văn Lực S396SI",
+  "workerCode": "TXW-S396SI",
+  "tradeId": "135fc01c-6311-493e-be13-f90204d3b53c",
+  "workerId": "ad390f88-0730-4768-a167-45c94f8c3d04",
+  "dupCode": "XT-S396SI",
+  "dupTradeId": "6d8af1a8-244f-4645-8a52-b6f145159083",
+  "correlationId": "b1f00000-0000-4000-8000-443438695155",
   "results": [
     {
       "id": "B1",
@@ -19,12 +19,12 @@
     {
       "id": "B2",
       "ok": true,
-      "note": "bảng render, 4 rows; row đầu: Tho cat gachTHO-CATThi cong cat gach, op latACTIVENgừng hoạt độngChi tiết"
+      "note": "bảng render, 4 rows; row đầu: Tho cat gachTHO-CATThi cong cat gach, op latACTIVENgừng hoạt độngChi tiếtXem chi"
     },
     {
       "id": "B3",
       "ok": true,
-      "note": "DB row:\ncode    |         name         | is_active \n-----------+----------------------+-----------\n NK-RLXNBI | Thợ nhôm kính RLXNBI | t\n(1 row)\naudit:\naction       | entity_type | result  \n-------------------+-------------+---------\n ORG_TRADE_CREATED | TRADE       | SUCCESS\n(1 row)"
+      "note": "DB row:\ncode    |         name         | is_active \n-----------+----------------------+-----------\n NK-S396SI | Thợ nhôm kính S396SI | t\n(1 row)\naudit:\naction       | entity_type | result  \n-------------------+-------------+---------\n ORG_TRADE_CREATED | TRADE       | SUCCESS\n(1 row)"
     },
     {
       "id": "B4",
@@ -39,17 +39,17 @@
     {
       "id": "B6",
       "ok": true,
-      "note": "DB:\ncode    |             name             \n-----------+------------------------------\n NK-RLXNBI | Thợ nhôm kính RLXNBI cao cấp\n(1 row)\naudit:\naction       |        b_name        |            a_name            \n-------------------+----------------------+------------------------------\n ORG_TRADE_UPDATED | Thợ nhôm kính RLXNBI | Thợ nhôm kính RLXNBI cao cấp\n(1 row)"
+      "note": "DB:\ncode    |             name             \n-----------+------------------------------\n NK-S396SI | Thợ nhôm kính S396SI cao cấp\n(1 row)\naudit:\naction       |        b_name        |            a_name            \n-------------------+----------------------+------------------------------\n ORG_TRADE_UPDATED | Thợ nhôm kính S396SI | Thợ nhôm kính S396SI cao cấp\n(1 row)"
     },
     {
       "id": "B7",
       "ok": true,
-      "note": "worker=d16be924-1667-4226-9a84-54f252e5b71a; DB:\ntrade_id               | skill_level | is_active |            email            \n--------------------------------------+-------------+-----------+-----------------------------\n a3964b26-d30c-4610-b444-b0ba517a092d |           3 | t         | luc.tran.rlxnbi@vinacons.vn\n(1 row)"
+      "note": "worker=ad390f88-0730-4768-a167-45c94f8c3d04; DB:\ntrade_id               | skill_level | is_active |            email            \n--------------------------------------+-------------+-----------+-----------------------------\n 135fc01c-6311-493e-be13-f90204d3b53c |           3 | t         | luc.tran.s396si@vinacons.vn\n(1 row)"
     },
     {
       "id": "B8",
       "ok": true,
-      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-RLXNBI | f\n(1 row)\naudit:\naction          |                                      warning                                       \n--------------------------+------------------------------------------------------------------------------------\n ORG_TRADE_STATUS_CHANGED | Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực\n(1 row)"
+      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-S396SI | f\n(1 row)\naudit:\naction          |                                      warning                                       \n--------------------------+------------------------------------------------------------------------------------\n ORG_TRADE_STATUS_CHANGED | Danh mục đang được tham chiếu bởi resource/loại công việc/work order đang hiệu lực\n(1 row)"
     },
     {
       "id": "B9",
@@ -59,17 +59,17 @@
     {
       "id": "B10",
       "ok": true,
-      "note": "HTTP 400 message=\"Trade không tồn tại hoặc đã ngừng hoạt động: a3964b26-d30c-4610-b444-b0ba517a092d\""
+      "note": "HTTP 400 message=\"Trade không tồn tại hoặc đã ngừng hoạt động: 135fc01c-6311-493e-be13-f90204d3b53c\""
     },
     {
       "id": "B11",
       "ok": true,
-      "note": "HTTP 200; DB:\nfull_name        | active_trades \n------------------------+---------------\n Bùi Văn Lực RLXNBI Mới |             1\n(1 row)"
+      "note": "HTTP 200; DB:\nfull_name        | active_trades \n------------------------+---------------\n Bùi Văn Lực S396SI Mới |             1\n(1 row)"
     },
     {
       "id": "B12",
       "ok": true,
-      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-RLXNBI | t\n(1 row)\naudit:\naction          |    b     |   a    \n--------------------------+----------+--------\n ORG_TRADE_STATUS_CHANGED | INACTIVE | ACTIVE\n(1 row)"
+      "note": "DB:\ncode    | is_active \n-----------+-----------\n NK-S396SI | t\n(1 row)\naudit:\naction          |    b     |   a    \n--------------------------+----------+--------\n ORG_TRADE_STATUS_CHANGED | INACTIVE | ACTIVE\n(1 row)"
     },
     {
       "id": "B13",

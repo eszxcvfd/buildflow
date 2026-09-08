@@ -255,13 +255,16 @@
     z-index: 20;
   }
 
-  /* DashCode topbar search pill: bordered pill, loupe icon, slate-400 text. */
+  /* DashCode topbar search pill: bordered pill, loupe icon, slate-400 text.
+     Rộng cố định ~240px, cao 38px thẳng hàng với các controls khác. */
   .bf-search-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-width: 180px;
-    max-width: 280px;
+    width: 240px;
+    max-width: 240px;
+    min-width: 0;
+    height: 38px;
     border: 1px solid var(--bf-line-strong);
     border-radius: var(--bf-r-pill);
     background: var(--bf-surface);
@@ -367,7 +370,7 @@
   .bf-topbar-side {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     color: var(--bf-muted);
     font-size: 13px;
     min-width: 0;
@@ -384,6 +387,34 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+  }
+
+  /* DashCode header — profile trigger AVATAR-ONLY: chip tròn initials 36px
+     (bg primary-100, chữ primary-700, viền trắng, shadow nhẹ). Tên + email
+     nằm trong menu header, không render text ngoài trigger. */
+  .bf-avatar-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--bf-r-pill);
+    border: 2px solid #fff;
+    background: var(--bf-accent-soft);
+    color: #2a3f96;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  }
+
+  .bf-avatar-btn:hover {
+    background: #dfe5ff;
+  }
+
+  /* Menu bọc triggerLabel trong span truncate — mở lại cho chip avatar. */
+  .bf-avatar-btn > span {
+    overflow: visible;
   }
 
   .bf-profile-name {
@@ -554,7 +585,19 @@
     font-size: 13.5px;
     font-weight: 600;
     cursor: pointer;
+    text-decoration: none;
     transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+
+  /* Anchor dùng class .bf-btn (vd: CTA list-screen): giữ chữ trắng + không
+     gạch chân ở mọi trạng thái. Bắt buộc vì `a:hover` ở @layer base
+     (specificity 0,1,1) thắng `.bf-btn-primary` (0,1,0) làm chữ hóa xanh
+     trên nền xanh khi hover, và UA stylesheet gạch chân link mặc định. */
+  a.bf-btn,
+  a.bf-btn:hover,
+  a.bf-btn:active,
+  a.bf-btn:visited {
+    text-decoration: none;
   }
 
   .bf-btn:disabled,
@@ -568,8 +611,16 @@
     color: #fff;
   }
 
-  .bf-btn-primary:hover:not(:disabled) {
+  .bf-btn-primary:hover:not(:disabled),
+  a.bf-btn-primary:hover {
     background: var(--bf-accent-hover);
+    color: #fff;
+  }
+
+  a.bf-btn-primary,
+  a.bf-btn-primary:visited,
+  a.bf-btn-primary:active {
+    color: #fff;
   }
 
   .bf-btn-secondary {
@@ -1072,18 +1123,22 @@
     gap: 8px;
   }
 
+  /* Link action ở card-header ('Xem tất cả', 'Chi tiết'…): slate-600
+     font-medium trên nền sáng, hover primary-700 + gạch chân.
+     (var(--bf-info) #0CE7FA cũ quá sáng, không đủ tương phản.) */
   .bf-detail-link {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     font-size: 13px;
-    color: var(--bf-info);
+    color: var(--bf-muted);
     text-decoration: none;
     font-weight: 500;
     white-space: nowrap;
   }
 
   .bf-detail-link:hover {
+    color: #2a3f96;
     text-decoration: underline;
   }
 

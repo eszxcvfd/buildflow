@@ -37,6 +37,19 @@ describe('Menu wrapper (Ark UI)', () => {
     );
   });
 
+  it('closed menu content is portaled out of the inline header DOM', async () => {
+    const { container } = render(
+      <header data-testid="topbar">
+        <Menu triggerLabel="🔔" triggerAriaLabel="Thông báo" items={[{ id: 'empty', label: 'Chưa có thông báo', disabled: true }]} />
+      </header>,
+    );
+    const header = container.querySelector('header')!;
+    // Panel khi đóng không được nằm inline trong header (tránh lộ text item
+    // trong topbar) — nội dung portal ra document.body.
+    expect(header.querySelector('[role="menu"]')).toBeNull();
+    expect(header.textContent).not.toContain('Chưa có thông báo');
+  });
+
   // NOTE: item activation (onSelect) is not asserted here — zag menu's
   // pointer/keyboard activation path does not fire inside jsdom (verified
   // against raw Ark Menu: open/close work, selection never dispatches).

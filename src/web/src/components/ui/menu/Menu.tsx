@@ -1,6 +1,7 @@
 'use client';
 
 import { Menu as ArkMenu } from '@ark-ui/react/menu';
+import { Portal } from '@ark-ui/react/portal';
 import * as React from 'react';
 import { cn } from '@/lib/cn';
 
@@ -61,6 +62,10 @@ function ChevronDownIcon() {
  *
  * Profile polish: optional `header` (name + email, border-b), per-item 16px
  * icons, danger tone cho Đăng xuất, panel w-56, chevron trigger.
+ *
+ * Content luôn render qua Portal ra document.body (giống Dialog) nên khi
+ * đóng, DOM của panel không nằm inline trong header — không bao giờ lộ
+ * text item (vd: 'Chưa có thông báo') trong topbar.
  */
 export function Menu({ triggerLabel, triggerAriaLabel, items, onSelect, header, panelClassName, triggerClassName }: MenuProps) {
   return (
@@ -79,13 +84,14 @@ export function Menu({ triggerLabel, triggerAriaLabel, items, onSelect, header, 
           </span>
         )}
       </ArkMenu.Trigger>
-      <ArkMenu.Positioner>
-        <ArkMenu.Content
-          className={cn(
-            'bf-menu-panel z-50 min-w-44 rounded-md border border-gray-200 bg-white py-1 shadow-dropdown focus:outline-none',
-            panelClassName,
-          )}
-        >
+      <Portal>
+        <ArkMenu.Positioner>
+          <ArkMenu.Content
+            className={cn(
+              'bf-menu-panel z-50 min-w-44 rounded-md border border-gray-200 bg-white py-1 shadow-dropdown focus:outline-none',
+              panelClassName,
+            )}
+          >
           {header ? (
             <div className="bf-menu-header">
               {header}
@@ -125,8 +131,9 @@ export function Menu({ triggerLabel, triggerAriaLabel, items, onSelect, header, 
               </ArkMenu.Item>
             );
           })}
-        </ArkMenu.Content>
-      </ArkMenu.Positioner>
+          </ArkMenu.Content>
+        </ArkMenu.Positioner>
+      </Portal>
     </ArkMenu.Root>
   );
 }
