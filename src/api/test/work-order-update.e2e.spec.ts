@@ -65,6 +65,7 @@ describe('JOB-SRS-003 work-order update (e2e HTTP contract)', () => {
       plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
       dueAt: null,
       plannedHeadcount: null,
+      customFields: {},
       createdBy: PM_ID,
       version: 1,
       requestKey: null,

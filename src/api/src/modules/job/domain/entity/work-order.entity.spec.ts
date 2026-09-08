@@ -26,6 +26,7 @@ function baseProps(overrides?: Partial<WorkOrderProps>): WorkOrderProps {
     plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
     dueAt: null,
     plannedHeadcount: 5,
+    customFields: {},
     createdBy: IDS.actor,
     version: 1,
     requestKey: null,
@@ -89,7 +90,7 @@ describe('WorkOrderEntity (JOB-SRS-001)', () => {
       [
         'id', 'code', 'projectId', 'areaId', 'workTypeId', 'requiredTradeId', 'title',
         'description', 'instructions', 'priority', 'status', 'plannedStartAt', 'plannedEndAt',
-        'dueAt', 'plannedHeadcount', 'createdBy', 'version', 'requestKey', 'createdAt', 'updatedAt',
+        'dueAt', 'plannedHeadcount', 'customFields', 'createdBy', 'version', 'requestKey', 'createdAt', 'updatedAt',
       ].sort(),
     );
   });

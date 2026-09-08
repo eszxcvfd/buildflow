@@ -14,10 +14,11 @@ import {
   type WorkOrder,
   type WorkOrderPriority,
 } from '@/lib/api/work-orders';
-import { listActiveWorkTypes, type WorkType } from '@/lib/api/work-types';
+import { listActiveWorkTypes, type WorkType, type RequiredField } from '@/lib/api/work-types';
 import { listTrades, type Trade } from '@/lib/api/trades';
 import { WORK_TYPE_PRIORITY_LABELS } from '@/features/work-types';
-import { WORK_ORDER_PRIORITIES } from '../schemas/work-order.schema';
+import { WORK_ORDER_PRIORITIES, toCustomFieldsPayload } from '../schemas/work-order.schema';
+import { WorkOrderCustomFieldsSection } from './WorkOrderCustomFieldsSection';
 
 export type WorkOrderEditableField =
   | 'description'
@@ -27,7 +28,8 @@ export type WorkOrderEditableField =
   | 'plannedStartAt'
   | 'plannedEndAt'
   | 'requiredTradeId'
-  | 'workTypeId';
+  | 'workTypeId'
+  | 'customFields';
 
 const ALL_FIELDS: WorkOrderEditableField[] = [
   'description',
@@ -38,6 +40,7 @@ const ALL_FIELDS: WorkOrderEditableField[] = [
   'plannedEndAt',
   'requiredTradeId',
   'workTypeId',
+  'customFields',
 ];
 
 /** Lịch/skill/work-type đổi → workflow-impacting (reason + notification). */
@@ -58,11 +61,12 @@ const TERMINAL_STATUSES = new Set(['WORK_DONE', 'CLOSED', 'CANCELLED']);
 export function editableFieldsForStatus(status: string, isAdmin: boolean): Set<WorkOrderEditableField> {
   const s = status.toUpperCase();
   if (s === 'DRAFT' || s === 'READY') return new Set(ALL_FIELDS);
-  if (s === 'OPEN') return new Set<WorkOrderEditableField>(['description', 'instructions', 'dueAt']);
+  if (s === 'OPEN') return new Set<WorkOrderEditableField>(['description', 'instructions', 'dueAt', 'customFields']);
   if (s === 'ASSIGNED' || s === 'IN_PROGRESS') {
     return new Set<WorkOrderEditableField>([
       'description',
       'instructions',
+      'customFields',
       'plannedStartAt',
       'plannedEndAt',
       'requiredTradeId',
@@ -93,6 +97,13 @@ function toIsoOrNull(datetimeLocal: string): string | null {
   const d = new Date(text);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+/** So sánh record bỏ qua thứ tự key (dùng cho diff `customFields`). */
+function sortRecord(rec: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(rec).sort()) out[k] = rec[k];
+  return out;
 }
 
 /**
@@ -129,6 +140,19 @@ export function WorkOrderEditDialog({
   const [workTypeId, setWorkTypeId] = React.useState(workOrder.workTypeId);
   const [reason, setReason] = React.useState('');
 
+  /** J8 — giá trị thô Dữ liệu bổ sung (khởi từ `customFields` của WO). */
+  const [customValues, setCustomValues] = React.useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(workOrder.customFields ?? {})) {
+      if (typeof v === 'string' && v.length > 10 && /^\d{4}-\d{2}-\d{2}/.test(v)) out[k] = v.slice(0, 10);
+      else out[k] = String(v);
+    }
+    return out;
+  });
+  function setCustomValue(key: string, value: string) {
+    setCustomValues((prev) => ({ ...prev, [key]: value }));
+  }
+
   const [workTypes, setWorkTypes] = React.useState<WorkType[]>([]);
   const [trades, setTrades] = React.useState<Trade[]>([]);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
@@ -158,6 +182,45 @@ export function WorkOrderEditDialog({
 
   function isLocked(field: WorkOrderEditableField): boolean {
     return !editable.has(field);
+  }
+
+  // J8 — loại công việc đang chọn (mới hoặc hiện tại): render Dữ liệu bổ sung
+  // từ `required_fields` + khóa ngành nghề theo yêu cầu (`Bắt buộc: <trade>`).
+  const selectedWorkType = React.useMemo(
+    () =>
+      workTypes.find((t) => t.id === (workTypeId.trim() || workOrder.workTypeId)) ??
+      workTypes.find((t) => t.id === workOrder.workTypeId) ??
+      null,
+    [workTypes, workTypeId, workOrder.workTypeId],
+  );
+  const requiredFields: RequiredField[] = React.useMemo(
+    () => selectedWorkType?.requiredFields ?? [],
+    [selectedWorkType],
+  );
+  const customTypes = React.useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const f of requiredFields) m[f.key] = String(f.type ?? '');
+    return m;
+  }, [requiredFields]);
+  const requiredTradeOfType = selectedWorkType?.requiredTradeId?.trim()
+    ? String(selectedWorkType.requiredTradeId).trim()
+    : null;
+  const tradeLockedByType = requiredTradeOfType !== null;
+  const requiredTradeLabel = React.useMemo(() => {
+    if (!requiredTradeOfType) return null;
+    const t = trades.find((x) => x.id === requiredTradeOfType);
+    return t ? `${t.code} — ${t.name}` : requiredTradeOfType;
+  }, [trades, requiredTradeOfType]);
+
+  function handleWorkTypeChange(nextId: string) {
+    setWorkTypeId(nextId);
+    const next = workTypes.find((t) => t.id === nextId) ?? null;
+    const nextRequired = next?.requiredTradeId?.trim() ? String(next.requiredTradeId).trim() : null;
+    if (nextRequired) {
+      // Đổi sang loại có ngành yêu cầu → tự khóa ngành theo yêu cầu.
+      setClearTrade(false);
+      setRequiredTradeId(nextRequired);
+    }
   }
 
   function lockTitle(field: WorkOrderEditableField): string | undefined {
@@ -276,6 +339,17 @@ export function WorkOrderEditDialog({
     if (editable.has('workTypeId') && workTypeId.trim() && workTypeId.trim() !== workOrder.workTypeId) {
       payload.workTypeId = workTypeId.trim();
       changed = true;
+    }
+    if (editable.has('customFields')) {
+      // J8 — partial merge: chỉ gửi khi khác giá trị hiện tại (so sánh chuẩn
+      // hóa key-sort; ô trống = bỏ qua theo `toCustomFieldsPayload`).
+      const nextCustom = toCustomFieldsPayload(customValues, customTypes);
+      const sameCustom =
+        JSON.stringify(sortRecord(nextCustom)) === JSON.stringify(sortRecord(workOrder.customFields ?? {}));
+      if (!sameCustom) {
+        payload.customFields = nextCustom;
+        changed = true;
+      }
     }
 
     const touchedWorkflow =
@@ -491,6 +565,7 @@ export function WorkOrderEditDialog({
             <div className="bf-field">
               <label className="bf-label" htmlFor="woedit-trade">
                 Ngành nghề yêu cầu{isLocked('requiredTradeId') ? ' (khóa)' : null}
+                {!isLocked('requiredTradeId') && tradeLockedByType ? ` (bắt buộc: ${requiredTradeLabel})` : null}
               </label>
               <select
                 id="woedit-trade"
@@ -500,8 +575,11 @@ export function WorkOrderEditDialog({
                   setClearTrade(false);
                   setRequiredTradeId(e.target.value);
                 }}
-                disabled={pending || isLocked('requiredTradeId')}
-                title={lockTitle('requiredTradeId')}
+                disabled={pending || isLocked('requiredTradeId') || tradeLockedByType}
+                title={
+                  lockTitle('requiredTradeId') ??
+                  (tradeLockedByType ? `Loại công việc yêu cầu ngành ${requiredTradeLabel}` : undefined)
+                }
                 aria-invalid={Boolean(fieldErrors.requiredTradeId)}
               >
                 <option value="">— Không yêu cầu cụ thể —</option>
@@ -514,7 +592,7 @@ export function WorkOrderEditDialog({
                   <option value={requiredTradeId}>Giữ ngành nghề hiện tại</option>
                 ) : null}
               </select>
-              {!isLocked('requiredTradeId') && workOrder.requiredTradeId ? (
+              {!isLocked('requiredTradeId') && !tradeLockedByType && workOrder.requiredTradeId ? (
                 <label style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', fontSize: '0.85rem', marginTop: '0.35rem' }}>
                   <input
                     type="checkbox"
@@ -540,7 +618,7 @@ export function WorkOrderEditDialog({
                 id="woedit-worktype"
                 className="bf-input"
                 value={workTypeId}
-                onChange={(e) => setWorkTypeId(e.target.value)}
+                onChange={(e) => handleWorkTypeChange(e.target.value)}
                 disabled={pending || isLocked('workTypeId')}
                 title={lockTitle('workTypeId')}
                 aria-invalid={Boolean(fieldErrors.workTypeId)}
@@ -562,6 +640,22 @@ export function WorkOrderEditDialog({
               ) : null}
             </div>
           </div>
+
+          {requiredFields.length > 0 ? (
+            <WorkOrderCustomFieldsSection
+              fields={requiredFields}
+              values={customValues}
+              disabled={pending || isLocked('customFields')}
+              onChange={setCustomValue}
+              fieldErrors={fieldErrors}
+              idPrefix="woedit-custom"
+            />
+          ) : null}
+          {isLocked('customFields') && requiredFields.length > 0 ? (
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--bf-muted)' }}>
+              Dữ liệu bổ sung khóa ở trạng thái {workOrder.status}
+            </p>
+          ) : null}
 
           {showReasonHint ? (
             <div className="bf-field">

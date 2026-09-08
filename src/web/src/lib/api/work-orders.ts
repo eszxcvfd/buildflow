@@ -36,6 +36,8 @@ export interface WorkOrder {
   /** Hạn hoàn thành (`due_at`) — đọc + PATCH #43 (create để null). */
   dueAt: string | null;
   plannedHeadcount: number | null;
+  /** Dữ liệu bổ sung theo loại công việc (`custom_fields`, J8 — luôn object, rỗng `{}` khi chưa nhập). */
+  customFields?: Record<string, string | number | boolean> | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +57,8 @@ export interface CreateWorkOrderPayload {
   plannedStartAt?: string | null;
   plannedEndAt?: string | null;
   plannedHeadcount?: number | null;
+  /** Dữ liệu bổ sung theo loại công việc (J8 — object phẳng, absent = không gửi). */
+  customFields?: Record<string, string | number | boolean> | null;
   requestKey?: string | null;
 }
 
@@ -77,6 +81,8 @@ export interface UpdateWorkOrderPayload {
   plannedEndAt?: string | null;
   requiredTradeId?: string | null;
   workTypeId?: string;
+  /** Dữ liệu bổ sung (J8 — partial merge, absent = không đụng). */
+  customFields?: Record<string, string | number | boolean> | null;
   expectedVersion?: number;
   reason?: string | null;
 }

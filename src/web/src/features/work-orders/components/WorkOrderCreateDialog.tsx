@@ -8,10 +8,12 @@ import { Card } from '@/components/ui/card/Card';
 import { Input } from '@/components/ui/input/Input';
 import { toast } from '@/components/ui/toast/Toaster';
 import { createWorkOrder, type ApiError, type WorkOrder } from '@/lib/api/work-orders';
-import { listActiveWorkTypes, type WorkType } from '@/lib/api/work-types';
+import { listActiveWorkTypes, type WorkType, type RequiredField } from '@/lib/api/work-types';
 import { listProjectAreas, type ProjectArea } from '@/lib/api/projects';
 import { listTrades, type Trade } from '@/lib/api/trades';
 import { WORK_TYPE_PRIORITY_LABELS } from '@/features/work-types';
+import { listActiveWorkOrderTemplates, type WorkOrderTemplate } from '@/lib/api/work-order-templates';
+import { WorkOrderCustomFieldsSection } from './WorkOrderCustomFieldsSection';
 import {
   defaultWorkOrderFormValues,
   validateWorkOrderCreate,
@@ -45,6 +47,22 @@ interface PickerState<T> {
 }
 
 /**
+ * Cộng `minutes` vào giá trị datetime-local (`YYYY-MM-DDTHH:mm`), trả về
+ * datetime-local (giờ địa phương, cùng cách `new Date()` parse input).
+ * Null khi start không parse được (caller bỏ qua prefill plannedEnd).
+ */
+function addMinutesToDatetimeLocal(startLocal: string, minutes: number): string | null {
+  const start = new Date(startLocal);
+  if (Number.isNaN(start.getTime()) || !Number.isFinite(minutes)) return null;
+  const t = new Date(start.getTime() + minutes * 60000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}` +
+    `T${pad(t.getHours())}:${pad(t.getMinutes())}`
+  );
+}
+
+/**
  * JOB-SRS-001 (issue #41) — dialog "Tạo Work Order nháp" từ context dự án.
  * Mirror WorkTypeCreateDialog (Card layout, field-level errors, aria-live):
  * - 3 picker active-only (loại công việc / khu vực / ngành nghề) với
@@ -53,6 +71,11 @@ interface PickerState<T> {
  *   trong phiên (replay cùng key → server 200 + notice, không tạo mới).
  * - Thành công → summary inline (mã, id, notice replay) + nút Đóng; KHÔNG tự
  *   đóng để người dùng đọc được kết quả; onCreated báo parent refresh.
+ * - "Tạo từ mẫu" (PRJ-SRS-008 #39 → JOB-SRS-001): picker `GET
+ *   /work-order-templates/active`; chọn mẫu → snapshot-copy prefill vào form
+ *   (KHÔNG lưu templateId — sửa mẫu sau không đổi WO đã tạo); user chỉnh
+ *   được mọi field sau khi áp dụng; đổi mẫu chỉ prefill lại field chưa
+ *   user-edit.
  */
 export function WorkOrderCreateDialog({
   open,
@@ -74,6 +97,14 @@ export function WorkOrderCreateDialog({
   const [workTypes, setWorkTypes] = React.useState<PickerState<WorkType>>({ data: [], loading: false, error: null });
   const [areas, setAreas] = React.useState<PickerState<ProjectArea>>({ data: [], loading: false, error: null });
   const [trades, setTrades] = React.useState<PickerState<Trade>>({ data: [], loading: false, error: null });
+  const [templates, setTemplates] = React.useState<PickerState<WorkOrderTemplate>>({ data: [], loading: false, error: null });
+  const [templateId, setTemplateId] = React.useState('');
+  const [appliedTemplate, setAppliedTemplate] = React.useState<WorkOrderTemplate | null>(null);
+  const [templateNotice, setTemplateNotice] = React.useState<string | null>(null);
+  // Field user đã tự sửa trong phiên mở — prefill từ mẫu (kể cả đổi mẫu)
+  // KHÔNG ghi đè các field này; prefill programmatic dùng `setValues`
+  // trực tiếp nên không đánh dấu.
+  const userEditedRef = React.useRef<Set<string>>(new Set());
 
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]>>({});
   const [globalError, setGlobalError] = React.useState<string | null>(null);
@@ -82,7 +113,138 @@ export function WorkOrderCreateDialog({
   const [created, setCreated] = React.useState<{ workOrder: WorkOrder; idempotentReplay: boolean } | null>(null);
 
   function setValue<K extends keyof WorkOrderFormValues>(key: K, value: WorkOrderFormValues[K]) {
+    userEditedRef.current.add(key);
     setValues((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function setCustomValue(key: string, value: string) {
+    userEditedRef.current.add('customFieldValues');
+    setValues((prev) => ({ ...prev, customFieldValues: { ...prev.customFieldValues, [key]: value } }));
+  }
+
+  // J8 — loại công việc đang chọn: khóa ngành nghề theo yêu cầu + render
+  // Dữ liệu bổ sung từ `required_fields`.
+  const selectedWorkType = React.useMemo(
+    () => workTypes.data.find((t) => t.id === values.workTypeId) ?? null,
+    [workTypes.data, values.workTypeId],
+  );
+  const requiredTradeOfType = selectedWorkType?.requiredTradeId?.trim()
+    ? String(selectedWorkType.requiredTradeId).trim()
+    : null;
+  const tradeLockedByType = requiredTradeOfType !== null;
+  const requiredTradeLabel = React.useMemo(() => {
+    if (!requiredTradeOfType) return null;
+    const t = trades.data.find((x) => x.id === requiredTradeOfType);
+    return t ? `${t.code} — ${t.name}` : requiredTradeOfType;
+  }, [trades.data, requiredTradeOfType]);
+  const requiredFields: RequiredField[] = React.useMemo(
+    () => selectedWorkType?.requiredFields ?? [],
+    [selectedWorkType],
+  );
+  const requiredFieldTypes = React.useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const f of requiredFields) m[f.key] = String(f.type ?? '');
+    return m;
+  }, [requiredFields]);
+
+  function handleWorkTypeChange(nextId: string) {
+    userEditedRef.current.add('workTypeId');
+    const next = workTypes.data.find((t) => t.id === nextId) ?? null;
+    const nextRequired = next?.requiredTradeId?.trim() ? String(next.requiredTradeId).trim() : null;
+    setValues((prev) => ({
+      ...prev,
+      workTypeId: nextId,
+      // Đổi loại → reset dữ liệu bổ sung (field theo loại mới) + khóa ngành
+      // theo yêu cầu của loại mới.
+      customFieldValues: {},
+      requiredTradeId: nextRequired ?? prev.requiredTradeId,
+    }));
+  }
+
+  // User sửa start sau khi đã áp dụng mẫu có thời lượng → tính lại end,
+  // trừ khi end đã user-edit (tôn trọng chỉnh tay).
+  function handlePlannedStartChange(nextStart: string) {
+    userEditedRef.current.add('plannedStartAt');
+    setValues((prev) => {
+      const next = { ...prev, plannedStartAt: nextStart };
+      const duration = appliedTemplate?.defaultDurationMinutes;
+      if (
+        appliedTemplate &&
+        duration != null &&
+        !userEditedRef.current.has('plannedEndAt') &&
+        nextStart.trim()
+      ) {
+        const computed = addMinutesToDatetimeLocal(nextStart.trim(), duration);
+        if (computed) next.plannedEndAt = computed;
+      }
+      return next;
+    });
+  }
+
+  /**
+   * Snapshot-copy từ mẫu active vào form (KHÔNG lưu templateId vào WO).
+   * - workTypeId ← mẫu (khi user chưa tự chọn loại + loại còn active).
+   * - requiredTradeId ← mẫu, NHƯNG rule khóa theo work type hiện có thắng
+   *   (loại yêu cầu ngành nào → ngành đó, như chọn tay).
+   * - priority ← defaultPriority (khi hợp lệ + chưa user-edit).
+   * - description ← mẫu (field chưa user-edit; tương đương "nếu trống" ở lần đầu).
+   * - plannedEndAt ← plannedStart + defaultDurationMinutes (khi có start +
+   *   chưa user-edit).
+   * - requiredSkills: WO chưa có field skills riêng → bỏ qua.
+   * - customFields: template không có → skip.
+   * Đổi mẫu / chọn lại → chỉ prefill lại field chưa user-edit.
+   */
+  function applyTemplate(nextId: string) {
+    setTemplateId(nextId);
+    if (!nextId) {
+      setAppliedTemplate(null);
+      setTemplateNotice(null);
+      return;
+    }
+    const t = templates.data.find((x) => x.id === nextId) ?? null;
+    if (!t) {
+      setAppliedTemplate(null);
+      setTemplateNotice(null);
+      return;
+    }
+    const edited = userEditedRef.current;
+    setValues((prev) => {
+      const next = { ...prev };
+      let finalWorkTypeId = prev.workTypeId;
+      if (t.workTypeId && !edited.has('workTypeId')) {
+        if (workTypes.data.some((w) => w.id === t.workTypeId)) {
+          next.workTypeId = t.workTypeId;
+          finalWorkTypeId = t.workTypeId;
+          // Đổi loại theo mẫu → reset Dữ liệu bổ sung như đổi tay.
+          next.customFieldValues = {};
+        }
+      }
+      const finalType = workTypes.data.find((w) => w.id === finalWorkTypeId) ?? null;
+      const lockedTrade = finalType?.requiredTradeId?.trim()
+        ? String(finalType.requiredTradeId).trim()
+        : null;
+      if (lockedTrade) {
+        next.requiredTradeId = lockedTrade;
+      } else if (t.requiredTradeId && !edited.has('requiredTradeId')) {
+        next.requiredTradeId = t.requiredTradeId;
+      }
+      if (
+        !edited.has('priority') &&
+        (WORK_ORDER_PRIORITIES as readonly string[]).includes(t.defaultPriority)
+      ) {
+        next.priority = t.defaultPriority as WorkOrderFormValues['priority'];
+      }
+      if (!edited.has('description')) {
+        next.description = t.description ?? '';
+      }
+      if (t.defaultDurationMinutes != null && !edited.has('plannedEndAt') && next.plannedStartAt.trim()) {
+        const computed = addMinutesToDatetimeLocal(next.plannedStartAt.trim(), t.defaultDurationMinutes);
+        if (computed) next.plannedEndAt = computed;
+      }
+      return next;
+    });
+    setAppliedTemplate(t);
+    setTemplateNotice(`Đã áp dụng mẫu ${t.name} — bạn có thể chỉnh sửa trước khi lưu`);
   }
 
   const loadWorkTypes = React.useCallback(async () => {
@@ -115,7 +277,17 @@ export function WorkOrderCreateDialog({
     }
   }, []);
 
-  // Mỗi phiên mở: requestKey mới + reset form/kết quả + nạp 3 picker.
+  const loadTemplates = React.useCallback(async () => {
+    setTemplates((p) => ({ ...p, loading: true, error: null }));
+    try {
+      const res = await listActiveWorkOrderTemplates();
+      setTemplates({ data: res.data, loading: false, error: null });
+    } catch {
+      setTemplates((p) => ({ ...p, loading: false, error: 'Không tải được danh sách mẫu công việc' }));
+    }
+  }, []);
+
+  // Mỗi phiên mở: requestKey mới + reset form/kết quả + nạp 4 picker.
   React.useEffect(() => {
     if (open && !prevOpen.current) {
       setRequestKey(newRequestKey());
@@ -124,12 +296,17 @@ export function WorkOrderCreateDialog({
       setGlobalError(null);
       setForbidden(false);
       setCreated(null);
+      setTemplateId('');
+      setAppliedTemplate(null);
+      setTemplateNotice(null);
+      userEditedRef.current = new Set();
       void loadWorkTypes();
       void loadAreas();
       void loadTrades();
+      void loadTemplates();
     }
     prevOpen.current = open;
-  }, [open, loadWorkTypes, loadAreas, loadTrades]);
+  }, [open, loadWorkTypes, loadAreas, loadTrades, loadTemplates]);
 
   if (!open) return null;
 
@@ -161,7 +338,7 @@ export function WorkOrderCreateDialog({
     setGlobalError(null);
     setForbidden(false);
     try {
-      const payload = toCreateWorkOrderPayload(projectId, values, requestKey);
+      const payload = toCreateWorkOrderPayload(projectId, values, requestKey, requiredFieldTypes);
       const result = await createWorkOrder(payload);
       setCreated(result);
       toast.success({ title: `Đã tạo Work Order ${result.workOrder.code}` });
@@ -217,6 +394,42 @@ export function WorkOrderCreateDialog({
                 </Button>
               </div>
             ) : null}
+
+            <div className="bf-field">
+              <label className="bf-label" htmlFor="wo-template">Tạo từ mẫu</label>
+              {templates.loading ? (
+                <p aria-busy="true" style={{ margin: 0, fontSize: '0.85rem' }}>Đang tải mẫu công việc…</p>
+              ) : templates.error ? (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--bf-risk)' }}>{templates.error}</span>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void loadTemplates()}>
+                    Thử lại
+                  </Button>
+                </div>
+              ) : (
+                <select
+                  id="wo-template"
+                  className="bf-input"
+                  value={templateId}
+                  onChange={(e) => applyTemplate(e.target.value)}
+                  disabled={pending}
+                >
+                  <option value="">
+                    {templates.data.length === 0 ? 'Chưa có mẫu công việc đang hoạt động' : '— Không dùng mẫu —'}
+                  </option>
+                  {templates.data.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.code} — {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {templateNotice ? (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <Alert tone="info">{templateNotice}</Alert>
+                </div>
+              ) : null}
+            </div>
 
             <div className="bf-field">
               <label className="bf-label" htmlFor="wo-title">Tiêu đề *</label>
@@ -280,7 +493,7 @@ export function WorkOrderCreateDialog({
                   id="wo-worktype"
                   className="bf-input"
                   value={values.workTypeId}
-                  onChange={(e) => setValue('workTypeId', e.target.value)}
+                  onChange={(e) => handleWorkTypeChange(e.target.value)}
                   aria-invalid={Boolean(fieldErrors.workTypeId)}
                   disabled={pending}
                 >
@@ -331,7 +544,9 @@ export function WorkOrderCreateDialog({
                 {fieldError('areaId') ? <p className="bf-field-error" role="alert">{fieldError('areaId')}</p> : null}
               </div>
               <div className="bf-field">
-                <label className="bf-label" htmlFor="wo-trade">Ngành nghề yêu cầu</label>
+                <label className="bf-label" htmlFor="wo-trade">
+                  Ngành nghề yêu cầu{tradeLockedByType ? ` (bắt buộc: ${requiredTradeLabel})` : null}
+                </label>
                 {trades.loading ? (
                   <p aria-busy="true" style={{ margin: 0, fontSize: '0.85rem' }}>Đang tải ngành nghề…</p>
                 ) : trades.error ? (
@@ -345,10 +560,11 @@ export function WorkOrderCreateDialog({
                   <select
                     id="wo-trade"
                     className="bf-input"
-                    value={values.requiredTradeId}
+                    value={tradeLockedByType ? requiredTradeOfType ?? '' : values.requiredTradeId}
                     onChange={(e) => setValue('requiredTradeId', e.target.value)}
                     aria-invalid={Boolean(fieldErrors.requiredTradeId)}
-                    disabled={pending}
+                    disabled={pending || tradeLockedByType}
+                    title={tradeLockedByType ? `Loại công việc yêu cầu ngành ${requiredTradeLabel}` : undefined}
                   >
                     <option value="">
                       {trades.data.length === 0 ? 'Chưa có ngành nghề đang hoạt động' : '— Không yêu cầu cụ thể —'}
@@ -358,8 +574,18 @@ export function WorkOrderCreateDialog({
                         {t.code} — {t.name}
                       </option>
                     ))}
+                    {tradeLockedByType &&
+                    requiredTradeOfType &&
+                    !trades.data.some((t) => t.id === requiredTradeOfType) ? (
+                      <option value={requiredTradeOfType}>Giữ ngành nghề theo yêu cầu loại công việc</option>
+                    ) : null}
                   </select>
                 )}
+                {tradeLockedByType ? (
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--bf-muted)' }}>
+                    Loại công việc yêu cầu ngành {requiredTradeLabel} — đã tự chọn, gửi sai sẽ bị từ chối (400).
+                  </p>
+                ) : null}
                 {fieldError('requiredTradeId') ? (
                   <p className="bf-field-error" role="alert">{fieldError('requiredTradeId')}</p>
                 ) : null}
@@ -373,7 +599,7 @@ export function WorkOrderCreateDialog({
                   id="wo-start"
                   type="datetime-local"
                   value={values.plannedStartAt}
-                  onChange={(e) => setValue('plannedStartAt', e.target.value)}
+                  onChange={(e) => handlePlannedStartChange(e.target.value)}
                   hasError={Boolean(fieldErrors.plannedStartAt)}
                   disabled={pending}
                 />
@@ -444,6 +670,15 @@ export function WorkOrderCreateDialog({
                 <p className="bf-field-error" role="alert">{fieldError('instructions')}</p>
               ) : null}
             </div>
+
+            <WorkOrderCustomFieldsSection
+              fields={requiredFields}
+              values={values.customFieldValues}
+              disabled={pending}
+              onChange={setCustomValue}
+              fieldErrors={fieldErrors}
+              idPrefix="wo-custom"
+            />
 
             <div className="bf-form-actions">
               <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>

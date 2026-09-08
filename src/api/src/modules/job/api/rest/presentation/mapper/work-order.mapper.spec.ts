@@ -27,6 +27,7 @@ function makeEntity(): WorkOrderEntity {
     plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
     dueAt: new Date('2026-10-05T08:00:00.000Z'),
     plannedHeadcount: 5,
+    customFields: {},
     createdBy: IDS.actor,
     version: 1,
     requestKey: '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b',
@@ -53,6 +54,7 @@ describe('work-order.mapper (JOB-SRS-001)', () => {
       plannedEndAt: '2026-10-02T08:00:00.000Z',
       dueAt: '2026-10-05T08:00:00.000Z',
       plannedHeadcount: 5,
+      customFields: {},
       createdBy: IDS.actor,
       version: 1,
     });
@@ -75,6 +77,7 @@ describe('work-order.mapper (JOB-SRS-001)', () => {
       plannedEndAt: null,
       dueAt: null,
       plannedHeadcount: null,
+      customFields: {},
     });
     const dto = toWorkOrderResponse(e, { workTypeName: null, idempotentReplay: true });
     expect(dto.plannedStartAt).toBeNull();

@@ -16,6 +16,13 @@ function getPool(): Pool {
 type Row = Record<string, unknown>;
 
 function mapRow(row: Row): WorkOrderEntity {
+  const rawCustomFields = row['custom_fields'];
+  const customFields =
+    rawCustomFields !== null &&
+    typeof rawCustomFields === 'object' &&
+    !Array.isArray(rawCustomFields)
+      ? (rawCustomFields as Record<string, string | number | boolean>)
+      : {};
   return WorkOrderEntity.fromPersistence({
     id: String(row['id']),
     code: String(row['code']),
@@ -35,6 +42,7 @@ function mapRow(row: Row): WorkOrderEntity {
       row['planned_headcount'] === null || row['planned_headcount'] === undefined
         ? null
         : Number(row['planned_headcount']),
+    customFields,
     createdBy: String(row['created_by']),
     version: Number(row['version'] ?? 1),
     requestKey: (row['request_key'] as string | null) ?? null,
@@ -46,7 +54,7 @@ function mapRow(row: Row): WorkOrderEntity {
 const WORK_ORDER_COLUMNS =
   'id, code, project_id, area_id, work_type_id, required_trade_id, title, ' +
   'description, instructions, priority, status, planned_start_at, planned_end_at, due_at, ' +
-  'planned_headcount, created_by, version, request_key, created_at, updated_at';
+  'planned_headcount, custom_fields, created_by, version, request_key, created_at, updated_at';
 
 @Injectable()
 export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
@@ -81,11 +89,15 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
 
   async findActiveWorkTypeById(workTypeId: string): Promise<ActiveWorkTypeRef | null> {
     const r = await this.pool().query(
-      'SELECT id, is_active FROM public.work_types WHERE id = $1 LIMIT 1',
+      'SELECT id, is_active, required_trade_id FROM public.work_types WHERE id = $1 LIMIT 1',
       [workTypeId],
     );
     if (r.rows.length === 0) return null;
-    return { id: String(r.rows[0].id), isActive: Boolean(r.rows[0].is_active) };
+    return {
+      id: String(r.rows[0].id),
+      isActive: Boolean(r.rows[0].is_active),
+      requiredTradeId: (r.rows[0].required_trade_id as string | null) ?? null,
+    };
   }
 
   async findActiveAreaById(areaId: string): Promise<ActiveAreaRef | null> {
@@ -103,11 +115,16 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
 
   async findActiveTradeById(tradeId: string): Promise<ActiveTradeRef | null> {
     const r = await this.pool().query(
-      'SELECT id, is_active FROM public.trades WHERE id = $1 LIMIT 1',
+      'SELECT id, code, name, is_active FROM public.trades WHERE id = $1 LIMIT 1',
       [tradeId],
     );
     if (r.rows.length === 0) return null;
-    return { id: String(r.rows[0].id), isActive: Boolean(r.rows[0].is_active) };
+    return {
+      id: String(r.rows[0].id),
+      isActive: Boolean(r.rows[0].is_active),
+      code: String(r.rows[0].code),
+      name: String(r.rows[0].name),
+    };
   }
 
   async findProjectStatusById(projectId: string): Promise<{ id: string; status: string } | null> {
@@ -209,8 +226,8 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
       `INSERT INTO public.work_orders
         (id, code, project_id, area_id, work_type_id, required_trade_id, title,
          description, instructions, priority, status, planned_start_at, planned_end_at,
-         planned_headcount, created_by, version, request_key, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+         planned_headcount, custom_fields, created_by, version, request_key, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [
         p.id,
         p.code,
@@ -226,6 +243,7 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
         p.plannedStartAt,
         p.plannedEndAt,
         p.plannedHeadcount ?? null,
+        JSON.stringify(p.customFields ?? {}),
         p.createdBy,
         p.version,
         p.requestKey ?? null,
@@ -259,19 +277,21 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
       `UPDATE public.work_orders SET code=$1, project_id=$2, area_id=$3, work_type_id=$4,
         required_trade_id=$5, title=$6, description=$7, instructions=$8, priority=$9,
         status=$10, planned_start_at=$11, planned_end_at=$12, due_at=$13,
-        planned_headcount=$14, version=$15, updated_at=$16
-       WHERE id=$17${guard ? ' AND version = $18' : ''}`,
+        planned_headcount=$14, custom_fields=$15, version=$16, updated_at=$17
+       WHERE id=$18${guard ? ' AND version = $19' : ''}`,
       guard
         ? [
           p.code, p.projectId, p.areaId ?? null, p.workTypeId, p.requiredTradeId ?? null,
           p.title, p.description ?? null, p.instructions ?? null, p.priority, p.status,
           p.plannedStartAt, p.plannedEndAt, p.dueAt ?? null, p.plannedHeadcount ?? null,
+          JSON.stringify(p.customFields ?? {}),
           p.version, p.updatedAt, p.id, expectedVersion,
         ]
         : [
           p.code, p.projectId, p.areaId ?? null, p.workTypeId, p.requiredTradeId ?? null,
           p.title, p.description ?? null, p.instructions ?? null, p.priority, p.status,
           p.plannedStartAt, p.plannedEndAt, p.dueAt ?? null, p.plannedHeadcount ?? null,
+          JSON.stringify(p.customFields ?? {}),
           p.version, p.updatedAt, p.id,
         ],
     );

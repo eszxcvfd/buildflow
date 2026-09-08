@@ -234,6 +234,9 @@ export function WorkOrderTemplateDetail({ id }: { id: string }) {
           Mẫu không bị xóa vĩnh viễn: Nháp → Hoạt động → Ngừng hoạt động, có thể kích
           hoạt lại khi cần.
         </p>
+        <p style={{ margin: '0.5rem 0 0', color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+          Mẫu này dùng để tạo Work Order — chọn mẫu này trong dialog Tạo Work Order của dự án.
+        </p>
       </Card>
 
       <WorkOrderTemplateEditDialog

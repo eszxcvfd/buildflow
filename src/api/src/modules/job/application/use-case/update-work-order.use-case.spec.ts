@@ -36,6 +36,7 @@ function makeEntity(status: WorkOrderStatus = 'DRAFT', version = 1): WorkOrderEn
     plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
     dueAt: null,
     plannedHeadcount: null,
+    customFields: {},
     createdBy: IDS.actor,
     version,
     requestKey: null,
@@ -217,6 +218,41 @@ describe('UpdateWorkOrderUseCase (JOB-SRS-003)', () => {
     const out = await env3.uc.execute({ ...BASE, description: 'Mô tả cũ' });
     expect(out.noOp).toBe(true);
     expect(env3.tx.withTransaction).not.toHaveBeenCalled();
+  });
+
+  it('J8 PATCH customFields partial merge (key absent giữ nguyên); object rỗng = no-op', async () => {
+    const env = setup('DRAFT');
+    const first = await env.uc.execute({ ...BASE, customFields: { dien_tich: 120 } });
+    expect(first.entity.version).toBe(2);
+    expect(first.entity.customFields).toEqual({ dien_tich: 120 });
+
+    const second = await env.uc.execute({ ...BASE, customFields: { anh_nghiem_thu: 'https://cdn.example/a.jpg' } });
+    expect(second.entity.customFields).toEqual({ dien_tich: 120, anh_nghiem_thu: 'https://cdn.example/a.jpg' });
+
+    const noop = await env.uc.execute({ ...BASE, customFields: {} });
+    expect(noop.noOp).toBe(true);
+  });
+
+  it('J8 đổi workTypeId không gửi trade → auto-fill ngành loại mới; gửi sai/gỡ null khi yêu cầu → 400', async () => {
+    const env = setup('DRAFT');
+    (env.repo.findActiveWorkTypeById as jest.Mock).mockResolvedValue({ id: IDS.otherWorkType, isActive: true, requiredTradeId: IDS.trade });
+    const { entity } = await env.uc.execute({ ...BASE, workTypeId: IDS.otherWorkType });
+    expect(entity.workTypeId).toBe(IDS.otherWorkType);
+    expect(entity.requiredTradeId).toBe(IDS.trade);
+
+    const env2 = setup('DRAFT');
+    (env2.repo.findActiveWorkTypeById as jest.Mock).mockResolvedValue({ id: IDS.otherWorkType, isActive: true, requiredTradeId: IDS.trade });
+    await expect(
+      env2.uc.execute({ ...BASE, workTypeId: IDS.otherWorkType, requiredTradeId: '99999999-9999-4999-8999-999999999999' }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ requiredTradeId: expect.anything() }) }),
+    });
+
+    const env3 = setup('DRAFT');
+    (env3.repo.findActiveWorkTypeById as jest.Mock).mockResolvedValue({ id: IDS.workType, isActive: true, requiredTradeId: IDS.trade });
+    await expect(env3.uc.execute({ ...BASE, requiredTradeId: null })).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ requiredTradeId: expect.anything() }) }),
+    });
   });
 
   it('audit fail → 500; notification fail → 500 (rollback)', async () => {

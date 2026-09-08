@@ -123,3 +123,88 @@ export function normalizeRequestKey(value?: string | null): string | null {
   }
   return trimmed;
 }
+
+/**
+ * Dữ liệu bổ sung theo loại công việc (`work_orders.custom_fields`,
+ * migration 0011) — nơi lưu giá trị các `required_fields` tùy chỉnh của
+ * work-type (thí dụ `dien_tich`, `anh_nghiem_thu` của `WT-OP-LAT`) mà WO
+ * không có cột riêng.
+ *
+ * Decision (ghi rõ theo ENDPOINTS §17 J8): chấp nhận key BẤT KỲ (không giới
+ * hạn theo `required_fields` của work-type hiện tại) — để WO không hỏng khi
+ * work-type đổi config, và để JOB không phải đọc catalog PRJ ở path ghi;
+ * publish-check đọc `required_fields` tại thời điểm check. Bù lại giới hạn
+ * size/depth: object phẳng ≤ 50 key, key alnum/`_` 1-50 ký tự, giá trị chỉ
+ * primitive `string | number | boolean` (không lồng object/array — depth 1),
+ * string ≤ 2000 ký tự, JSON serialize ≤ 32KB.
+ */
+export type WorkOrderCustomFields = Record<string, string | number | boolean>;
+
+export const CUSTOM_FIELDS_MAX_KEYS = 50;
+export const CUSTOM_FIELDS_KEY_RE = /^[A-Za-z0-9_]{1,50}$/;
+export const CUSTOM_FIELDS_STRING_MAX_LENGTH = 2000;
+export const CUSTOM_FIELDS_JSON_MAX_BYTES = 32 * 1024;
+
+function normalizeCustomFieldValue(key: string, value: unknown): string | number | boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`Dữ liệu bổ sung "${key}" phải là số hữu hạn`);
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length > CUSTOM_FIELDS_STRING_MAX_LENGTH) {
+      throw new Error(`Dữ liệu bổ sung "${key}" tối đa ${CUSTOM_FIELDS_STRING_MAX_LENGTH} ký tự`);
+    }
+    return trimmed;
+  }
+  throw new Error(`Dữ liệu bổ sung "${key}" chỉ nhận chuỗi, số hoặc true/false`);
+}
+
+/** Validate object `customFields` thô (POST full / PATCH partial đều qua đây). */
+export function normalizeCustomFieldsInput(value: unknown): WorkOrderCustomFields {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Dữ liệu bổ sung phải là object { key: giá trị }');
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > CUSTOM_FIELDS_MAX_KEYS) {
+    throw new Error(`Dữ liệu bổ sung tối đa ${CUSTOM_FIELDS_MAX_KEYS} trường`);
+  }
+  const out: WorkOrderCustomFields = {};
+  for (const [key, raw] of entries) {
+    if (!CUSTOM_FIELDS_KEY_RE.test(key)) {
+      throw new Error(`Khóa dữ liệu bổ sung "${key}" chỉ gồm chữ/số/gạch dưới, tối đa 50 ký tự`);
+    }
+    out[key] = normalizeCustomFieldValue(key, raw);
+  }
+  if (Buffer.byteLength(JSON.stringify(out), 'utf8') > CUSTOM_FIELDS_JSON_MAX_BYTES) {
+    throw new Error('Dữ liệu bổ sung vượt quá 32KB');
+  }
+  return out;
+}
+
+/**
+ * PATCH merge: partial object chồng lên giá trị hiện tại (key absent = giữ
+ * nguyên; key gửi = ghi đè). Không có ngữ nghĩa xóa key riêng ở slice này.
+ * Kết quả merge re-validate limits (tổng size sau merge vẫn ≤ 32KB).
+ */
+export function mergeCustomFields(
+  base: WorkOrderCustomFields,
+  patch: WorkOrderCustomFields,
+): WorkOrderCustomFields {
+  const merged: WorkOrderCustomFields = { ...base };
+  for (const [key, raw] of Object.entries(patch)) {
+    if (!CUSTOM_FIELDS_KEY_RE.test(key)) {
+      throw new Error(`Khóa dữ liệu bổ sung "${key}" chỉ gồm chữ/số/gạch dưới, tối đa 50 ký tự`);
+    }
+    merged[key] = normalizeCustomFieldValue(key, raw);
+  }
+  if (Object.keys(merged).length > CUSTOM_FIELDS_MAX_KEYS) {
+    throw new Error(`Dữ liệu bổ sung tối đa ${CUSTOM_FIELDS_MAX_KEYS} trường`);
+  }
+  if (Buffer.byteLength(JSON.stringify(merged), 'utf8') > CUSTOM_FIELDS_JSON_MAX_BYTES) {
+    throw new Error('Dữ liệu bổ sung vượt quá 32KB');
+  }
+  return merged;
+}

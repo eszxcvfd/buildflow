@@ -23,7 +23,10 @@ import {
 } from '../../domain/service/work-order-update.policy';
 import {
   WorkOrderPriority,
+  WorkOrderCustomFields,
   assertPlannedRange,
+  mergeCustomFields,
+  normalizeCustomFieldsInput,
   normalizeWorkOrderPriority,
   normalizeWorkOrderText,
   parsePlannedDateTime,
@@ -40,6 +43,11 @@ export interface UpdateWorkOrderInput {
   plannedEndAt?: string | null;
   requiredTradeId?: string | null;
   workTypeId?: string | null;
+  /**
+   * Partial object dữ liệu bổ sung — merge lên `customFields` hiện tại
+   * (key absent = giữ nguyên; validate limits sau merge).
+   */
+  customFields?: unknown;
   expectedVersion?: number | null;
   reason?: string | null;
   actorUserId: string;
@@ -102,6 +110,11 @@ function serializeValue(value: unknown): unknown {
  *   (dedup_key hash woId+fields+version); notification/audit fail → 500 rollback.
  * - Không đổi `status` qua endpoint này; không gán assignee (defer #47 —
  *   notify creator).
+ * - J8 dữ liệu bổ sung + skill khớp khi đổi loại: `customFields` partial merge
+ *   lên giá trị hiện tại (re-validate limits sau merge; object rỗng = no-op);
+ *   đổi `workTypeId` mà không gửi `requiredTradeId` → auto-fill ngành loại mới
+ *   yêu cầu; gửi trade khác ngành yêu cầu (kể cả gỡ `null` khi loại yêu cầu
+ *   ngành cụ thể) → 400 `fieldErrors.requiredTradeId`.
  */
 @Injectable()
 export class UpdateWorkOrderUseCase {
@@ -134,6 +147,7 @@ export class UpdateWorkOrderUseCase {
     });
 
     const fields = Object.keys(requested.values) as UpdatableWorkOrderField[];
+    if (requested.customFieldsPatch !== undefined) fields.push('customFields');
     if (fields.length === 0) {
       const workTypeName = await this.workOrderRepo.findWorkTypeNameById(current.workTypeId);
       return { entity: current, workTypeName, exceptionEdit: false, noOp: true };
@@ -148,30 +162,60 @@ export class UpdateWorkOrderUseCase {
       throw fieldErrors400(evaluation.fieldErrors);
     }
 
-    // 4. Refs validate như create (workType/trade ACTIVE + tồn tại).
+    // 4. Refs validate như create + J8 trade re-validate/auto-fill khi đổi
+    // workTypeId (cùng rule create, kèm reason rules hiện có của state policy).
     let workTypeId = current.workTypeId;
-    if (requested.values.workTypeId !== undefined) {
+    const workTypeChanged = requested.values.workTypeId !== undefined;
+    // Ngành mà work-type (mới / hiện tại) yêu cầu — chỉ load khi cần (đổi loại
+    // hoặc gửi trade tường minh) để tránh query thừa ở PATCH thuần mô tả.
+    let effectiveRequiredTradeId: string | null | undefined;
+    if (workTypeChanged) {
       const ref = await this.workOrderRepo.findActiveWorkTypeById(requested.values.workTypeId as string);
       if (!ref || !ref.isActive) {
         throw fieldError('workTypeId', 'Loại công việc không tồn tại hoặc đã ngừng hoạt động');
       }
       workTypeId = requested.values.workTypeId as string;
+      effectiveRequiredTradeId = ref.requiredTradeId ?? null;
     }
+    const tradeSent = requested.values.requiredTradeId !== undefined;
+    const sentTradeRaw = tradeSent ? (requested.values.requiredTradeId as string | null) : undefined;
+    if (effectiveRequiredTradeId === undefined && tradeSent) {
+      const ref = await this.workOrderRepo.findActiveWorkTypeById(current.workTypeId);
+      effectiveRequiredTradeId = ref?.requiredTradeId ?? null;
+    }
+    const mismatchTradeError = async (requiredId: string): Promise<BadRequestException> => {
+      const requiredTrade = await this.workOrderRepo.findActiveTradeById(requiredId);
+      const label = requiredTrade?.code ?? requiredTrade?.name ?? 'khác';
+      return fieldError('requiredTradeId', `Loại công việc yêu cầu ngành ${label}`);
+    };
     let requiredTradeId = current.requiredTradeId;
-    if (requested.values.requiredTradeId !== undefined) {
-      const raw = requested.values.requiredTradeId as string | null;
-      if (raw !== null) {
-        const ref = await this.workOrderRepo.findActiveTradeById(raw);
+    if (tradeSent) {
+      if (sentTradeRaw !== null && sentTradeRaw !== undefined) {
+        if (effectiveRequiredTradeId !== null && sentTradeRaw !== effectiveRequiredTradeId) {
+          throw await mismatchTradeError(effectiveRequiredTradeId as string);
+        }
+        const ref = await this.workOrderRepo.findActiveTradeById(sentTradeRaw);
         if (!ref || !ref.isActive) {
           throw fieldError('requiredTradeId', 'Ngành nghề không tồn tại hoặc đã ngừng hoạt động');
         }
+        requiredTradeId = sentTradeRaw;
+      } else {
+        // Gỡ skill (`null`): chặn khi work-type yêu cầu ngành cụ thể.
+        if (effectiveRequiredTradeId !== null && effectiveRequiredTradeId !== undefined) {
+          throw await mismatchTradeError(effectiveRequiredTradeId);
+        }
+        requiredTradeId = null;
       }
-      requiredTradeId = raw;
+    } else if (workTypeChanged && effectiveRequiredTradeId !== null && effectiveRequiredTradeId !== undefined) {
+      // Đổi loại mà không gửi trade → auto-fill ngành loại mới yêu cầu (khi
+      // đang khác); loại mới không yêu cầu → giữ trade hiện tại.
+      if (current.requiredTradeId !== effectiveRequiredTradeId) {
+        requiredTradeId = effectiveRequiredTradeId;
+      }
     }
 
     // 5. Giá trị mới + diff thực tế (gửi trùng giá trị hiện tại = no-op).
-    const nextDescription = (requested.values.description ?? current.description) as string | null;
-    const nextInstructions = (requested.values.instructions ?? current.instructions) as string | null;
+    const nextDescription = (requested.values.description ?? current.description) as string | null;    const nextInstructions = (requested.values.instructions ?? current.instructions) as string | null;
     const nextPriority = (requested.values.priority ?? current.priority) as WorkOrderPriority;
     const nextDueAt = requested.values.dueAt !== undefined ? requested.values.dueAt : current.dueAt;
     const nextStart =
@@ -185,6 +229,17 @@ export class UpdateWorkOrderUseCase {
       throw fieldError('plannedEndAt', e instanceof Error ? e.message : 'Khoảng thời gian không hợp lệ');
     }
 
+    // J8 — merge partial `customFields` lên giá trị hiện tại + re-validate
+    // limits sau merge (vượt 50 key / 32KB → 400 fieldErrors `customFields`).
+    let nextCustomFields = current.customFields;
+    if (requested.customFieldsPatch !== undefined) {
+      try {
+        nextCustomFields = mergeCustomFields(current.customFields, requested.customFieldsPatch);
+      } catch (e) {
+        throw fieldError('customFields', e instanceof Error ? e.message : 'Dữ liệu bổ sung không hợp lệ');
+      }
+    }
+
     const changed = this.diff(current, {
       description: nextDescription,
       instructions: nextInstructions,
@@ -194,6 +249,7 @@ export class UpdateWorkOrderUseCase {
       plannedEndAt: nextEnd as Date | null,
       requiredTradeId,
       workTypeId,
+      customFields: nextCustomFields,
     });
     if (changed.length === 0) {
       const workTypeName = await this.workOrderRepo.findWorkTypeNameById(current.workTypeId);
@@ -216,6 +272,7 @@ export class UpdateWorkOrderUseCase {
       plannedEndAt: nextEnd as Date | null,
       requiredTradeId,
       workTypeId,
+      customFields: nextCustomFields,
       version: current.version + 1,
       updatedAt: now,
     });
@@ -312,11 +369,12 @@ export class UpdateWorkOrderUseCase {
   }
 
   private normalize(input: UpdateWorkOrderInput): {
-    values: Partial<Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | null>>;
+    values: Partial<Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | WorkOrderCustomFields | null>>;
+    customFieldsPatch: WorkOrderCustomFields | undefined;
     reason: string | null;
     expectedVersion: number | null;
   } {
-    const values: Partial<Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | null>> = {};
+    const values: Partial<Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | WorkOrderCustomFields | null>> = {};
     const mark = (field: UpdatableWorkOrderField, raw: unknown, parse: (v: unknown) => unknown): void => {
       if (raw === undefined) return;
       try {
@@ -347,6 +405,19 @@ export class UpdateWorkOrderUseCase {
       return trimmed;
     });
 
+    // J8 — `customFields` là partial object (validate shape ở đây, merge +
+    // re-validate limits ở execute). Object rỗng = không đụng (tránh bump
+    // version giả).
+    let customFieldsPatch: WorkOrderCustomFields | undefined;
+    if (input.customFields !== undefined && input.customFields !== null) {
+      try {
+        const parsed = normalizeCustomFieldsInput(input.customFields);
+        if (Object.keys(parsed).length > 0) customFieldsPatch = parsed;
+      } catch (e) {
+        throw fieldError('customFields', e instanceof Error ? e.message : 'Dữ liệu bổ sung không hợp lệ');
+      }
+    }
+
     let reason: string | null = null;
     if (input.reason !== undefined && input.reason !== null) {
       const trimmed = String(input.reason).trim();
@@ -364,7 +435,7 @@ export class UpdateWorkOrderUseCase {
       }
       expectedVersion = num;
     }
-    return { values, reason, expectedVersion };
+    return { values, customFieldsPatch, reason, expectedVersion };
   }
 
   private readField(entity: WorkOrderEntity, field: UpdatableWorkOrderField): unknown {
@@ -377,24 +448,30 @@ export class UpdateWorkOrderUseCase {
       case 'plannedEndAt': return entity.plannedEndAt;
       case 'requiredTradeId': return entity.requiredTradeId;
       case 'workTypeId': return entity.workTypeId;
+      case 'customFields': return entity.customFields;
       default: return null;
     }
   }
 
   private diff(
     current: WorkOrderEntity,
-    next: Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | null>,
+    next: Record<UpdatableWorkOrderField, string | WorkOrderPriority | Date | WorkOrderCustomFields | null>,
   ): UpdatableWorkOrderField[] {
     const changed: UpdatableWorkOrderField[] = [];
     for (const field of UPDATABLE_WORK_ORDER_FIELDS) {
       const oldValue = this.readField(current, field);
       const newValue = next[field];
-      const same =
-        oldValue instanceof Date || newValue instanceof Date
-          ? oldValue instanceof Date &&
-            newValue instanceof Date &&
-            oldValue.getTime() === newValue.getTime()
-          : oldValue === newValue;
+      let same: boolean;
+      if (field === 'customFields') {
+        same = JSON.stringify(oldValue ?? {}) === JSON.stringify(newValue ?? {});
+      } else {
+        same =
+          oldValue instanceof Date || newValue instanceof Date
+            ? oldValue instanceof Date &&
+              newValue instanceof Date &&
+              oldValue.getTime() === newValue.getTime()
+            : oldValue === newValue;
+      }
       if (!same) changed.push(field);
     }
     return changed;

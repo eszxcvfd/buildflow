@@ -29,6 +29,7 @@ function makeSnapshot(): PublishCheckSnapshot {
       plannedStartAt: null,
       plannedEndAt: null,
       plannedHeadcount: null,
+      customFields: {},
       jobBoardOpen: false,
     },
     project: { id: IDS.project, status: 'ACTIVE' },

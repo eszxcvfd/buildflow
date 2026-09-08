@@ -8,8 +8,10 @@ import { ProjectScopeService } from '../../../iam/application/service/project-sc
 import { WorkOrderEntity } from '../../domain/entity/work-order.entity';
 import {
   WorkOrderPriority,
+  WorkOrderCustomFields,
   assertPlannedRange,
   generateWorkOrderCode,
+  normalizeCustomFieldsInput,
   normalizePlannedHeadcount,
   normalizeRequestKey,
   normalizeWorkOrderCode,
@@ -32,6 +34,11 @@ export interface CreateWorkOrderInput {
   plannedStartAt?: string | null;
   plannedEndAt?: string | null;
   plannedHeadcount?: number | null;
+  /**
+   * Dữ liệu bổ sung theo loại công việc (`custom_fields`, migration 0011) —
+   * object thô từ body, validate ở dưới (400 fieldErrors `{customFields}`).
+   */
+  customFields?: unknown;
   requestKey?: string | null;
   actorUserId: string;
   /** Roles server-derived từ JWT (ADMIN bypass scope — xem J1). */
@@ -93,6 +100,10 @@ function projectNotActive400(projectStatus: string): BadRequestException {
  * - J5 audit `JOB_WORK_ORDER_CREATED` (`entityType` `WORK_ORDER`,
  *   tx-embedded, afterData public fields — không secret); audit fail → 500
  *   rollback. Không gán người thực hiện / không mở job board (defer #42/#44).
+ * - J8 skill khớp từ gốc + dữ liệu bổ sung: `requiredTradeId` không gửi →
+ *   auto-fill từ `work_types.required_trade_id`; gửi khác ngành yêu cầu →
+ *   400 `fieldErrors.requiredTradeId` (`Loại công việc yêu cầu ngành X`);
+ *   `customFields` validate limits rồi lưu vào `custom_fields` (0011).
  */
 @Injectable()
 export class CreateWorkOrderUseCase {
@@ -163,6 +174,12 @@ export class CreateWorkOrderUseCase {
     } catch (e) {
       throw fieldError('requestKey', e instanceof Error ? e.message : 'Request key không hợp lệ');
     }
+    let customFields: WorkOrderCustomFields;
+    try {
+      customFields = normalizeCustomFieldsInput(input.customFields);
+    } catch (e) {
+      throw fieldError('customFields', e instanceof Error ? e.message : 'Dữ liệu bổ sung không hợp lệ');
+    }
 
     // J1 — scope TRƯỚC mọi existence check (anti existence-oracle).
     await this.scope.assertProjectWriteScope({
@@ -202,8 +219,34 @@ export class CreateWorkOrderUseCase {
         : String(input.areaId);
 
     let requiredTradeId: string | null = null;
-    if (input.requiredTradeId !== undefined && input.requiredTradeId !== null && String(input.requiredTradeId).trim() !== '') {
-      requiredTradeId = String(input.requiredTradeId).trim();
+    // J8 — skill auto-fill/mismatch: không gửi `requiredTradeId` → TỰ ĐIỀN
+    // từ `work_types.required_trade_id` (khớp skill yêu cầu ngay từ lúc tạo,
+    // hết mismatch lúc tạo); gửi nhưng khác ngành mà loại công việc yêu cầu
+    // → 400 `fieldErrors.requiredTradeId` (chặn trạng thái không thể pass
+    // publish-check từ gốc). Loại không yêu cầu (null) → giữ nguyên input.
+    const workTypeRequiredTradeId = workType.requiredTradeId ?? null;
+    const sentTrade =
+      input.requiredTradeId !== undefined &&
+      input.requiredTradeId !== null &&
+      String(input.requiredTradeId).trim() !== ''
+        ? String(input.requiredTradeId).trim()
+        : null;
+    if (sentTrade === null) {
+      requiredTradeId = workTypeRequiredTradeId;
+    } else {
+      if (workTypeRequiredTradeId !== null && sentTrade !== workTypeRequiredTradeId) {
+        const requiredTrade = await this.workOrderRepo.findActiveTradeById(workTypeRequiredTradeId);
+        const tradeLabel = requiredTrade?.code ?? requiredTrade?.name ?? 'khác';
+        const message = `Loại công việc yêu cầu ngành ${tradeLabel}`;
+        throw new BadRequestException({
+          statusCode: 400,
+          message,
+          fieldErrors: { requiredTradeId: [message] },
+        });
+      }
+      requiredTradeId = sentTrade;
+    }
+    if (requiredTradeId !== null) {
       const trade = await this.workOrderRepo.findActiveTradeById(requiredTradeId);
       if (!trade || !trade.isActive) {
         throw fieldError('requiredTradeId', 'Ngành nghề không tồn tại hoặc đã ngừng hoạt động');
@@ -259,6 +302,7 @@ export class CreateWorkOrderUseCase {
         plannedEndAt,
         dueAt: null,
         plannedHeadcount,
+        customFields,
         createdBy: input.actorUserId,
         version: 1,
         requestKey,

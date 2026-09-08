@@ -6,13 +6,15 @@ import { WorkOrderStatus } from '../entity/work-order.entity';
  *
  * Ma trận cho phép (field khóa gửi payload → caller 400
  * `WORK_ORDER_FIELD_LOCKED` + `fieldErrors` per-field):
- * - `DRAFT`/`READY` → sửa được tất cả field updatable.
- * - `OPEN` → chỉ `description`/`instructions`/`dueAt` (lịch/skill/work-type
- *   khóa — đổi phải qua đóng board trước; xem ENDPOINTS §17 J7).
- * - `ASSIGNED`/`IN_PROGRESS` → chỉ `description`/`instructions`; lịch/skill/
- *   work-type (`plannedStartAt`/`plannedEndAt`/`requiredTradeId`/`workTypeId`)
- *   là workflow-impacting: cho phép nhưng BẮT BUỘC `reason` (SRS: đổi
- *   lịch/kỹ năng phải thông báo + lưu before/after).
+ * - `DRAFT`/`READY` → sửa được tất cả field updatable (9 field: 8 cũ +
+ *   `customFields` J8).
+ * - `OPEN` → chỉ `description`/`instructions`/`dueAt`/`customFields`
+ *   (lịch/skill/work-type khóa — đổi phải qua đóng board trước; xem
+ *   ENDPOINTS §17 J7).
+ * - `ASSIGNED`/`IN_PROGRESS` → chỉ `description`/`instructions`/`customFields`;
+ *   lịch/skill/work-type (`plannedStartAt`/`plannedEndAt`/`requiredTradeId`/
+ *   `workTypeId`) là workflow-impacting: cho phép nhưng BẮT BUỘC `reason`
+ *   (SRS: đổi lịch/kỹ năng phải thông báo + lưu before/after).
  * - `WORK_DONE`/`CLOSED`/`CANCELLED` → toàn bộ khóa; CHỈ ADMIN với `reason`
  *   ≥ 10 ký tự sửa được (quy trình ngoại lệ, audit
  *   `WORK_ORDER_EXCEPTION_EDIT`).
@@ -35,6 +37,12 @@ export const UPDATABLE_WORK_ORDER_FIELDS = [
   'plannedEndAt',
   'requiredTradeId',
   'workTypeId',
+  /**
+   * Dữ liệu bổ sung (`custom_fields`, J8) — chỉnh được như
+   * `description`/`instructions` (không workflow-impacting: không đòi
+   * `reason`, không notification; terminal vẫn khóa như mọi field).
+   */
+  'customFields',
 ] as const;
 
 export type UpdatableWorkOrderField = (typeof UPDATABLE_WORK_ORDER_FIELDS)[number];
@@ -61,10 +69,12 @@ const OPEN_EDITABLE_FIELDS: readonly UpdatableWorkOrderField[] = [
   'description',
   'instructions',
   'dueAt',
+  'customFields',
 ];
 const ACTIVE_EDITABLE_FIELDS: readonly UpdatableWorkOrderField[] = [
   'description',
   'instructions',
+  'customFields',
 ];
 
 export interface UpdateFieldDecision {

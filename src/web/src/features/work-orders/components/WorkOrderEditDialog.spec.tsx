@@ -48,28 +48,29 @@ beforeEach(() => {
 });
 
 describe('editableFieldsForStatus JOB-SRS-003', () => {
-  it('DRAFT/READY full 8 fields', () => {
-    expect(editableFieldsForStatus('DRAFT', false).size).toBe(8);
-    expect(editableFieldsForStatus('READY', false).size).toBe(8);
+  it('DRAFT/READY full 9 fields (8 cũ + customFields J8)', () => {
+    expect(editableFieldsForStatus('DRAFT', false).size).toBe(9);
+    expect(editableFieldsForStatus('READY', false).size).toBe(9);
   });
 
-  it('OPEN chỉ description/instructions/dueAt', () => {
+  it('OPEN chỉ description/instructions/dueAt/customFields', () => {
     const s = editableFieldsForStatus('OPEN', false);
-    expect([...s].sort()).toEqual(['description', 'dueAt', 'instructions'].sort());
+    expect([...s].sort()).toEqual(['customFields', 'description', 'dueAt', 'instructions'].sort());
   });
 
-  it('ASSIGNED gồm desc/instructions + lịch/skill/work-type (không priority/dueAt)', () => {
+  it('ASSIGNED gồm desc/instructions/customFields + lịch/skill/work-type (không priority/dueAt)', () => {
     const s = editableFieldsForStatus('ASSIGNED', false);
     expect(s.has('plannedStartAt')).toBe(true);
     expect(s.has('requiredTradeId')).toBe(true);
     expect(s.has('workTypeId')).toBe(true);
+    expect(s.has('customFields')).toBe(true);
     expect(s.has('priority')).toBe(false);
     expect(s.has('dueAt')).toBe(false);
   });
 
   it('WORK_DONE non-ADMIN rỗng, ADMIN full', () => {
     expect(editableFieldsForStatus('WORK_DONE', false).size).toBe(0);
-    expect(editableFieldsForStatus('WORK_DONE', true).size).toBe(8);
+    expect(editableFieldsForStatus('WORK_DONE', true).size).toBe(9);
     expect(editableFieldsForStatus('CLOSED', false).size).toBe(0);
   });
 });
@@ -161,5 +162,69 @@ describe('WorkOrderEditDialog JOB-SRS-003', () => {
     // trạng thái) — dialog vẫn hiển thị lỗi đúng field, server là source of truth.
     expect(updateMock).toHaveBeenCalledWith(wo().id, expect.objectContaining({ priority: 'HIGH' }));
     expect((await screen.findAllByText(/Ưu tiên bị khóa/)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('J8 Dữ liệu bổ sung render từ required_fields + gửi customFields khi đổi', async () => {
+    const TYPE_ID = '22222222-2222-4222-8222-222222222222';
+    (listActiveWorkTypes as jest.Mock).mockResolvedValue({
+      data: [
+        {
+          id: TYPE_ID,
+          code: 'WT-OP-LAT',
+          name: 'Op lat',
+          requiredTradeId: null,
+          requiredFields: [
+            { key: 'dien_tich', label: 'Diện tích (m²)', type: 'NUMBER' },
+            { key: 'anh_nghiem_thu', label: 'Ảnh nghiệm thu', type: 'PHOTO' },
+          ],
+        },
+      ],
+      total: 1,
+    });
+    updateMock.mockResolvedValue(wo({ version: 3 }));
+    render(<WorkOrderEditDialog workOrder={wo()} isAdmin={false} onClose={jest.fn()} />);
+
+    expect(await screen.findByText('Dữ liệu bổ sung (theo loại công việc)')).not.toBeNull();
+    await userEvent.type(screen.getByLabelText(/Diện tích \(m²\)/), '120');
+    await userEvent.type(screen.getByLabelText(/Ảnh nghiệm thu/), 'https://cdn.example/a.jpg');
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith(
+        wo().id,
+        expect.objectContaining({
+          customFields: { dien_tich: 120, anh_nghiem_thu: 'https://cdn.example/a.jpg' },
+        }),
+      ),
+    );
+  });
+
+  it('J8 đổi sang workType có ngành yêu cầu → trade tự khóa Bắt buộc', async () => {
+    const TYPE_ID = '22222222-2222-4222-8222-222222222222';
+    const OTHER_TYPE = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+    const TRADE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    (listActiveWorkTypes as jest.Mock).mockResolvedValue({
+      data: [
+        { id: TYPE_ID, code: 'WT-001', name: 'Loai cu', requiredTradeId: null, requiredFields: [] },
+        { id: OTHER_TYPE, code: 'WT-OP-LAT', name: 'Op lat', requiredTradeId: TRADE_ID, requiredFields: [] },
+      ],
+      total: 2,
+    });
+    (listTrades as jest.Mock).mockResolvedValue({
+      data: [{ id: TRADE_ID, code: 'OP-LAT', name: 'Lat' }],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    });
+    updateMock.mockResolvedValue(wo({ version: 3 }));
+    render(<WorkOrderEditDialog workOrder={wo()} isAdmin={false} onClose={jest.fn()} />);
+
+    await waitFor(() => expect(listActiveWorkTypes).toHaveBeenCalled());
+    expect(await screen.findByRole('option', { name: /WT-OP-LAT — Op lat/ })).not.toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText(/Loại công việc/), OTHER_TYPE);
+    expect(await screen.findByText(/bắt buộc: OP-LAT — Lat/)).not.toBeNull();
+    const trade = screen.getByLabelText(/Ngành nghề yêu cầu/) as HTMLSelectElement;
+    expect(trade.disabled).toBe(true);
+    expect(trade.value).toBe(TRADE_ID);
   });
 });

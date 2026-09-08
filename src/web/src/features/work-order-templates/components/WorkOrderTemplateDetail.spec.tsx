@@ -80,6 +80,7 @@ describe('WorkOrderTemplateDetail PRJ-SRS-008', () => {
     expect(screen.getByText('Tho xay')).not.toBeNull();
     expect(screen.getByText('Kiem tra cop pha')).not.toBeNull();
     expect(screen.getByText(/Sửa mẫu không thay đổi Work Order đã tạo/)).not.toBeNull();
+    expect(screen.getByText(/Mẫu này dùng để tạo Work Order/)).not.toBeNull();
   });
 
   it('status action DRAFT→kích hoạt: confirm + alreadyInState', async () => {

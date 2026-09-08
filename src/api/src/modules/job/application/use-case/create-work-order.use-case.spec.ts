@@ -32,6 +32,7 @@ function makeEntity(code = 'WO-2026-A1'): WorkOrderEntity {
     plannedEndAt: null,
     dueAt: null,
     plannedHeadcount: null,
+    customFields: {},
     createdBy: IDS.actor,
     version: 1,
     requestKey: null,
@@ -290,6 +291,39 @@ describe('CreateWorkOrderUseCase (JOB-SRS-001)', () => {
     expect(out.idempotentReplay).toBe(true);
     expect(withTx.withTransaction).not.toHaveBeenCalled();
     expect(audit.logWithClient).not.toHaveBeenCalled();
+  });
+
+  it('J8 requiredTradeId thiếu → tự điền từ work_types.required_trade_id', async () => {
+    const { uc } = setup({
+      findActiveWorkTypeById: jest.fn(async (id: string) => ({ id, isActive: true, requiredTradeId: IDS.trade })),
+    });
+    const { entity } = await uc.execute({ ...baseInput });
+    expect(entity.requiredTradeId).toBe(IDS.trade);
+  });
+
+  it('J8 gửi trade khác ngành loại yêu cầu → 400 fieldErrors requiredTradeId', async () => {
+    const otherTrade = '88888888-8888-4888-8888-888888888888';
+    const { uc } = setup({
+      findActiveWorkTypeById: jest.fn(async (id: string) => ({ id, isActive: true, requiredTradeId: IDS.trade })),
+      findActiveTradeById: jest.fn(async (id: string) => ({ id, isActive: true, code: 'OP-LAT', name: 'Lát' })),
+    });
+    const err = await uc.execute({ ...baseInput, requiredTradeId: otherTrade }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toMatchObject({
+      fieldErrors: { requiredTradeId: expect.anything() },
+    });
+    expect(JSON.stringify((err as BadRequestException).getResponse())).toContain('OP-LAT');
+  });
+
+  it('J8 customFields hợp lệ → lưu vào entity; sai shape → 400 fieldErrors customFields', async () => {
+    const { uc } = setup();
+    const { entity } = await uc.execute({ ...baseInput, customFields: { dien_tich: 120, dat: false } });
+    expect(entity.customFields).toEqual({ dien_tich: 120, dat: false });
+
+    const { uc: ucBad } = setup();
+    await expect(ucBad.execute({ ...baseInput, customFields: { ok: { nested: 1 } } })).rejects.toMatchObject({
+      response: expect.objectContaining({ fieldErrors: expect.objectContaining({ customFields: expect.anything() }) }),
+    });
   });
 
   it('audit fail → 500 rollback (không swallow)', async () => {

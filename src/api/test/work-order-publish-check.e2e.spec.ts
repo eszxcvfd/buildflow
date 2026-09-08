@@ -33,6 +33,9 @@ const AREA_P2 = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const WO_DRAFT_NOSCHED = '11111111-1111-4111-8111-111111111111';
 const WO_READY = '22222222-1111-4111-8111-222222222222';
 const WO_AREA_OTHER = '33333333-1111-4111-8111-333333333333';
+// J8 — WO kiểu WT-OP-LAT: đúng trade yêu cầu + custom_fields đủ → ready true.
+const WO_CUSTOM_READY = '44444444-1111-4111-8111-444444444444';
+const TRADE_OPLAT = 'b017178a-daf2-4614-ac34-a05e1d1a6fb7';
 
 function makeSnapshot(over: Partial<PublishCheckSnapshot['workOrder']> & { projectStatus?: string }): PublishCheckSnapshot {
   const { projectStatus, ...woOver } = over;
@@ -51,6 +54,7 @@ function makeSnapshot(over: Partial<PublishCheckSnapshot['workOrder']> & { proje
       plannedStartAt: null,
       plannedEndAt: null,
       plannedHeadcount: 5,
+      customFields: {},
       jobBoardOpen: false,
       ...woOver,
     },
@@ -79,6 +83,31 @@ describe('JOB-SRS-002 publish-check (e2e HTTP contract)', () => {
       }),
     ],
     [WO_AREA_OTHER, makeSnapshot({ id: WO_AREA_OTHER, code: 'WO-2026-C3', areaId: AREA_P2 })],
+    [
+      WO_CUSTOM_READY,
+      {
+        workOrder: {
+          ...makeSnapshot({ id: WO_CUSTOM_READY, code: 'WO-2026-D4' }).workOrder,
+          requiredTradeId: TRADE_OPLAT,
+          plannedStartAt: new Date('2026-10-01T08:00:00.000Z'),
+          plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
+          customFields: { dien_tich: 120, anh_nghiem_thu: 'https://cdn.example/a.jpg' },
+        },
+        project: { id: P1, status: 'ACTIVE' },
+        workType: {
+          id: WT_PLAIN,
+          isActive: true,
+          requiredTradeId: TRADE_OPLAT,
+          requiredFieldsRaw: [
+            { key: 'dien_tich', label: 'Diện tích (m²)', type: 'NUMBER' },
+            { key: 'anh_nghiem_thu', label: 'Ảnh nghiệm thu', type: 'PHOTO' },
+          ],
+        },
+        area: null,
+        workTypeTrade: { id: TRADE_OPLAT, isActive: true },
+        workOrderTrade: { id: TRADE_OPLAT, isActive: true },
+      },
+    ],
   ]);
   const memberships = new Map<string, string>([
     [`${P1}:${PM_ID}`, 'MANAGER'],
@@ -219,6 +248,16 @@ describe('JOB-SRS-002 publish-check (e2e HTTP contract)', () => {
     expect(res.body.ready).toBe(true);
     expect(res.body.unmet).toEqual([]);
     expect(res.body.status).toBe('DRAFT');
+  });
+
+  it('J8 custom_fields đủ + đúng trade → ready true (kịch bản WT-OP-LAT)', async () => {
+    const pmToken = await login('pm-e2e-pc@example.com');
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/work-orders/${WO_CUSTOM_READY}/publish-check`)
+      .set('Authorization', `Bearer ${pmToken}`)
+      .expect(200);
+    expect(res.body.ready).toBe(true);
+    expect(res.body.unmet).toEqual([]);
   });
 
   it('area khác project → AREA_INVALID', async () => {

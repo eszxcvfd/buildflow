@@ -24,8 +24,9 @@ function toDate(value: unknown): Date | null {
 /**
  * JOB-SRS-002 (issue #42) — PG read adapter cho publish-check: 1 query duy
  * nhất JOIN `work_orders` + `projects` + `work_types` + `project_areas` +
- * `trades` (×2: trade của work-type, trade của WO). Dùng cột hiện có, không
- * migration. Read-only (SELECT), không audit.
+ * `trades` (×2: trade của work-type, trade của WO). Kèm `custom_fields`
+ * (migration 0011) cho `MISSING_REQUIRED_FIELD` (J8). Read-only (SELECT),
+ * không audit.
  */
 @Injectable()
 export class PgWorkOrderPublishCheckReadAdapter implements WorkOrderPublishCheckReadPort {
@@ -46,6 +47,7 @@ export class PgWorkOrderPublishCheckReadAdapter implements WorkOrderPublishCheck
          wo.planned_end_at AS wo_planned_end_at,
          wo.planned_headcount AS wo_planned_headcount,
          wo.job_board_open AS wo_job_board_open,
+         wo.custom_fields AS wo_custom_fields,
          p.id AS p_id, p.status AS p_status,
          wt.id AS wt_id, wt.is_active AS wt_is_active,
          wt.required_trade_id AS wt_required_trade_id,
@@ -84,6 +86,12 @@ export class PgWorkOrderPublishCheckReadAdapter implements WorkOrderPublishCheck
             ? null
             : Number(row['wo_planned_headcount']),
         jobBoardOpen: Boolean(row['wo_job_board_open']),
+        customFields:
+          row['wo_custom_fields'] !== null &&
+          typeof row['wo_custom_fields'] === 'object' &&
+          !Array.isArray(row['wo_custom_fields'])
+            ? (row['wo_custom_fields'] as Record<string, unknown>)
+            : {},
       },
       project:
         row['p_id'] === null || row['p_id'] === undefined

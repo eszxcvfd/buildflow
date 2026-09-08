@@ -3,6 +3,7 @@ import {
   IsInt,
   IsISO8601,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -12,6 +13,14 @@ import {
 } from 'class-validator';
 import { WorkOrderPriority } from '../../../../domain/service/work-order.policy';
 import { WorkOrderStatus } from '../../../../domain/entity/work-order.entity';
+
+/**
+ * Dữ liệu bổ sung theo loại công việc (`custom_fields`, J8): object phẳng
+ * `{ key: string | number | boolean }`. DTO chỉ gate object-shape thô;
+ * validate chi tiết (key pattern, primitive, size/depth) do use case qua
+ * `normalizeCustomFieldsInput` (400 fieldErrors `{customFields}`).
+ */
+export type WorkOrderCustomFieldsDto = Record<string, string | number | boolean>;
 
 export interface WorkOrderResponseDto {
   id: string;
@@ -34,6 +43,8 @@ export interface WorkOrderResponseDto {
   /** Hạn hoàn thành (`due_at`) — đọc + PATCH #43 (create để null). */
   dueAt: string | null;
   plannedHeadcount: number | null;
+  /** Dữ liệu bổ sung theo loại công việc (`custom_fields`, J8 — luôn object, rỗng `{}` khi chưa nhập). */
+  customFields: WorkOrderCustomFieldsDto;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -108,6 +119,10 @@ export class CreateWorkOrderDto {
   @IsOptional()
   @IsUUID('4', { message: 'Request key không hợp lệ' })
   requestKey?: string | null;
+
+  @IsOptional()
+  @IsObject({ message: 'Dữ liệu bổ sung phải là object { key: giá trị }' })
+  customFields?: WorkOrderCustomFieldsDto;
 }
 
 /**
@@ -156,6 +171,15 @@ export class UpdateWorkOrderDto {
   @IsOptional()
   @IsUUID('4', { message: 'Loại công việc không hợp lệ' })
   workTypeId?: string | null;
+
+  /**
+   * J8 — partial object dữ liệu bổ sung (merge lên giá trị hiện tại, key
+   * absent = giữ nguyên). DTO gate object-shape; use case validate chi tiết
+   * + re-validate limits sau merge (400 fieldErrors `{customFields}`).
+   */
+  @IsOptional()
+  @IsObject({ message: 'Dữ liệu bổ sung phải là object { key: giá trị }' })
+  customFields?: WorkOrderCustomFieldsDto;
 
   @IsOptional()
   @IsInt({ message: 'Phiên bản kỳ vọng phải là số nguyên' })

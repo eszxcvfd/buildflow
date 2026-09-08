@@ -30,6 +30,7 @@ function makeReadySnapshot(): PublishCheckSnapshot {
       plannedStartAt: new Date('2026-10-01T08:00:00.000Z'),
       plannedEndAt: new Date('2026-10-02T08:00:00.000Z'),
       plannedHeadcount: 5,
+      customFields: {},
       jobBoardOpen: false,
     },
     project: { id: IDS.project, status: 'ACTIVE' },
@@ -192,6 +193,73 @@ describe('evaluatePublishReadiness (JOB-SRS-002)', () => {
     const { ready, unmet } = evaluatePublishReadiness(s);
     expect(ready).toBe(false);
     expect(unmet.map((u) => u.code)).toEqual(['ALREADY_ON_JOB_BOARD']);
+  });
+
+  it('J8 custom_fields: key tùy chỉnh đã nhập đủ → pass (WT-OP-LAT mẫu)', () => {
+    const s = makeReadySnapshot();
+    s.workType = {
+      id: IDS.workType,
+      isActive: true,
+      requiredTradeId: IDS.trade,
+      requiredFieldsRaw: [
+        { key: 'dien_tich', label: 'Diện tích (m²)', type: 'NUMBER' },
+        { key: 'anh_nghiem_thu', label: 'Ảnh nghiệm thu', type: 'PHOTO' },
+      ],
+    };
+    s.workOrder.requiredTradeId = IDS.trade;
+    s.workTypeTrade = { id: IDS.trade, isActive: true };
+    s.workOrderTrade = { id: IDS.trade, isActive: true };
+    s.workOrder.customFields = { dien_tich: 120, anh_nghiem_thu: 'https://cdn.example/a.jpg' };
+    const { ready, unmet } = evaluatePublishReadiness(s);
+    expect(ready).toBe(true);
+    expect(unmet).toEqual([]);
+  });
+
+  it('J8 custom_fields: key tùy chỉnh chưa nhập → MISSING_REQUIRED_FIELD + message Dữ liệu bổ sung', () => {
+    const s = makeReadySnapshot();
+    s.workType = {
+      id: IDS.workType,
+      isActive: true,
+      requiredTradeId: null,
+      requiredFieldsRaw: [
+        { key: 'dien_tich', label: 'Diện tích (m²)', type: 'NUMBER' },
+        { key: 'anh_nghiem_thu', label: 'Ảnh nghiệm thu', type: 'PHOTO' },
+      ],
+    };
+    const { ready, unmet } = evaluatePublishReadiness(s);
+    expect(ready).toBe(false);
+    expect(unmet).toEqual([
+      expect.objectContaining({ code: 'MISSING_REQUIRED_FIELD', field: 'dien_tich' }),
+      expect.objectContaining({ code: 'MISSING_REQUIRED_FIELD', field: 'anh_nghiem_thu' }),
+    ]);
+    expect(unmet[0].message).toContain('Diện tích (m²)');
+    expect(unmet[0].message).toContain('Dữ liệu bổ sung');
+  });
+
+  it('J8 custom_fields: NUMBER không parse được số → fail; chuỗi số + BOOLEAN false → pass', () => {
+    const fieldsRaw = [{ key: 'dien_tich', label: 'Diện tích (m²)', type: 'NUMBER' }];
+    const invalid = makeReadySnapshot();
+    invalid.workType = { id: IDS.workType, isActive: true, requiredTradeId: null, requiredFieldsRaw: fieldsRaw };
+    invalid.workOrder.customFields = { dien_tich: 'abc' };
+    expect(evaluatePublishReadiness(invalid).ready).toBe(false);
+    expect(evaluatePublishReadiness(invalid).unmet.map((u) => u.code)).toEqual(['MISSING_REQUIRED_FIELD']);
+
+    const numericString = makeReadySnapshot();
+    numericString.workType = { id: IDS.workType, isActive: true, requiredTradeId: null, requiredFieldsRaw: fieldsRaw };
+    numericString.workOrder.customFields = { dien_tich: '120' };
+    expect(evaluatePublishReadiness(numericString).ready).toBe(true);
+
+    const boolFalse = makeReadySnapshot();
+    boolFalse.workType = {
+      id: IDS.workType,
+      isActive: true,
+      requiredTradeId: null,
+      requiredFieldsRaw: [{ key: 'dat_kiem_dinh', label: 'Đạt kiểm định', type: 'BOOLEAN' }],
+    };
+    boolFalse.workOrder.customFields = { dat_kiem_dinh: false };
+    const boolResult = evaluatePublishReadiness(boolFalse);
+    expect(boolResult.ready).toBe(true);
+    expect(boolResult.unmet).toEqual([]);
   });
 
   it('order deterministic theo catalog khi nhiều điều kiện cùng fail', () => {

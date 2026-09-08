@@ -12,13 +12,17 @@
  * Quyết định ghi rõ (xem ENDPOINTS.md §17 J6):
  * - Trạng thái được công bố: chỉ `DRAFT`/`READY` (slice #41 mới tạo `DRAFT`;
  *   `READY` dành cho transition tương lai — gate tái dùng ở #44/#47).
- * - `MISSING_REQUIRED_FIELD`: `work_orders` KHÔNG có cột custom-fields nên
- *   mỗi entry `required_fields` của work-type được resolve về cột WO qua
- *   `resolveRequiredFieldValue` (key quen thuộc: description/instructions/
- *   area/schedule/headcount/trade/...). Entry shape verify theo work-types
- *   policy (mirror, không import cross-feature — xem J6); entry sai shape bị
- *   bỏ qua defensively; `required: false` được miễn; key lạ (không có cột WO
- *   tương ứng) → fail-closed `MISSING_REQUIRED_FIELD` (không đoán đạt).
+ * - `MISSING_REQUIRED_FIELD`: key ánh xạ được cột WO thì resolve về cột
+ *   (title/code/description/instructions/priority/area/schedule/headcount/
+ *   trade/project — so khớp case-insensitive, bỏ `_`/`-`); key còn lại
+ *   resolve qua `work_orders.custom_fields` (J8, migration 0011) theo key gốc
+ *   (fallback case-insensitive) và kiểm tra present + đúng kiểu theo `type`
+ *   entry (NUMBER parse được số; BOOLEAN `false` vẫn tính là đã nhập;
+ *   TEXT/SELECT/PHOTO non-empty; DATE parse được ngày). Entry shape verify
+ *   theo work-types policy (mirror, không import cross-feature — xem J6);
+ *   entry sai shape bị bỏ qua defensively; `required: false` được miễn; key
+ *   vắng mặt ở cả cột WO lẫn `custom_fields` → fail-closed
+ *   `MISSING_REQUIRED_FIELD` (không đoán đạt).
  * - Skill/required-field chỉ đánh giá khi work-type tồn tại (tránh cascade
  *   noise sau `WORK_TYPE_MISSING`).
  */
@@ -61,6 +65,12 @@ export interface PublishCheckSnapshot {
     plannedEndAt: Date | null;
     plannedHeadcount: number | null;
     jobBoardOpen: boolean;
+    /**
+     * Dữ liệu bổ sung theo loại công việc (`work_orders.custom_fields`,
+     * migration 0011) — key tùy chỉnh của `work_types.required_fields`
+     * resolve ở đây (J8), không fail-closed như trước.
+     */
+    customFields: Record<string, unknown>;
   };
   project: { id: string; status: string } | null;
   workType: {
@@ -121,55 +131,146 @@ function verifyRequiredFieldEntry(entry: unknown): RequiredFieldEntry | null {
 
 /**
  * Resolve giá trị WO cho một required-field key (so khớp không phân biệt
- * hoa/thường, bỏ `_`/`-`). Key không ánh xạ được cột WO nào → undefined
+ * hoa/thường, bỏ `_`/`-`). Key không ánh xạ được cột WO nào → đọc
+ * `custom_fields` theo key GỐC (J8 — key lạ không còn fail-closed nếu user
+ * đã nhập ở phần Dữ liệu bổ sung); key vắng mặt ở cả hai nơi → undefined
  * (caller fail-closed).
  */
 function resolveRequiredFieldValue(
   snapshot: PublishCheckSnapshot,
   normalizedKey: string,
-): string | number | Date | null | undefined {
+  rawKey: string,
+): { found: boolean; value: string | number | Date | boolean | null | undefined } {
   const wo = snapshot.workOrder;
   switch (normalizedKey) {
     case 'title':
-      return wo.title;
+      return { found: true, value: wo.title };
     case 'code':
-      return wo.code;
+      return { found: true, value: wo.code };
     case 'description':
-      return wo.description;
+      return { found: true, value: wo.description };
     case 'instructions':
-      return wo.instructions;
+      return { found: true, value: wo.instructions };
     case 'priority':
-      return wo.priority;
+      return { found: true, value: wo.priority };
     case 'area':
     case 'areaid':
-      return wo.areaId;
+      return { found: true, value: wo.areaId };
     case 'plannedstartat':
     case 'start':
     case 'plannedstart':
-      return wo.plannedStartAt;
+      return { found: true, value: wo.plannedStartAt };
     case 'plannedendat':
     case 'end':
     case 'plannedend':
-      return wo.plannedEndAt;
+      return { found: true, value: wo.plannedEndAt };
     case 'plannedheadcount':
     case 'headcount':
-      return wo.plannedHeadcount;
+      return { found: true, value: wo.plannedHeadcount };
     case 'requiredtradeid':
     case 'trade':
     case 'skill':
-      return wo.requiredTradeId;
+      return { found: true, value: wo.requiredTradeId };
     case 'project':
     case 'projectid':
-      return wo.projectId;
-    default:
-      return undefined;
+      return { found: true, value: wo.projectId };
+    default: {
+      const custom = wo.customFields ?? {};
+      if (Object.prototype.hasOwnProperty.call(custom, rawKey)) {
+        return { found: true, value: custom[rawKey] as string | number | boolean | null | undefined };
+      }
+      const lowered = rawKey.toLowerCase();
+      const hit = Object.keys(custom).find((k) => k.toLowerCase() === lowered);
+      if (hit !== undefined) {
+        return { found: true, value: custom[hit] as string | number | boolean | null | undefined };
+      }
+      return { found: false, value: undefined };
+    }
   }
 }
 
-function isValuePresent(value: string | number | Date | null | undefined): boolean {
+/** Các normalized key ánh xạ về cột WO (còn lại resolve qua `custom_fields`). */
+const COLUMN_MAPPED_KEYS: readonly string[] = [
+  'title',
+  'code',
+  'description',
+  'instructions',
+  'priority',
+  'area',
+  'areaid',
+  'plannedstartat',
+  'start',
+  'plannedstart',
+  'plannedendat',
+  'end',
+  'plannedend',
+  'plannedheadcount',
+  'headcount',
+  'requiredtradeid',
+  'trade',
+  'skill',
+  'project',
+  'projectid',
+];
+
+function isColumnMappedKey(normalizedKey: string): boolean {
+  return (COLUMN_MAPPED_KEYS as readonly string[]).includes(normalizedKey);
+}
+
+function isValuePresent(value: string | number | Date | boolean | null | undefined): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
   return true;
+}
+
+/**
+ * Kiểm tra giá trị `custom_fields` theo `type` của required-field entry
+ * (J8 — present + đúng kiểu mới pass):
+ * - TEXT/SELECT/PHOTO: chuỗi non-empty (số hữu hạn/boolean cũng chấp nhận —
+ *   hiển thị được); PHOTO thường là URL hoặc ghi chú, đính kèm bằng chứng
+ *   thật ở bước sau.
+ * - NUMBER: số hữu hạn hoặc chuỗi parse được số.
+ * - DATE: Date hợp lệ hoặc chuỗi parse được ngày.
+ * - BOOLEAN: `true`/`false` (cả hai đều là giá trị hợp lệ — `false` KHÔNG
+ *   coi là thiếu) hoặc chuỗi `true`/`false`/`1`/`0`, số `1`/`0`.
+ */
+function isCustomFieldValueValid(value: unknown, type: string): boolean {
+  if (value === null || value === undefined) return false;
+  switch (type) {
+    case 'NUMBER': {
+      if (typeof value === 'number') return Number.isFinite(value);
+      if (typeof value === 'string') {
+        const text = value.trim();
+        return text.length > 0 && !Number.isNaN(Number(text));
+      }
+      return false;
+    }
+    case 'BOOLEAN': {
+      if (typeof value === 'boolean') return true;
+      if (typeof value === 'string') {
+        const text = value.trim().toLowerCase();
+        return text === 'true' || text === 'false' || text === '1' || text === '0';
+      }
+      if (typeof value === 'number') return value === 1 || value === 0;
+      return false;
+    }
+    case 'DATE': {
+      if (value instanceof Date) return !Number.isNaN(value.getTime());
+      if (typeof value === 'string') {
+        const text = value.trim();
+        return text.length > 0 && !Number.isNaN(Date.parse(text));
+      }
+      return false;
+    }
+    default: {
+      // TEXT / SELECT / PHOTO.
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (typeof value === 'number') return Number.isFinite(value);
+      return typeof value === 'boolean';
+    }
+  }
 }
 
 /**
@@ -298,18 +399,28 @@ export function evaluatePublishReadiness(snapshot: PublishCheckSnapshot): Publis
       if (!verified) continue;
       if (verified.required === false) continue;
       const normalizedKey = verified.key.toLowerCase().replace(/[_-]/g, '');
-      const value = resolveRequiredFieldValue(snapshot, normalizedKey);
-      if (value === undefined) {
+      const resolved = resolveRequiredFieldValue(snapshot, normalizedKey, verified.key);
+      const isCustom = !isColumnMappedKey(normalizedKey);
+      if (!resolved.found) {
         unmet.push({
           code: 'MISSING_REQUIRED_FIELD',
           field: verified.key,
-          message: `Thiếu dữ liệu bắt buộc: ${verified.label} (khóa "${verified.key}" chưa có trường tương ứng trên Work Order)`,
+          message: isCustom
+            ? `Chưa nhập "${verified.label}" — nhập ở phần Dữ liệu bổ sung khi tạo/sửa Work Order`
+            : `Thiếu dữ liệu bắt buộc: ${verified.label} (khóa "${verified.key}" chưa có trường tương ứng trên Work Order)`,
         });
-      } else if (!isValuePresent(value)) {
+        continue;
+      }
+      const present = isCustom
+        ? isCustomFieldValueValid(resolved.value, verified.type)
+        : isValuePresent(resolved.value);
+      if (!present) {
         unmet.push({
           code: 'MISSING_REQUIRED_FIELD',
           field: verified.key,
-          message: `Thiếu dữ liệu bắt buộc: ${verified.label}`,
+          message: isCustom
+            ? `Chưa nhập "${verified.label}" — nhập ở phần Dữ liệu bổ sung khi tạo/sửa Work Order`
+            : `Thiếu dữ liệu bắt buộc: ${verified.label}`,
         });
       }
     }

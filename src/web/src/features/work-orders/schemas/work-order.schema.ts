@@ -15,6 +15,11 @@ export interface WorkOrderFormValues {
   plannedHeadcount: string;
   description: string;
   instructions: string;
+  /**
+   * Giá trị thô phần Dữ liệu bổ sung (J8) — key → chuỗi nhập từ ô theo loại
+   * `required_fields` của work-type; rỗng = không nhập (không gửi key đó).
+   */
+  customFieldValues: Record<string, string>;
 }
 
 export interface ValidationResult {
@@ -41,6 +46,7 @@ export function defaultWorkOrderFormValues(): WorkOrderFormValues {
     plannedHeadcount: '',
     description: '',
     instructions: '',
+    customFieldValues: {},
   };
 }
 
@@ -124,6 +130,42 @@ function toIsoOrNull(datetimeLocal: string): string | null {
 }
 
 /**
+ * Map giá trị thô Dữ liệu bổ sung → payload `customFields` (J8): ô trống bị
+ * bỏ qua (PATCH partial: absent = giữ nguyên); NUMBER parse số khi được
+ * (không parse được → giữ chuỗi, server publish-check fail với message rõ);
+ * BOOLEAN `true`/`false`/`1`/`0` → boolean; còn lại giữ chuỗi đã trim.
+ */
+export function toCustomFieldsPayload(
+  raw: Record<string, string>,
+  typesByKey?: Record<string, string>,
+): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const text = (value ?? '').trim();
+    if (!text) continue;
+    const type = (typesByKey?.[key] ?? '').toUpperCase();
+    if (type === 'NUMBER') {
+      const n = Number(text);
+      out[key] = text !== '' && !Number.isNaN(n) ? n : text;
+      continue;
+    }
+    if (type === 'BOOLEAN') {
+      const lowered = text.toLowerCase();
+      if (lowered === 'true' || lowered === '1') {
+        out[key] = true;
+        continue;
+      }
+      if (lowered === 'false' || lowered === '0') {
+        out[key] = false;
+        continue;
+      }
+    }
+    out[key] = text;
+  }
+  return out;
+}
+
+/**
  * Map form values → payload POST /api/v1/work-orders. Các field optional rỗng
  * được gửi null (server whitelist + DTO chấp nhận null); `requestKey` do
  * dialog sinh một lần mỗi phiên mở và truyền vào.
@@ -132,8 +174,10 @@ export function toCreateWorkOrderPayload(
   projectId: string,
   values: WorkOrderFormValues,
   requestKey: string,
+  requiredFieldTypes?: Record<string, string>,
 ): CreateWorkOrderPayload {
   const headcountText = values.plannedHeadcount.trim();
+  const customFields = toCustomFieldsPayload(values.customFieldValues ?? {}, requiredFieldTypes);
   return {
     projectId,
     title: values.title.trim(),
@@ -147,6 +191,7 @@ export function toCreateWorkOrderPayload(
     plannedStartAt: toIsoOrNull(values.plannedStartAt),
     plannedEndAt: toIsoOrNull(values.plannedEndAt),
     plannedHeadcount: headcountText === '' ? null : Number(headcountText),
+    customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
     requestKey,
   };
 }

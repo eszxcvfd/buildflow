@@ -27,6 +27,7 @@ function makeEntity(): WorkOrderEntity {
     plannedEndAt: null,
     dueAt: null,
     plannedHeadcount: null,
+    customFields: {},
     createdBy: IDS.actor,
     version: 1,
     requestKey: null,

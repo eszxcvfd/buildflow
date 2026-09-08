@@ -1,5 +1,7 @@
 import {
+  WorkOrderCustomFields,
   WorkOrderPriority,
+  normalizeCustomFieldsInput,
   normalizePlannedHeadcount,
   normalizeWorkOrderCode,
   normalizeWorkOrderPriority,
@@ -47,6 +49,11 @@ export interface WorkOrderProps {
   /** Hạn hoàn thành (`work_orders.due_at`) — chỉnh qua PATCH #43 (create để null). */
   dueAt: Date | null;
   plannedHeadcount: number | null;
+  /**
+   * Dữ liệu bổ sung theo loại công việc (`work_orders.custom_fields`,
+   * migration 0011) — giá trị các `required_fields` tùy chỉnh của work-type.
+   */
+  customFields: WorkOrderCustomFields;
   createdBy: string;
   version: number;
   requestKey: string | null;
@@ -94,6 +101,7 @@ export class WorkOrderEntity {
     this.props.priority = normalizeWorkOrderPriority(this.props.priority);
     if (!WORK_ORDER_STATUSES.includes(this.props.status)) throw new Error('Trạng thái công việc không hợp lệ');
     this.props.plannedHeadcount = normalizePlannedHeadcount(this.props.plannedHeadcount);
+    this.props.customFields = normalizeCustomFieldsInput(this.props.customFields);
     if (!Number.isInteger(this.props.version) || this.props.version < 1) {
       throw new Error('Version công việc không hợp lệ');
     }
@@ -114,6 +122,7 @@ export class WorkOrderEntity {
   get plannedEndAt(): Date | null { return this.props.plannedEndAt; }
   get dueAt(): Date | null { return this.props.dueAt; }
   get plannedHeadcount(): number | null { return this.props.plannedHeadcount; }
+  get customFields(): WorkOrderCustomFields { return { ...this.props.customFields }; }
   get createdBy(): string { return this.props.createdBy; }
   get version(): number { return this.props.version; }
   get requestKey(): string | null { return this.props.requestKey; }
@@ -149,6 +158,7 @@ export class WorkOrderEntity {
     plannedEndAt: Date | null;
     plannedHeadcount: number | null;
     dueAt: Date | null;
+    customFields: WorkOrderCustomFields;
     createdBy: string;
     version: number;
     requestKey: string | null;

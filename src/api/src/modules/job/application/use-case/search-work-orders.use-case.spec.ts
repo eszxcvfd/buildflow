@@ -24,6 +24,7 @@ function makeEntity(id: string, projectId: string, status: 'DRAFT' | 'OPEN' = 'D
     plannedEndAt: null,
     dueAt: null,
     plannedHeadcount: null,
+    customFields: {},
     createdBy: ACTOR,
     version: 1,
     requestKey: null,

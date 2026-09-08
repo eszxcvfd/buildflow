@@ -34,6 +34,7 @@ export function toWorkOrderResponse(
     plannedEndAt: pub.plannedEndAt ? pub.plannedEndAt.toISOString() : null,
     dueAt: pub.dueAt ? pub.dueAt.toISOString() : null,
     plannedHeadcount: pub.plannedHeadcount,
+    customFields: { ...(pub.customFields ?? {}) },
     createdBy: pub.createdBy,
     createdAt: pub.createdAt.toISOString(),
     updatedAt: pub.updatedAt.toISOString(),

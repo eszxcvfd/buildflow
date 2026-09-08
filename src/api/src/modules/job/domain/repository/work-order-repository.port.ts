@@ -4,6 +4,12 @@ import { WorkOrderEntity, WorkOrderStatus } from '../entity/work-order.entity';
 export interface ActiveWorkTypeRef {
   id: string;
   isActive: boolean;
+  /**
+   * Ngành nghề mà loại công việc yêu cầu (`work_types.required_trade_id`,
+   * null = không yêu cầu) — dùng auto-fill/mismatch ở create/update (J8).
+   * Mock cũ thiếu field → caller coi như null.
+   */
+  requiredTradeId?: string | null;
 }
 
 export interface ActiveAreaRef {
@@ -15,6 +21,9 @@ export interface ActiveAreaRef {
 export interface ActiveTradeRef {
   id: string;
   isActive: boolean;
+  /** Kèm để dựng message mismatch (`Loại công việc yêu cầu ngành X`). */
+  code?: string;
+  name?: string;
 }
 
 export interface ProjectStatusRef {
