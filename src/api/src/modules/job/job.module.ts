@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
 import { WorkOrdersController } from './api/rest/controller/work-orders.controller';
+import { WorkOrderPublishCheckController } from './api/rest/controller/work-order-publish-check.controller';
 import { CreateWorkOrderUseCase } from './application/use-case/create-work-order.use-case';
 import { GetWorkOrderUseCase } from './application/use-case/get-work-order.use-case';
+import { CheckWorkOrderPublishUseCase } from './application/use-case/check-work-order-publish.use-case';
 import { PgWorkOrderRepository } from './infrastructure/database/pg-work-order.repository';
 import { JOB_WORK_ORDER_REPOSITORY } from './domain/repository/work-order-repository.port';
+import { PgWorkOrderPublishCheckReadAdapter } from './infrastructure/database/pg-work-order-publish-check.read-adapter';
+import { JOB_PUBLISH_CHECK_READ_PORT } from './domain/repository/work-order-publish-check.read-port';
 import { PgAuditRepository } from '../iam/infrastructure/database/pg-audit.repository';
 import { PgTransactionManager } from '../iam/infrastructure/database/pg-transaction.manager';
 import { BcryptHasherService } from '../iam/infrastructure/security/bcrypt-hasher.service';
@@ -25,16 +29,20 @@ import { IamModule } from '../iam/iam.module';
  * read = ADMIN bypass hoặc bất kỳ ACTIVE member nào (kể cả WORKER).
  * Gán người thực hiện / job board thuộc slice sau (#42/#44) — không endpoint
  * ở đây. Chi tiết xem ENDPOINTS.md §17.
+ * JOB-SRS-002 (issue #42) — thêm `GET /:id/publish-check` (advisory read-only,
+ * read-port riêng, không đụng port/repo/entity/controller của #41/#43).
  */
 @Module({
   imports: [IamModule],
-  controllers: [WorkOrdersController],
+  controllers: [WorkOrdersController, WorkOrderPublishCheckController],
   providers: [
     CreateWorkOrderUseCase,
     GetWorkOrderUseCase,
+    CheckWorkOrderPublishUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: JOB_WORK_ORDER_REPOSITORY, useClass: PgWorkOrderRepository },
+    { provide: JOB_PUBLISH_CHECK_READ_PORT, useClass: PgWorkOrderPublishCheckReadAdapter },
     { provide: AUDIT_PORT, useClass: PgAuditRepository },
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     { provide: HASHER_PORT, useClass: BcryptHasherService },

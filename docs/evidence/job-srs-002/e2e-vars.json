@@ -1,0 +1,53 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "digits": "341600",
+  "title": "Thi công ván khuôn cột C2 tầng trệt 341600",
+  "workOrderId": "da026aa7-990d-4f13-a1e7-5510f2c2f7b6",
+  "praId": "10000000-0000-4000-8000-000000000001",
+  "auditBaseline": "2584",
+  "auditFinal": "2605",
+  "rest": "0",
+  "tempWtRest": "0",
+  "results": [
+    {
+      "id": "K1",
+      "ok": true,
+      "note": "ready=false codes=[MISSING_SCHEDULE,MISSING_SCHEDULE,MISSING_REQUIRED_SKILL]; no-store; assignments=0"
+    },
+    {
+      "id": "K2",
+      "ok": true,
+      "note": "panel liệt kê unmet, Công bố/Phân công disabled"
+    },
+    {
+      "id": "K3",
+      "ok": true,
+      "note": "unmet 3→1: [MISSING_REQUIRED_SKILL] (SQL UPDATE vì không có PATCH — deviation D1)"
+    },
+    {
+      "id": "K4",
+      "ok": true,
+      "note": "PAUSED→[PROJECT_NOT_ACTIVE,MISSING_REQUIRED_SKILL]; ACTIVE→[MISSING_REQUIRED_SKILL]"
+    },
+    {
+      "id": "K5",
+      "ok": true,
+      "note": "WT-inactive→[WORK_TYPE_INACTIVE]; area-PRD→[AREA_INVALID,MISSING_REQUIRED_SKILL]; restore sạch"
+    },
+    {
+      "id": "K6",
+      "ok": true,
+      "note": "ready=true unmet=[]; UI badge xanh, Công bố vẫn disabled (chờ #44)"
+    },
+    {
+      "id": "K7",
+      "ok": true,
+      "note": "non-member 403 (check + GET); WORKER 200; anon 401; id sai 400"
+    },
+    {
+      "id": "K8",
+      "ok": true,
+      "note": "kết quả đồng nhất; assignments 0→0; audit WO 4→4 (chỉ +PROJECT_SCOPE_* scope rows theo J6)"
+    }
+  ]
+}
