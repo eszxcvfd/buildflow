@@ -47,6 +47,8 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
       // ORG-SRS-006 (issue #29) — đội thi công: read + write cho ADMIN + PROJECT_MANAGER.
       { href: '/crews', label: 'Đội thi công', resourceViewer: true },
       { href: '/trades', label: 'Ngành nghề', adminOnly: true },
+      // PRJ-SRS-004 (issue #35) — loại công việc: read ADMIN + PROJECT_MANAGER.
+      { href: '/work-types', label: 'Loại công việc', resourceViewer: true },
     ],
   },
   {
@@ -67,6 +69,7 @@ const TITLES: Array<[prefix: string, title: string]> = [
   ['/workers', 'Công nhân'],
   ['/crews', 'Đội thi công'],
   ['/trades', 'Ngành nghề'],
+  ['/work-types', 'Loại công việc'],
   ['/admin/users', 'Tài khoản'],
   ['/admin/audit-logs', 'Nhật ký thao tác'],
   ['/profile', 'Hồ sơ cá nhân'],
