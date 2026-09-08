@@ -86,6 +86,8 @@ src/app/
 ├── (app)/trades/new/page.tsx         → /trades/new (tạo ngành nghề)
 ├── (app)/trades/[id]/page.tsx        → /trades/:id (chi tiết + deactivate/activate + warning)
 ├── (app)/trades/[id]/edit/page.tsx   → /trades/:id/edit (sửa mã/tên/mô tả)
+├── (app)/work-types/page.tsx         → /work-types (PRJ-SRS-004, issue #35: danh sách loại công việc cho ADMIN + PROJECT_MANAGER)
+├── (app)/work-types/[id]/page.tsx    → /work-types/:id (chi tiết loại công việc)
 └── (app)/items/[itemId]/page.tsx     → /items/:itemId
 ```
 

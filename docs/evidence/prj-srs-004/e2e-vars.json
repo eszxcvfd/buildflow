@@ -1,0 +1,66 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "hoang.anh@vinacons.vn",
+  "seedIds": [
+    "a1b2c3d4-0001-4000-8000-000000000001",
+    "a1b2c3d4-0002-4000-8000-000000000002",
+    "a1b2c3d4-0003-4000-8000-000000000003",
+    "a1b2c3d4-0004-4000-8000-000000000004"
+  ],
+  "createdIds": [
+    "c435ca52-fa04-4de7-b806-cdba9a0102f0"
+  ],
+  "createdCode": "WT-OP-LAT-TUONG",
+  "tempTradeId": "917ae0f6-0b48-42d6-a045-2f6ecb011594",
+  "auditBaseline": "2175",
+  "auditFinal": "2186",
+  "rest": "0",
+  "tradeRest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "UI toast Tạo thành công + list Thi công ốp lát tường; psql WT-OP-LAT-TUONG|1; audit CREATED admin; configVersion=1"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "UI đủ h1+chip+badge+def-grid+bảng fields+v1; API usage:{workOrders} đủ"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "UI toast Cập nhật + v2 + field Ngày thi công; API configVersion=2, 3 fields"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "UI notice \"Version cấu hình đã thay đổi\" + nút Tải lại; API 409 WORK_TYPE_CONFIG_CONFLICT + fieldErrors; version giữ 3 (không mất thay đổi)"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "UI badge Ngừng hoạt động + success; psql is_active=false row còn; audit reason đủ"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "/active total=4: loại trừ 2 inactive, giữ seed active (JOB đọc picker này khi tạo WO mới)"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "UI đủ badge + Bị chặn + fields; API 200 status INACTIVE + configVersion đủ"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "400 fieldErrors.requiredTradeId=\"Ngành nghề không tồn tại hoặc đã ngừng hoạt động\"; không tạo bản ghi"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "preview \"180 phút\"+\"Cao\" đúng; API configVersion giữ 3 (không bump), duration=180, priority=HIGH"
+    }
+  ]
+}

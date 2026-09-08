@@ -1,4 +1,4 @@
-import { ConflictException, BadRequestException } from '@nestjs/common';
+import { ConflictException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { CreateWorkTypeUseCase } from './create-work-type.use-case';
 import { WorkTypeEntity } from '../../domain/entity/work-type.entity';
 import { WorkTypeRepositoryPort } from '../../domain/repository/work-type-repository.port';
@@ -111,5 +111,22 @@ describe('CreateWorkTypeUseCase (PRJ-SRS-004)', () => {
     const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
     const uc = new CreateWorkTypeUseCase(repo, audit as never, tx as never);
     await expect(uc.execute({ ...baseInput })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('audit thất bại → 500 rollback (catch-all); thiếu logWithClient → 500', async () => {
+    const repo = makeRepo();
+    const audit = { log: jest.fn(), logWithClient: jest.fn(async () => {}) };
+    const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
+    audit.logWithClient.mockRejectedValue(new Error('db down'));
+    const uc = new CreateWorkTypeUseCase(repo, audit as never, tx as never);
+    const err = await uc.execute({ ...baseInput }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InternalServerErrorException);
+    // mutation đã thử trong tx nhưng 500 thoát ra khỏi callback → tx thật ROLLBACK
+    expect(repo.createWithClient).toHaveBeenCalled();
+    const noTxAudit = new CreateWorkTypeUseCase(
+      makeRepo(), { log: jest.fn() } as never, tx as never,
+    );
+    const err2 = await noTxAudit.execute({ ...baseInput }).catch((e: unknown) => e);
+    expect(err2).toBeInstanceOf(InternalServerErrorException);
   });
 });

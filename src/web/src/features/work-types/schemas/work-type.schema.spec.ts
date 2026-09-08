@@ -1,4 +1,4 @@
-import { validateWorkTypeCreate, validateRequiredFields } from './work-type.schema';
+import { validateWorkTypeCreate, validateWorkTypeUpdate, validateRequiredFields } from './work-type.schema';
 
 describe('work-type schema PRJ-SRS-004', () => {
   const base = {
@@ -32,5 +32,26 @@ describe('work-type schema PRJ-SRS-004', () => {
 
     const ok = validateRequiredFields([{ key: 'grade', label: 'Mac', type: 'SELECT', options: ['M200', 'M250'] }]);
     expect(ok).toEqual({});
+  });
+
+  it('defaultDurationMinutes: tùy chọn, rỗng hợp lệ, chỉ nhận số nguyên dương', () => {
+    expect(validateWorkTypeCreate(base).valid).toBe(true);
+    expect(validateWorkTypeCreate({ ...base, defaultDurationMinutes: '' }).valid).toBe(true);
+    expect(validateWorkTypeCreate({ ...base, defaultDurationMinutes: '120' }).valid).toBe(true);
+    expect(validateWorkTypeCreate({ ...base, defaultDurationMinutes: 'abc' }).fieldErrors.defaultDurationMinutes).toBeDefined();
+    expect(validateWorkTypeCreate({ ...base, defaultDurationMinutes: '0' }).fieldErrors.defaultDurationMinutes).toBeDefined();
+    expect(validateWorkTypeCreate({ ...base, defaultDurationMinutes: '1.5' }).fieldErrors.defaultDurationMinutes).toBeDefined();
+  });
+
+  it('defaultPriority: tùy chọn, chỉ nhận LOW/NORMAL/HIGH/URGENT', () => {
+    expect(validateWorkTypeCreate({ ...base, defaultPriority: 'HIGH' }).valid).toBe(true);
+    expect(validateWorkTypeCreate({ ...base, defaultPriority: 'KHAN_CAP' }).fieldErrors.defaultPriority).toBeDefined();
+  });
+
+  it('update: chỉ validate hai trường mới khi được truyền', () => {
+    expect(validateWorkTypeUpdate({}).valid).toBe(true);
+    expect(validateWorkTypeUpdate({ defaultDurationMinutes: '-5' }).fieldErrors.defaultDurationMinutes).toBeDefined();
+    expect(validateWorkTypeUpdate({ defaultPriority: 'URGENT' }).valid).toBe(true);
+    expect(validateWorkTypeUpdate({ defaultPriority: 'LOW2' }).fieldErrors.defaultPriority).toBeDefined();
   });
 });

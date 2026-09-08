@@ -64,6 +64,24 @@ describe('WorkTypeEditDialog PRJ-SRS-004', () => {
     expect(onUpdated).toHaveBeenCalled();
   });
 
+  it('prefill thời lượng/ưu tiên + preview trạng thái + gửi kèm payload', async () => {
+    getMock.mockResolvedValue({ ...wt(), defaultDurationMinutes: 90, defaultPriority: 'URGENT' });
+    updateMock.mockResolvedValue({ workType: wt(), versionChanged: true });
+    render(<WorkTypeEditDialog id="44444444-4444-4444-8444-444444444444" open onClose={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Thời lượng mặc định (phút)')).not.toBeNull());
+    expect((screen.getByLabelText('Thời lượng mặc định (phút)') as HTMLInputElement).value).toBe('90');
+    expect((screen.getByLabelText('Ưu tiên mặc định') as HTMLSelectElement).value).toBe('URGENT');
+    expect(screen.getByText('Xem trước cấu hình')).not.toBeNull();
+    expect(screen.getByText('90 phút')).not.toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith(
+      '44444444-4444-4444-8444-444444444444',
+      expect.objectContaining({ defaultDurationMinutes: 90, defaultPriority: 'URGENT', expectedConfigVersion: 3 }),
+    ));
+  });
+
   it('409 conflict hiển thị notice + nút tải lại', async () => {
     getMock.mockResolvedValue(wt());
     updateMock.mockRejectedValue({

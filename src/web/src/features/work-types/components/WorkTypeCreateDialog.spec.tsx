@@ -48,6 +48,32 @@ describe('WorkTypeCreateDialog PRJ-SRS-004', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('preview hiển thị trực tiếp + validate/gửi thời lượng và ưu tiên', async () => {
+    createMock.mockResolvedValue({ id: 'new-id' });
+    render(<WorkTypeCreateDialog open onClose={jest.fn()} />);
+
+    // Panel xem trước render ngay với giá trị mặc định
+    expect(screen.getByText('Xem trước cấu hình')).not.toBeNull();
+
+    await userEvent.type(screen.getByLabelText('Mã loại công việc *'), 'WT-002');
+    await userEvent.type(screen.getByLabelText('Tên loại công việc *'), 'Xay tuong');
+    await userEvent.type(screen.getByLabelText('Thời lượng mặc định (phút)'), 'abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo loại công việc' }));
+    expect(await screen.findByText('Thời lượng mặc định phải là số nguyên dương (phút)')).not.toBeNull();
+    expect(createMock).not.toHaveBeenCalled();
+
+    await userEvent.clear(screen.getByLabelText('Thời lượng mặc định (phút)'));
+    await userEvent.type(screen.getByLabelText('Thời lượng mặc định (phút)'), '120');
+    await userEvent.selectOptions(screen.getByLabelText('Ưu tiên mặc định'), 'HIGH');
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo loại công việc' }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultDurationMinutes: 120, defaultPriority: 'HIGH' }),
+    ));
+    // Preview cập nhật theo nội dung đang nhập
+    expect(screen.getByText('120 phút')).not.toBeNull();
+    expect(screen.getAllByText('Cao').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('409 trùng code hiển thị lỗi theo field', async () => {
     createMock.mockRejectedValue({
       status: 409,

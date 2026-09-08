@@ -1,4 +1,4 @@
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ChangeWorkTypeStatusUseCase } from './change-work-type-status.use-case';
 import { WorkTypeEntity } from '../../domain/entity/work-type.entity';
 import { WorkTypeRepositoryPort } from '../../domain/repository/work-type-repository.port';
@@ -39,7 +39,7 @@ function setup(isActive: boolean, usage = 0) {
   const audit = { log: jest.fn(), logWithClient: jest.fn(async () => {}) };
   const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
   const uc = new ChangeWorkTypeStatusUseCase(repo, audit as never, tx as never);
-  return { uc, audit, store };
+  return { uc, audit, repo, tx, store };
 }
 
 const base = { workTypeId: WT_ID, actorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
@@ -82,5 +82,24 @@ describe('ChangeWorkTypeStatusUseCase (PRJ-SRS-004/007)', () => {
       { withTransaction: jest.fn() } as never,
     );
     await expect(uc404.execute({ ...base, action: 'DEACTIVATE' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('audit thất bại → 500 rollback (catch-all); thiếu logWithClient → 500', async () => {
+    const { uc, audit, repo } = setup(true);
+    audit.logWithClient.mockRejectedValue(new Error('db down'));
+    const err = await uc
+      .execute({ ...base, action: 'DEACTIVATE' })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InternalServerErrorException);
+    // mutation đã thử trong tx nhưng 500 thoát ra khỏi callback → tx thật ROLLBACK
+    expect(repo.saveWithClient).toHaveBeenCalled();
+    const fresh = setup(true);
+    const noTxAudit = new ChangeWorkTypeStatusUseCase(
+      fresh.repo, { log: jest.fn() } as never, fresh.tx as never,
+    );
+    const err2 = await noTxAudit
+      .execute({ ...base, action: 'DEACTIVATE' })
+      .catch((e: unknown) => e);
+    expect(err2).toBeInstanceOf(InternalServerErrorException);
   });
 });

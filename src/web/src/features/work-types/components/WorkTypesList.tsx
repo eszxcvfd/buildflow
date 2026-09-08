@@ -151,7 +151,7 @@ export function WorkTypesList() {
             />
           </div>
           <SearchField
-            id="worktype-group"
+            id="worktype-group-filter"
             label="Nhóm"
             placeholder="Lọc theo nhóm…"
             value={groupFilter}

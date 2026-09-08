@@ -7,6 +7,9 @@ export interface WorkTypeFormValues {
   group: string;
   requiredTradeId: string;
   requiredFields: RequiredField[];
+  /** Giá trị thô từ ô nhập (chuỗi); rỗng = không đặt. */
+  defaultDurationMinutes?: string | number | null;
+  defaultPriority?: string;
 }
 
 export interface ValidationResult {
@@ -27,6 +30,36 @@ export const REQUIRED_FIELD_TYPE_LABELS: Record<string, string> = {
   SELECT: 'Chọn một',
   PHOTO: 'Ảnh',
 };
+
+export const WORK_TYPE_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
+
+export type WorkTypePriorityValue = (typeof WORK_TYPE_PRIORITIES)[number];
+
+export const WORK_TYPE_PRIORITY_LABELS: Record<string, string> = {
+  LOW: 'Thấp',
+  NORMAL: 'Thường',
+  HIGH: 'Cao',
+  URGENT: 'Khẩn cấp',
+};
+
+export function validateDurationMinutes(value: string | number | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (!/^\d+$/.test(text)) return 'Thời lượng mặc định phải là số nguyên dương (phút)';
+  if (Number(text) < 1) return 'Thời lượng mặc định phải lớn hơn 0 (phút)';
+  return null;
+}
+
+export function validatePriority(value: string | null | undefined): string | null {
+  if (value === undefined || value === null) return null;
+  const text = value.trim();
+  if (!text) return null;
+  if (!(WORK_TYPE_PRIORITIES as readonly string[]).includes(text)) {
+    return 'Ưu tiên mặc định không hợp lệ (LOW/NORMAL/HIGH/URGENT)';
+  }
+  return null;
+}
 
 export function validateRequiredFields(fields: RequiredField[]): Record<string, string[]> {
   const fieldErrors: Record<string, string[]> = {};
@@ -87,6 +120,11 @@ export function validateWorkTypeCreate(values: WorkTypeFormValues): ValidationRe
     fieldErrors.group = ['Nhóm công việc tối đa 100 ký tự'];
   }
 
+  const durationError = validateDurationMinutes(values.defaultDurationMinutes);
+  if (durationError) fieldErrors.defaultDurationMinutes = [durationError];
+  const priorityError = validatePriority(values.defaultPriority);
+  if (priorityError) fieldErrors.defaultPriority = [priorityError];
+
   Object.assign(fieldErrors, validateRequiredFields(values.requiredFields));
 
   return { valid: Object.keys(fieldErrors).length === 0, fieldErrors };
@@ -111,6 +149,14 @@ export function validateWorkTypeUpdate(values: Partial<WorkTypeFormValues>): Val
   }
   if (values.group !== undefined && values.group && values.group.trim().length > 100) {
     fieldErrors.group = ['Nhóm công việc tối đa 100 ký tự'];
+  }
+  if (values.defaultDurationMinutes !== undefined) {
+    const durationError = validateDurationMinutes(values.defaultDurationMinutes);
+    if (durationError) fieldErrors.defaultDurationMinutes = [durationError];
+  }
+  if (values.defaultPriority !== undefined) {
+    const priorityError = validatePriority(values.defaultPriority);
+    if (priorityError) fieldErrors.defaultPriority = [priorityError];
   }
   if (values.requiredFields !== undefined) {
     Object.assign(fieldErrors, validateRequiredFields(values.requiredFields));

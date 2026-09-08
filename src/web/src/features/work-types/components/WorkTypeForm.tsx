@@ -14,6 +14,8 @@ import {
   validateWorkTypeCreate,
   REQUIRED_FIELD_TYPES,
   REQUIRED_FIELD_TYPE_LABELS,
+  WORK_TYPE_PRIORITIES,
+  WORK_TYPE_PRIORITY_LABELS,
 } from '@/features/work-types/schemas/work-type.schema';
 import { Input } from '@/components/ui/input/Input';
 import { Button } from '@/components/ui/button/Button';
@@ -47,6 +49,10 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
   const [description, setDescription] = React.useState(initial?.description ?? '');
   const [group, setGroup] = React.useState(initial?.group ?? '');
   const [requiredTradeId, setRequiredTradeId] = React.useState(initial?.requiredTradeId ?? '');
+  const [duration, setDuration] = React.useState(
+    initial?.defaultDurationMinutes != null ? String(initial.defaultDurationMinutes) : '',
+  );
+  const [priority, setPriority] = React.useState(initial?.defaultPriority || 'NORMAL');
   const [fields, setFields] = React.useState<RequiredField[]>(
     () => initial?.requiredFields.map((f) => ({ ...f })) ?? [],
   );
@@ -107,6 +113,8 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
         description: description.trim() || null,
         group: group.trim() || null,
         requiredTradeId: requiredTradeId || null,
+        defaultDurationMinutes: duration.trim() === '' ? null : Number(duration.trim()),
+        defaultPriority: priority || undefined,
         requiredFields: fields.map((f) => ({
           key: f.key.trim(),
           label: f.label.trim(),
@@ -123,6 +131,8 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
           description: payload.description,
           group: payload.group,
           requiredTradeId: payload.requiredTradeId,
+          defaultDurationMinutes: payload.defaultDurationMinutes,
+          defaultPriority: payload.defaultPriority,
           requiredFields: payload.requiredFields,
         });
         setGlobalSuccess('Tạo loại công việc thành công');
@@ -155,6 +165,8 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
       description,
       group,
       requiredTradeId,
+      defaultDurationMinutes: duration,
+      defaultPriority: priority,
       requiredFields: fields,
     });
     if (!validation.valid) {
@@ -165,8 +177,25 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
     await save();
   }
 
+  const previewTrade = requiredTradeId
+    ? (trades.find((t) => t.id === requiredTradeId) ?? null)
+    : null;
+  const previewTradeLabel = !requiredTradeId
+    ? '—'
+    : previewTrade
+      ? `${previewTrade.code} — ${previewTrade.name}`
+      : '—';
+  const previewDuration = duration.trim() === '' ? '—' : `${duration.trim()} phút`;
+  const previewPriorityLabel = WORK_TYPE_PRIORITY_LABELS[priority] ?? priority ?? '—';
+  const previewStatus = mode === 'create'
+    ? 'Hoạt động (mặc định khi tạo mới)'
+    : initial?.status === 'ACTIVE'
+      ? 'Hoạt động'
+      : 'Ngừng hoạt động';
+
   return (
-    <Card style={{ maxWidth: 760 }}>
+    <div style={{ display: 'grid', gap: '1rem', maxWidth: 760 }}>
+    <Card>
       {mode === 'edit' ? (
         <p className="bf-card-meta" style={{ marginTop: 0 }}>
           Đang sửa: {initial?.code ?? ''} · phiên bản cấu hình {initial?.configVersion ?? '—'}
@@ -265,6 +294,42 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
           {fieldErrors.description ? <p className="bf-field-error" role="alert">{fieldErrors.description.join(' ')}</p> : null}
         </div>
 
+        <div className="bf-form-grid">
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="worktype-duration">Thời lượng mặc định (phút)</label>
+            <Input
+              id="worktype-duration"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              hasError={Boolean(fieldErrors.defaultDurationMinutes)}
+              placeholder="Thí dụ: 120"
+              inputMode="numeric"
+            />
+            {fieldErrors.defaultDurationMinutes ? (
+              <p className="bf-field-error" role="alert">{fieldErrors.defaultDurationMinutes.join(' ')}</p>
+            ) : null}
+          </div>
+          <div className="bf-field">
+            <label className="bf-label" htmlFor="worktype-priority">Ưu tiên mặc định</label>
+            <select
+              id="worktype-priority"
+              className="bf-input"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              aria-invalid={Boolean(fieldErrors.defaultPriority)}
+            >
+              {WORK_TYPE_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {WORK_TYPE_PRIORITY_LABELS[p]}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.defaultPriority ? (
+              <p className="bf-field-error" role="alert">{fieldErrors.defaultPriority.join(' ')}</p>
+            ) : null}
+          </div>
+        </div>
+
         <fieldset style={{ border: '1px solid var(--bf-line, #e5e7eb)', borderRadius: 8, padding: '0.75rem' }}>
           <legend style={{ fontSize: '0.85rem', fontWeight: 600, padding: '0 0.4rem' }}>
             Dữ liệu bắt buộc khi nghiệm thu ({fields.length})
@@ -353,10 +418,65 @@ export function WorkTypeForm({ mode, initial, onSuccess, onCancel }: Props) {
         </div>
 
         <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.8rem' }}>
-          Trường có dấu * là bắt buộc. Đổi mã/tên/nhóm/ngành nghề/dữ liệu bắt buộc sẽ tăng phiên
-          bản cấu hình. Nếu mã đã tồn tại, hệ thống báo trùng và không tạo bản ghi.
+          Trường có dấu * là bắt buộc. Chỉ đổi mã/tên/nhóm/ngành nghề/dữ liệu
+          bắt buộc mới tăng phiên bản cấu hình; đổi mô tả/thời lượng/ưu tiên thì không.
+          Nếu mã đã tồn tại, hệ thống báo trùng và không tạo bản ghi.
         </p>
       </form>
     </Card>
+
+    <Card>
+      <div className="bf-card-head">
+        <span className="bf-card-title">Xem trước cấu hình</span>
+      </div>
+      <p className="bf-card-meta" style={{ marginTop: 0 }}>
+        Tóm tắt trực tiếp theo nội dung đang nhập — kiểm tra lại trước khi lưu.
+      </p>
+      <dl className="bf-def-grid" aria-live="polite">
+        <div>
+          <dt>Mã / Tên</dt>
+          <dd>{[code.trim() || '—', name.trim() || '—'].join(' — ')}</dd>
+        </div>
+        <div>
+          <dt>Nhóm công việc</dt>
+          <dd>{group.trim() || '—'}</dd>
+        </div>
+        <div>
+          <dt>Ngành nghề yêu cầu</dt>
+          <dd>{previewTradeLabel}</dd>
+        </div>
+        <div>
+          <dt>Thời lượng mặc định</dt>
+          <dd>{previewDuration}</dd>
+        </div>
+        <div>
+          <dt>Ưu tiên mặc định</dt>
+          <dd>{previewPriorityLabel}</dd>
+        </div>
+        <div>
+          <dt>Trạng thái</dt>
+          <dd>{previewStatus}</dd>
+        </div>
+        <div>
+          <dt>Dữ liệu bắt buộc ({fields.length})</dt>
+          <dd>
+            {fields.length === 0 ? (
+              'Chưa có trường dữ liệu nào'
+            ) : (
+              <span style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                {fields.map((f, i) => (
+                  <span key={i} className="bf-chip">
+                    {(f.label.trim() || f.key.trim() || `Trường ${i + 1}`)}
+                    {' · '}
+                    {REQUIRED_FIELD_TYPE_LABELS[f.type] ?? f.type}
+                  </span>
+                ))}
+              </span>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </Card>
+    </div>
   );
 }

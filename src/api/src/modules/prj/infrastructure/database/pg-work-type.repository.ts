@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { WorkTypeEntity } from '../../domain/entity/work-type.entity';
 import {
@@ -6,7 +6,7 @@ import {
   WorkTypePriority,
   normalizeRequiredFields,
 } from '../../domain/service/work-type.policy';
-import { WorkTypeFilter, WorkTypeRepositoryPort, ActiveTradeRef } from '../../domain/repository/work-type-repository.port';
+import { WorkTypeFilter, WorkTypeRepositoryPort, ActiveTradeRef, SaveWorkTypeOptions } from '../../domain/repository/work-type-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -174,35 +174,74 @@ export class PgWorkTypeRepository implements WorkTypeRepositoryPort {
     await this.createOnExecutor(client, workType);
   }
 
-  private async saveOnExecutor(executor: Pool | PoolClient, workType: WorkTypeEntity): Promise<void> {
+  private async saveOnExecutor(
+    executor: Pool | PoolClient,
+    workType: WorkTypeEntity,
+    opts?: SaveWorkTypeOptions,
+  ): Promise<void> {
     const p = workType.getProps();
-    await executor.query(
+    // Optimistic locking SQL guard: pre-check ở use-case fail-fast cho
+    // sequential mismatch; guard này đóng lost update khi hai PATCH đồng thời
+    // cùng version (cả hai đều pass pre-check trước khi commit).
+    const guard = opts?.expectedConfigVersion !== undefined;
+    const result = await executor.query(
       `UPDATE public.work_types SET code=$1, name=$2, description=$3, work_type_group=$4,
         required_trade_id=$5, required_fields=$6::jsonb, config_version=$7,
         default_duration_minutes=$8, default_priority=$9, is_active=$10, updated_at=$11
-       WHERE id=$12`,
-      [
-        p.code,
-        p.name,
-        p.description ?? null,
-        p.group ?? null,
-        p.requiredTradeId ?? null,
-        JSON.stringify(p.requiredFields),
-        p.configVersion,
-        p.defaultDurationMinutes ?? null,
-        p.defaultPriority,
-        p.isActive,
-        p.updatedAt,
-        p.id,
-      ],
+       WHERE id=$12${guard ? ' AND config_version = $13' : ''}`,
+      guard
+        ? [
+          p.code,
+          p.name,
+          p.description ?? null,
+          p.group ?? null,
+          p.requiredTradeId ?? null,
+          JSON.stringify(p.requiredFields),
+          p.configVersion,
+          p.defaultDurationMinutes ?? null,
+          p.defaultPriority,
+          p.isActive,
+          p.updatedAt,
+          p.id,
+          opts?.expectedConfigVersion,
+        ]
+        : [
+          p.code,
+          p.name,
+          p.description ?? null,
+          p.group ?? null,
+          p.requiredTradeId ?? null,
+          JSON.stringify(p.requiredFields),
+          p.configVersion,
+          p.defaultDurationMinutes ?? null,
+          p.defaultPriority,
+          p.isActive,
+          p.updatedAt,
+          p.id,
+        ],
     );
+    if (guard && result.rowCount === 0) {
+      const cur = await executor.query(
+        'SELECT config_version FROM public.work_types WHERE id = $1 LIMIT 1',
+        [p.id],
+      );
+      const current = cur.rows.length > 0 ? Number(cur.rows[0].config_version) : p.configVersion;
+      throw new ConflictException({
+        statusCode: 409,
+        message: `Cấu hình đã bị thay đổi bởi người dùng khác (hiện tại version ${current}); vui lòng tải lại và thử lại`,
+        code: 'WORK_TYPE_CONFIG_CONFLICT',
+        fieldErrors: {
+          expectedConfigVersion: [`Version cấu hình đã thay đổi (hiện tại: ${current})`],
+        },
+      });
+    }
   }
 
-  async save(workType: WorkTypeEntity): Promise<void> {
-    await this.saveOnExecutor(this.pool(), workType);
+  async save(workType: WorkTypeEntity, opts?: SaveWorkTypeOptions): Promise<void> {
+    await this.saveOnExecutor(this.pool(), workType, opts);
   }
 
-  async saveWithClient(client: PoolClient, workType: WorkTypeEntity): Promise<void> {
-    await this.saveOnExecutor(client, workType);
+  async saveWithClient(client: PoolClient, workType: WorkTypeEntity, opts?: SaveWorkTypeOptions): Promise<void> {
+    await this.saveOnExecutor(client, workType, opts);
   }
 }

@@ -20,6 +20,16 @@ export interface ActiveTradeRef {
   isActive: boolean;
 }
 
+export interface SaveWorkTypeOptions {
+  /**
+   * Optimistic locking SQL guard: khi gửi, `UPDATE ... WHERE id=$ AND
+   * config_version=$expected`; rowcount 0 → 409 `WORK_TYPE_CONFIG_CONFLICT`
+   * (hai PATCH đồng thời cùng version không còn lost update).
+   * Không gửi = last-write-wins (không guard).
+   */
+  expectedConfigVersion?: number;
+}
+
 export interface WorkTypeRepositoryPort {
   findById(id: string): Promise<WorkTypeEntity | null>;
   /** Tra cứu theo code, case-insensitive (`lower(code) = lower($1)`). */
@@ -42,8 +52,8 @@ export interface WorkTypeRepositoryPort {
   countActiveWorkOrders(workTypeId: string): Promise<number>;
   create(workType: WorkTypeEntity): Promise<void>;
   createWithClient?(client: PoolClient, workType: WorkTypeEntity): Promise<void>;
-  save(workType: WorkTypeEntity): Promise<void>;
-  saveWithClient?(client: PoolClient, workType: WorkTypeEntity): Promise<void>;
+  save(workType: WorkTypeEntity, opts?: SaveWorkTypeOptions): Promise<void>;
+  saveWithClient?(client: PoolClient, workType: WorkTypeEntity, opts?: SaveWorkTypeOptions): Promise<void>;
 }
 
 export const PRJ_WORK_TYPE_REPOSITORY = Symbol('PRJ_WORK_TYPE_REPOSITORY');

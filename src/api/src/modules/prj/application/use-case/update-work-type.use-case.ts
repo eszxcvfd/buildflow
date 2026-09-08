@@ -76,6 +76,8 @@ function configConflict409(current: number): ConflictException {
  * PRJ-SRS-004 (issue #35) — cập nhật loại công việc tại chỗ (giữ `id` history).
  * - Optimistic locking: `expectedConfigVersion` mismatch → 409
  *   `WORK_TYPE_CONFIG_CONFLICT` + fieldErrors (không mất thay đổi).
+ *   Pre-check fail-fast + SQL guard `UPDATE ... WHERE id AND config_version`
+ *   (rowcount 0 → 409 từ repo) — hai PATCH đồng thời cùng version không lost update.
  * - Config đổi (code/name/group/trade/requiredFields) → `config_version` +1;
  *   nếu WO đang tham chiếu → kèm `warning` phạm vi áp dụng (WO cũ giữ bản trước).
  * - `required_trade_id` đổi sang trade không tồn tại/inactive → 400 fieldErrors.
@@ -211,8 +213,12 @@ export class UpdateWorkTypeUseCase {
 
     await this.tx.withTransaction(async (client: PoolClient) => {
       try {
-        if (this.workTypeRepo.saveWithClient) await this.workTypeRepo.saveWithClient(client, entity);
-        else await this.workTypeRepo.save(entity);
+        // Guard SQL chống lost update: pre-check ở trên fail-fast cho
+        // sequential mismatch; opts này đóng race hai PATCH đồng thời cùng
+        // version (rowcount 0 → 409 WORK_TYPE_CONFIG_CONFLICT từ repo).
+        const guard = { expectedConfigVersion: input.expectedConfigVersion };
+        if (this.workTypeRepo.saveWithClient) await this.workTypeRepo.saveWithClient(client, entity, guard);
+        else await this.workTypeRepo.save(entity, guard);
       } catch (e) {
         if (e instanceof ConflictException) throw e;
         const err = e as Record<string, unknown>;

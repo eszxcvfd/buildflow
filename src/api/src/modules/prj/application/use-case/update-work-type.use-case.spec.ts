@@ -1,4 +1,4 @@
-import { ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConflictException, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { UpdateWorkTypeUseCase } from './update-work-type.use-case';
 import { WorkTypeEntity } from '../../domain/entity/work-type.entity';
 import { WorkTypeRepositoryPort } from '../../domain/repository/work-type-repository.port';
@@ -42,7 +42,7 @@ function setup(current?: WorkTypeEntity, usage = 0) {
   const audit = { log: jest.fn(), logWithClient: jest.fn(async () => {}) };
   const tx = { withTransaction: async (fn: (c: unknown) => Promise<unknown>) => fn({}) };
   const uc = new UpdateWorkTypeUseCase(repo, audit as never, tx as never);
-  return { repo, audit, uc, store };
+  return { repo, audit, tx, uc, store };
 }
 
 const base = { workTypeId: WT_ID, actorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
@@ -77,6 +77,38 @@ describe('UpdateWorkTypeUseCase (PRJ-SRS-004)', () => {
       expect.anything(),
       expect.objectContaining({ action: 'PRJ_WORK_TYPE_UPDATED', entityType: 'WORK_TYPE' }),
     );
+  });
+
+  it('expectedConfigVersion được forward xuống SQL guard (saveWithClient opts)', async () => {
+    const { uc, repo } = setup();
+    await uc.execute({ ...base, name: 'Tên mới', expectedConfigVersion: 3 });
+    expect(repo.saveWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { expectedConfigVersion: 3 },
+    );
+  });
+
+  it('đồng thời cùng version: SQL guard rowcount 0 → 409 WORK_TYPE_CONFIG_CONFLICT lan truyền', async () => {
+    const { uc, repo } = setup();
+    (repo.saveWithClient as jest.Mock).mockRejectedValueOnce(
+      new ConflictException({
+        statusCode: 409,
+        message: 'Cấu hình đã bị thay đổi bởi người dùng khác (hiện tại version 4); vui lòng tải lại và thử lại',
+        code: 'WORK_TYPE_CONFIG_CONFLICT',
+        fieldErrors: { expectedConfigVersion: ['Version cấu hình đã thay đổi (hiện tại: 4)'] },
+      }),
+    );
+    try {
+      // PATCH thứ hai: pass pre-check (cùng đọc v3) nhưng thua guard ở commit.
+      await uc.execute({ ...base, name: 'Ghi đè đồng thời', expectedConfigVersion: 3 });
+      fail('expected 409');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ConflictException);
+      expect((e as ConflictException).getResponse()).toMatchObject({
+        code: 'WORK_TYPE_CONFIG_CONFLICT',
+      });
+    }
   });
 
   it('config đổi + WO đang dùng → warning phạm vi áp dụng (WO=0 hiện tại không warning)', async () => {
@@ -128,5 +160,24 @@ describe('UpdateWorkTypeUseCase (PRJ-SRS-004)', () => {
       { withTransaction: jest.fn() } as never,
     );
     await expect(uc.execute({ ...base, name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('audit thất bại → 500 rollback (catch-all); thiếu logWithClient → 500', async () => {
+    const { repo, audit, uc } = setup();
+    audit.logWithClient.mockRejectedValue(new Error('db down'));
+    const err = await uc
+      .execute({ ...base, name: 'Tên mới', expectedConfigVersion: 3 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InternalServerErrorException);
+    // mutation đã thử trong tx nhưng 500 thoát ra khỏi callback → tx thật ROLLBACK
+    expect(repo.saveWithClient).toHaveBeenCalled();
+    const fresh = setup();
+    const noTxAudit = new UpdateWorkTypeUseCase(
+      fresh.repo, { log: jest.fn() } as never, fresh.tx as never,
+    );
+    const err2 = await noTxAudit
+      .execute({ ...base, name: 'Tên mới', expectedConfigVersion: 3 })
+      .catch((e: unknown) => e);
+    expect(err2).toBeInstanceOf(InternalServerErrorException);
   });
 });
