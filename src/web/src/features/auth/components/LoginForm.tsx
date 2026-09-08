@@ -60,9 +60,9 @@ export function LoginForm() {
   }
 
   return (
-    <Card style={{ display: 'grid', gap: 20, padding: 24 }}>
+    <Card className="shadow-base2" style={{ display: 'grid', gap: 20 }}>
       <div style={{ display: 'grid', gap: 6 }}>
-        <h1 className="bf-card-title" style={{ fontSize: '1.25rem' }}>
+        <h1 className="bf-card-title" style={{ fontSize: '20px' }}>
           Đăng nhập
         </h1>
         <p className="bf-card-meta" style={{ margin: 0 }}>

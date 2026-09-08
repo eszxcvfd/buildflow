@@ -94,9 +94,14 @@ export function ProjectsByStatus() {
     <Card>
       <div className="bf-card-head">
         <span className="bf-card-title">Dự án theo trạng thái</span>
-        {state.kind === 'ok' && state.total > 0 ? (
-          <span className="bf-card-meta">Tổng {state.total} dự án</span>
-        ) : null}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+          {state.kind === 'ok' && state.total > 0 ? (
+            <span className="bf-card-meta">Tổng {state.total} dự án</span>
+          ) : null}
+          <a href="/projects" className="bf-detail-link">
+            Xem tất cả
+          </a>
+        </span>
       </div>
 
       {state.kind === 'loading' ? (

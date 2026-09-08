@@ -30,6 +30,8 @@ export interface MenuProps {
   header?: React.ReactNode;
   /** Extra class cho panel (mặc định w-56). */
   panelClassName?: string;
+  /** Extra class cho trigger (mặc định nút bordered full-width). */
+  triggerClassName?: string;
 }
 
 function ChevronDownIcon() {
@@ -60,17 +62,22 @@ function ChevronDownIcon() {
  * Profile polish: optional `header` (name + email, border-b), per-item 16px
  * icons, danger tone cho Đăng xuất, panel w-56, chevron trigger.
  */
-export function Menu({ triggerLabel, triggerAriaLabel, items, onSelect, header, panelClassName }: MenuProps) {
+export function Menu({ triggerLabel, triggerAriaLabel, items, onSelect, header, panelClassName, triggerClassName }: MenuProps) {
   return (
     <ArkMenu.Root>
       <ArkMenu.Trigger
         aria-label={triggerAriaLabel}
-        className="inline-flex w-full items-center justify-between gap-2 rounded-[4px] border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
+        className={
+          triggerClassName ??
+          'inline-flex w-full items-center justify-between gap-2 rounded-[4px] border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500'
+        }
       >
         <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>
-        <span aria-hidden="true" className="text-gray-400">
-          <ChevronDownIcon />
-        </span>
+        {triggerClassName ? null : (
+          <span aria-hidden="true" className="text-gray-400">
+            <ChevronDownIcon />
+          </span>
+        )}
       </ArkMenu.Trigger>
       <ArkMenu.Positioner>
         <ArkMenu.Content

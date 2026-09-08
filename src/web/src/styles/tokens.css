@@ -47,7 +47,7 @@
   /* Nền & bề mặt */
   --bf-ink: #0f172a;          /* gray-900: tiêu đề */
   --bf-ink-soft: #1e293b;     /* gray-800 */
-  --bf-paper: #f4f5f7;        /* gray-100: nền app */
+  --bf-paper: #eef1f9;        /* DashCode body bg #EEF1F9 */
   --bf-surface: #ffffff;      /* thẻ */
   --bf-surface-2: #f9fafb;    /* gray-50: thẻ phụ / dòng bảng xen kẽ */
 

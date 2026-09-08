@@ -121,12 +121,12 @@
     padding: 14px 12px 20px;
   }
 
-  /* DashCode menulabel recipe: uppercase, text-xs, semibold. */
+  /* DashCode menulabel recipe: 12px/600 uppercase #1E293B, margin 16px top. */
   .bf-nav-group {
-    margin: 18px 8px 6px;
+    margin: 16px 8px 8px;
     font-size: 12px;
     font-weight: 600;
-    color: var(--bf-ink);
+    color: var(--bf-ink-soft);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     white-space: nowrap;
@@ -137,11 +137,12 @@
     margin-top: 4px;
   }
 
-  /* DashCode menu-link recipe: px-[10px] py-3 rounded-[4px] text-sm medium. */
+  /* DashCode menu-link recipe: 14px/500 #475569, padding 12px 10px,
+     radius 4px, icon gap 12px. */
   .bf-nav a {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     margin: 2px 0;
     padding: 12px 10px;
     border-radius: 4px;
@@ -164,14 +165,64 @@
     color: #fff;
   }
 
+  /* DashCode menu-icon: 18px. */
   .bf-nav-icon {
     flex: 0 0 auto;
+    margin-right: 0;
   }
 
   .bf-nav-label {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* DashCode sidebar promo card đáy: bg-slate-900 rounded-2xl p-4 + nút trắng. */
+  .bf-promo {
+    margin: 10px 12px 16px;
+    padding: 16px;
+    border-radius: 16px;
+    background: #0f172a;
+    color: #fff;
+    display: grid;
+    gap: 4px;
+  }
+
+  .bf-promo-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bf-promo-sub {
+    font-size: 12px;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bf-promo-btn {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: #fff;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .bf-promo-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
   }
 
   .bf-nav-user {
@@ -264,9 +315,9 @@
     margin-left: 72px;
   }
 
-  /* DashCode header: sticky white bar, base shadow, px-6. */
+  /* DashCode header: 80px white bar, base shadow, px-6. */
   .bf-topbar {
-    height: 60px;
+    height: 80px;
     background: var(--bf-surface);
     border-bottom: 1px solid var(--bf-line);
     box-shadow: var(--bf-shadow-card);
@@ -278,6 +329,98 @@
     position: sticky;
     top: 0;
     z-index: 20;
+  }
+
+  /* DashCode topbar search pill: bordered pill, loupe icon, slate-400 text. */
+  .bf-search-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 180px;
+    max-width: 280px;
+    border: 1px solid var(--bf-line-strong);
+    border-radius: var(--bf-r-pill);
+    background: var(--bf-surface);
+    color: var(--bf-faint);
+    font-size: 13.5px;
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .bf-search-pill:hover {
+    border-color: var(--bf-ink);
+    color: var(--bf-muted);
+  }
+
+  /* DashCode bell icon button + red dot badge. */
+  .bf-icon-badge-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .bf-bell-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--bf-r-pill);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--bf-muted);
+    cursor: pointer;
+  }
+
+  .bf-bell-btn:hover {
+    background: var(--bf-surface-2);
+    color: var(--bf-ink);
+  }
+
+  .bf-dot {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--bf-r-pill);
+    background: var(--bf-risk);
+    border: 2px solid var(--bf-surface);
+  }
+
+  /* Search palette list rows: active row = slate-900 bg, white text. */
+  .bf-palette-list {
+    display: grid;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .bf-palette-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-text);
+    font-size: 13.5px;
+    font-weight: 500;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+
+  .bf-palette-item[data-active='true'] {
+    background: var(--bf-ink-soft);
+    color: #fff;
+  }
+
+  .bf-palette-item small {
+    margin-left: auto;
+    font-size: 11.5px;
+    font-weight: 400;
+    opacity: 0.7;
   }
 
   .bf-topbar-title {
@@ -414,11 +557,17 @@
     }
   }
 
-  /* ---------- Thẻ: white, rounded-md, shadow-base ---------- */
+  /* ---------- Thẻ: white, rounded-md (6px), shadow-base, padding 0;
+     nội dung trong .bf-card-body p-5 (20px) ---------- */
   .bf-card {
     background: var(--bf-surface);
     border-radius: var(--bf-r-card);
     box-shadow: var(--bf-shadow-card);
+    padding: 0;
+    min-width: 0;
+  }
+
+  .bf-card-body {
     padding: 20px;
     min-width: 0;
   }
@@ -442,23 +591,24 @@
     color: var(--bf-faint);
   }
 
-  /* ---------- Tiêu đề trang ---------- */
+  /* ---------- Tiêu đề trang: h1 20px/600 #0F172A, sub 14px slate-500 ---------- */
   .bf-page-head {
     margin-bottom: 20px;
   }
 
   .bf-page-head h1 {
-    font-size: 21px;
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 600;
   }
 
   .bf-page-head-sub {
     margin: 4px 0 0;
     color: var(--bf-muted);
-    font-size: 13.5px;
+    font-size: 14px;
   }
 
-  /* ---------- Nút: primary-500 white rounded ---------- */
+  /* ---------- Nút: radius 4px; .bf-btn-sm 8px 16px 12px/600;
+     primary bg-primary-500 white; dark bg-slate-900 white 12px 24px ---------- */
   .bf-btn {
     appearance: none;
     display: inline-flex;
@@ -508,6 +658,22 @@
 
   .bf-btn-ghost:hover:not(:disabled) {
     background: var(--bf-surface-2);
+  }
+
+  .bf-btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .bf-btn-dark {
+    background: #0f172a;
+    color: #fff;
+    padding: 12px 24px;
+  }
+
+  .bf-btn-dark:hover:not(:disabled) {
+    background: #1e293b;
   }
 
   /* ---------- Form ---------- */
@@ -586,13 +752,13 @@
     color: var(--bf-ok);
   }
 
-  /* ---------- Badge trạng thái ---------- */
+  /* ---------- Badge trạng thái: radius 6px, padding 4px 8px, 12px ---------- */
   .bf-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border-radius: var(--bf-r-pill);
-    padding: 3px 10px;
+    border-radius: 6px;
+    padding: 4px 8px;
     font-size: 12px;
     font-weight: 600;
     line-height: 1.5;
@@ -636,6 +802,8 @@
     font-size: 13.5px;
   }
 
+  /* ---------- Bảng DashCode: th 12px/600 uppercase slate-500,
+     padding 20px 24px, transparent bg; td ~16px 24px; row hover slate-50 ---------- */
   .bf-table th {
     text-align: left;
     font-size: 12px;
@@ -643,13 +811,14 @@
     color: var(--bf-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 8px 12px;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--bf-line);
     white-space: nowrap;
+    background: transparent;
   }
 
   .bf-table td {
-    padding: 11px 12px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--bf-line);
     vertical-align: middle;
   }
@@ -671,11 +840,12 @@
     margin-top: 14px;
   }
 
-  /* ---------- KPI ---------- */
+  /* ---------- KPI DashCode: chip 48px soft-tone, label 14px slate-500,
+     value 24-28px/700, delta success ---------- */
   .bf-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
+    gap: 24px;
   }
 
   @media (max-width: 1080px) {
@@ -702,7 +872,7 @@
   }
 
   .bf-kpi-value {
-    font-size: 30px;
+    font-size: 26px;
     font-weight: 700;
     color: var(--bf-ink);
     line-height: 1.2;
@@ -712,6 +882,12 @@
   .bf-kpi-note {
     font-size: 12.5px;
     color: var(--bf-faint);
+  }
+
+  .bf-kpi-delta {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #3f9a7a;
   }
 
   /* ---------- Dashboard "dự án theo trạng thái" ----------
@@ -729,15 +905,13 @@
     border-radius: 999px;
   }
 
-  /* ---------- Auth frame: centered card on soft primary-tinted bg ---------- */
+  /* ---------- Auth DashCode: card trắng rounded-md shadow-base2 trên #EEF1F9 ---------- */
   .bf-auth {
     min-height: 100vh;
     display: grid;
     place-items: center;
     padding: 2rem 1rem;
-    background:
-      radial-gradient(480px 240px at 50% -60px, rgba(70, 105, 250, 0.14), transparent 70%),
-      var(--bf-accent-soft);
+    background: #eef1f9;
   }
 
   .bf-auth-card {
@@ -905,10 +1079,8 @@
     color: var(--bf-ink);
   }
 
-  /* Bảng DashCode card-table: thead uppercase trên nền slate-50. */
-  .bf-table thead th {
-    background: var(--bf-surface-2);
-  }
+  /* Bảng DashCode card-table: thead transparent (th đã có padding chuẩn).
+     Giữ bo góc th đầu/cuối cho bảng không bọc card-body. */
 
   .bf-table thead th:first-child {
     border-top-left-radius: var(--bf-r-control);

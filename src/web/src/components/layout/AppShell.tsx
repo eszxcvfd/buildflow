@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { logoutAndClear } from '@/features/auth';
+import { Dialog } from '@/components/ui/dialog/Dialog';
 import { Menu } from '@/components/ui/menu/Menu';
 import { Tooltip } from '@/components/ui/tooltip/Tooltip';
 import { BrandMark } from './BrandMark';
@@ -151,8 +152,8 @@ const NAV_ICON_PATHS: Record<string, React.ReactNode> = {
 function NavIcon({ href }: { href: string }) {
   return (
     <svg
-      width={19}
-      height={19}
+      width={18}
+      height={18}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -161,6 +162,42 @@ function NavIcon({ href }: { href: string }) {
       className="bf-nav-icon"
     >
       {NAV_ICON_PATHS[href] ?? NAV_ICON_PATHS['/projects']}
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
     </svg>
   );
 }
@@ -194,6 +231,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(false);
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
+  const [paletteQuery, setPaletteQuery] = React.useState('');
+  const [paletteActive, setPaletteActive] = React.useState(0);
 
   React.useEffect(() => {
     const a = getAuth();
@@ -224,6 +264,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.addEventListener(AUTH_CHANGED_EVENT, syncAuth);
     return () => window.removeEventListener(AUTH_CHANGED_EVENT, syncAuth);
   }, []);
+
+  // Search palette: links lọc theo role (auth null → chỉ mục public) + /profile.
+  // Đặt TRƯỚC early return guard để giữ thứ tự hooks ổn định.
+  const paletteLinks = React.useMemo(() => {
+    const codes = (auth?.roles ?? []).map((r) => r.code);
+    const adminLike = hasAdminRole(codes);
+    const viewerLike = canViewResourceDirectory(codes);
+    const links: Array<{ href: string; label: string; group: string }> = [];
+    for (const group of NAV_GROUPS) {
+      for (const it of group.items) {
+        if (it.adminOnly && !adminLike) continue;
+        if (it.resourceViewer && !viewerLike) continue;
+        links.push({ href: it.href, label: it.label, group: group.title });
+      }
+    }
+    links.push({ href: '/profile', label: 'Hồ sơ cá nhân', group: 'Tài khoản' });
+    return links;
+  }, [auth]);
+
+  const paletteResults = React.useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase();
+    if (!q) return paletteLinks;
+    return paletteLinks.filter((l) => l.label.toLowerCase().includes(q));
+  }, [paletteLinks, paletteQuery]);
+
+  function openPalette() {
+    setPaletteQuery('');
+    setPaletteActive(0);
+    setPaletteOpen(true);
+  }
+
+  function goPalette(href: string) {
+    setPaletteOpen(false);
+    router.push(href);
+  }
 
   const toggleSidebar = React.useCallback(() => {
     // Mobile (≤900px, khớp breakpoint CSS): mở drawer phủ + scrim.
@@ -303,15 +378,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="bf-nav-user">
-          <span className="bf-avatar" aria-hidden="true">
-            {initials(auth.user.fullName)}
-          </span>
-          <span className="bf-nav-user-id" style={{ minWidth: 0 }}>
-            <span className="bf-nav-user-name">{auth.user.fullName}</span>
-            <br />
-            <span className="bf-nav-user-role">{auth.roles[0]?.name ?? auth.user.userType}</span>
-          </span>
+        <div className="bf-promo">
+          <span className="bf-promo-title">Xin chào, {auth.user.fullName}</span>
+          <span className="bf-promo-sub">{auth.roles[0]?.name ?? auth.user.userType}</span>
+          <a href="/profile" className="bf-promo-btn">
+            Xem hồ sơ
+          </a>
         </div>
       </aside>
 
@@ -335,6 +407,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="bf-topbar-title">{pageTitle(pathname)}</span>
           </div>
           <div className="bf-topbar-side">
+            <button type="button" className="bf-search-pill" onClick={openPalette} aria-label="Tìm kiếm trang">
+              <SearchIcon />
+              <span>Search…</span>
+            </button>
+            <Menu
+              triggerLabel={
+                <span className="bf-icon-badge-wrap">
+                  <BellIcon />
+                  <span className="bf-dot" aria-hidden="true" />
+                </span>
+              }
+              triggerAriaLabel="Thông báo"
+              triggerClassName="bf-bell-btn"
+              items={[{ id: 'empty', label: 'Chưa có thông báo', disabled: true }]}
+            />
             <span className="bf-topbar-email">{auth.user.email}</span>
             <div className="bf-profile-menu">
               <Menu
@@ -384,6 +471,60 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <main className="bf-content">{children}</main>
       </div>
+      {paletteOpen ? (
+        <Dialog title="Tìm kiếm" open onClose={() => setPaletteOpen(false)} className="max-w-xl">
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div className="bf-search" style={{ maxWidth: 'none' }}>
+              <SearchIcon />
+              <input
+                autoFocus
+                className="bf-input"
+                placeholder="Search…"
+                aria-label="Từ khóa tìm kiếm trang"
+                value={paletteQuery}
+                onChange={(e) => {
+                  setPaletteQuery(e.target.value);
+                  setPaletteActive(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && paletteResults.length > 0) {
+                    goPalette(paletteResults[Math.min(paletteActive, paletteResults.length - 1)].href);
+                  } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setPaletteActive((i) => Math.min(i + 1, paletteResults.length - 1));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setPaletteActive((i) => Math.max(i - 1, 0));
+                  }
+                }}
+              />
+            </div>
+            <div className="bf-palette-list" role="listbox" aria-label="Kết quả tìm kiếm">
+              {paletteResults.length === 0 ? (
+                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--bf-muted)' }}>
+                  Không tìm thấy trang nào.
+                </p>
+              ) : (
+                paletteResults.map((l, i) => (
+                  <button
+                    key={l.href}
+                    type="button"
+                    role="option"
+                    aria-selected={i === paletteActive}
+                    data-active={i === paletteActive}
+                    className="bf-palette-item"
+                    onMouseEnter={() => setPaletteActive(i)}
+                    onClick={() => goPalette(l.href)}
+                  >
+                    <span>{l.label}</span>
+                    <small>{l.group}</small>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

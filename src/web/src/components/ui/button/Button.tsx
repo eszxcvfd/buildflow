@@ -43,8 +43,9 @@ export function Button({
       className={cn(
         'bf-btn',
         `bf-btn-${variant}`,
-        'inline-flex items-center justify-center gap-2 rounded-[4px] text-sm font-medium',
-        size === 'sm' ? 'px-2.5 py-1 text-[13px]' : 'px-4 py-2',
+        size === 'sm' && 'bf-btn-sm',
+        'inline-flex items-center justify-center gap-2 rounded-[4px] text-sm font-semibold',
+        size === 'sm' ? 'px-4 py-2 text-xs' : 'px-4 py-2',
         iconOnly && (size === 'sm' ? 'h-7 w-7 px-0' : 'h-9 w-9 px-0'),
         'transition-colors duration-100',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500',

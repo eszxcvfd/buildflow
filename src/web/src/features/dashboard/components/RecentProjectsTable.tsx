@@ -39,11 +39,16 @@ export function RecentProjectsTable({
     <Card>
       <div className="bf-card-head">
         <span className="bf-card-title">Dự án gần đây</span>
-        {projects.length > recent.length ? (
-          <span className="bf-card-meta">
-            {recent.length} mới nhất / {projects.length} dự án
-          </span>
-        ) : null}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+          {projects.length > recent.length ? (
+            <span className="bf-card-meta">
+              {recent.length} mới nhất / {projects.length} dự án
+            </span>
+          ) : null}
+          <a href="/projects" className="bf-detail-link">
+            Xem tất cả
+          </a>
+        </span>
       </div>
 
       {loading ? (
