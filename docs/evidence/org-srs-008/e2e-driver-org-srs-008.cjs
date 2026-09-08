@@ -259,7 +259,7 @@ function preCleanupRun() {
       await snap(adminPage, `${id}-checklist`, 'Checklist worker1 (fail-closed, 5 conditions)');
       const t = await bodyText(adminPage);
       const need = ['Hồ sơ hiệu lực', 'Ngành nghề / kỹ năng', 'Dữ liệu năng lực', 'Khối lượng công việc', 'Trùng lịch',
-        'KHÔNG ĐÁNH GIÁ ĐƯỢC', 'Không đủ điều kiện nhận việc', 'Mã đối chiếu:', 'Kiểm tra lại'];
+        'Không đánh giá được', 'Không đủ điều kiện', 'Mã đối chiếu:', 'Kiểm tra lại'];
       const miss = need.filter((x) => !t.includes(x));
       if (miss.length) return fail(id, `UI thiếu: ${miss.join(' | ')}`);
       if (!s1Captured || s1Captured.resourceType !== 'WORKER' || s1Captured.resourceId !== WORKER1_ID
@@ -291,9 +291,9 @@ function preCleanupRun() {
       await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Mã đối chiếu:'), { timeout: 20000 });
       await snap(adminPage, `${id}-failclosed`, 'Checklist zero-trade (verdict lỗi)');
       const t = await bodyText(adminPage);
-      if (!t.includes('Không đủ điều kiện nhận việc')) return fail(id, 'UI thiếu verdict lỗi');
-      if (!t.includes('KHÔNG ĐẠT')) return fail(id, 'UI thiếu badge KHÔNG ĐẠT');
-      return ok(id, `API eligible=false + CAPABILITY_DATA_MISSING; UI verdict lỗi + badge KHÔNG ĐẠT`);
+      if (!t.includes('Không đủ điều kiện')) return fail(id, 'UI thiếu verdict lỗi');
+      if (!t.includes('Thiếu dữ liệu năng lực')) return fail(id, 'UI thiếu badge Thiếu dữ liệu năng lực');
+      return ok(id, `API eligible=false + CAPABILITY_DATA_MISSING; UI verdict lỗi + badge Thiếu dữ liệu năng lực`);
     })();
 
     // ============ S3: skill match ============
@@ -408,7 +408,7 @@ function preCleanupRun() {
       await snap(adminPage, `${id}-crew-suspended`, 'Crew SUSPEND thành công (UI)');
       await adminPage.locator('button', { hasText: 'Kích hoạt lại' }).first().click();
       await adminPage.locator('button', { hasText: 'Xác nhận' }).first().click();
-      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('thành công') || (document.body.textContent || '').includes('Đã kích hoạt lại'), { timeout: 20000 });
+      await adminPage.waitForFunction(() => (document.body.textContent || '').includes('Đã kích hoạt lại đội'), { timeout: 20000 });
       const c2 = await api('GET', `/api/v1/eligibility/crews/${crewId}`, adminToken);
       if (c2.body.eligible !== true) return fail(id, `sau activate crew eligible=${c2.body.eligible} (mong true)`);
       return ok(id, `crew eligible=true (MEMBER_COVERAGE OK); suspend → RESOURCE_INACTIVE false; activate → true lại`);

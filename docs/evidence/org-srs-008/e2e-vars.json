@@ -1,31 +1,31 @@
 {
-  "zeroId": "f3928c92-464b-4232-ac81-25e421656c75",
+  "zeroId": "3932a3b2-8f75-40a5-a3e5-2f3ffbd9a8f8",
   "zeroEmail": "dat.vo@vinacons.vn",
   "zeroName": "Võ Văn Đạt",
-  "skill3Id": "4fd41e0d-38e2-4ebc-ae35-b5d84526c92d",
+  "skill3Id": "14411b78-fcaa-4f19-98c1-d4a14b8abb0c",
   "skill3Email": "sang.tran@vinacons.vn",
   "skill3Name": "Trần Văn Sang",
-  "crewId": "07be7e56-a8f8-47e1-bae4-8ae4226573ca",
+  "crewId": "2e04351a-1854-43a8-82aa-e45de34aedd2",
   "crewCode": "DXT-01",
   "crewName": "Đội xây tô số 1",
-  "today": "2026-09-07",
+  "today": "2026-09-08",
   "worker1": "33333333-3333-4333-8333-333333333333",
   "worker2": "44444444-4444-4444-8444-444444444444",
   "tradeThoCat": "11111111-1111-4111-8111-111111111111",
-  "auditBaseline": "996",
-  "auditFinal": "1006",
+  "auditBaseline": "1750",
+  "auditFinal": "1760",
   "crewsRest": "0",
   "usersRest": "0",
   "results": [
     {
       "id": "S1",
       "ok": true,
-      "note": "UI đủ 5 conditions + verdict + Mã đối chiếu c34432b3-0a52-499b-a038-b18d8c29b8c5; API shape chuẩn, eligible=false"
+      "note": "UI đủ 5 conditions + verdict + Mã đối chiếu 590cdeb3-ab5e-4bc7-9d08-1863646806a3; API shape chuẩn, eligible=false"
     },
     {
       "id": "S2",
       "ok": true,
-      "note": "API eligible=false + CAPABILITY_DATA_MISSING; UI verdict lỗi + badge KHÔNG ĐẠT"
+      "note": "API eligible=false + CAPABILITY_DATA_MISSING; UI verdict lỗi + badge Thiếu dữ liệu năng lực"
     },
     {
       "id": "S3",
@@ -70,7 +70,7 @@
     {
       "id": "S11",
       "ok": true,
-      "note": "reuse 6a8661bf-b612-41fe-821f-d30b0dee5d7b; xấu → generate; no-store; audit 1006→1006 (delta 0)"
+      "note": "reuse 49b91a45-9aec-48ec-841e-371fe3f0e40a; xấu → generate; no-store; audit 1760→1760 (delta 0)"
     }
   ]
 }

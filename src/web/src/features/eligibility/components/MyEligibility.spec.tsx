@@ -37,7 +37,7 @@ describe('MyEligibility ORG-SRS-008', () => {
   it('success hiển thị checklist + mã đối chiếu', async () => {
     checkMyMock.mockResolvedValue(myResult());
     render(<MyEligibility />);
-    await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Đủ điều kiện')).not.toBeNull());
     expect(screen.getByText(/Mã đối chiếu: corr-me-1/)).not.toBeNull();
     expect(screen.getByText('Điều kiện nhận việc của tôi')).not.toBeNull();
   });
@@ -74,7 +74,7 @@ describe('MyEligibility ORG-SRS-008', () => {
     await waitFor(() => expect(screen.getByText('Bad Gateway')).not.toBeNull());
     checkMyMock.mockResolvedValue(myResult());
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Đủ điều kiện')).not.toBeNull());
   });
 
   it('lỗi chung có retry và tải lại thành công', async () => {
@@ -83,6 +83,6 @@ describe('MyEligibility ORG-SRS-008', () => {
     render(<MyEligibility />);
     await waitFor(() => expect(screen.getByText('Lỗi máy chủ')).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Đủ điều kiện')).not.toBeNull());
   });
 });

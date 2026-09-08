@@ -76,9 +76,9 @@ describe('WorkerDetail ORG-SRS-008', () => {
     await waitFor(() => expect(screen.getByText('Nguyen Van A')).not.toBeNull());
     expect(checkEligibilityMock).toHaveBeenCalledWith('worker-1');
     await waitFor(() => expect(screen.getByText('Điều kiện nhận việc')).not.toBeNull());
-    expect(screen.getByText(/Không đủ điều kiện nhận việc/)).not.toBeNull();
+    expect(screen.getByText('Không đủ điều kiện')).not.toBeNull();
     expect(screen.getByText(/Mã đối chiếu: corr-w-1/)).not.toBeNull();
-    expect(screen.getByText('KHÔNG ĐẠT')).not.toBeNull();
+    expect(screen.getByText('Thiếu dữ liệu năng lực')).not.toBeNull();
     // boolean-only cũ đã gỡ: không còn dòng tóm tắt theo worker.eligible
     expect(screen.queryByText('Không đủ điều kiện — chặn phân công mới, lịch sử vẫn giữ')).toBeNull();
   });
@@ -89,6 +89,6 @@ describe('WorkerDetail ORG-SRS-008', () => {
     render(<WorkerDetail id="worker-1" />);
     await waitFor(() => expect(screen.getByText('Lỗi máy chủ')).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(screen.getByText(/Không đủ điều kiện nhận việc/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Không đủ điều kiện')).not.toBeNull());
   });
 });

@@ -157,9 +157,9 @@ describe('CrewDetail ORG-SRS-006', () => {
     render(<CrewDetail id="crew-1" />);
     await waitFor(() => expect(checkCrewEligibilityMock).toHaveBeenCalledWith('crew-1'));
     expect(screen.getByText('Điều kiện nhận việc')).not.toBeNull();
-    expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull();
+    expect(screen.getByText('Đủ điều kiện')).not.toBeNull();
     expect(screen.getByText(/Mã đối chiếu: corr-crew-1/)).not.toBeNull();
-    expect(screen.getByText('KHÔNG ĐÁNH GIÁ ĐƯỢC')).not.toBeNull();
+    expect(screen.getByText('Không đánh giá được')).not.toBeNull();
   });
 
   it('ORG-SRS-008 section hiển thị retry khi eligibility lỗi', async () => {
@@ -168,6 +168,6 @@ describe('CrewDetail ORG-SRS-006', () => {
     await waitFor(() => expect(screen.getByText('Lỗi máy chủ')).not.toBeNull());
     checkCrewEligibilityMock.mockResolvedValue(crewEligibility());
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(screen.getByText(/Đủ điều kiện nhận việc/)).not.toBeNull());
+    await waitFor(() => expect(screen.getByText('Đủ điều kiện')).not.toBeNull());
   });
 });

@@ -6,7 +6,8 @@
    primary-500 #4669FA actions, slate-800 active menu leaf, shadow-base.
    Structure/behavior roles (grids, drawer, table layout) are unchanged.
    Tailwind utilities are available; recipes below stay in @layer components
-   so utility overrides keep working.
+   so utility overrides keep working (exception: the dynamic-class section
+   at the end of this file is intentionally unlayered — see its comment).
    ========================================================================== */
 
 @tailwind base;
@@ -225,18 +226,6 @@
     color: #0f172a;
   }
 
-  .bf-nav-user {
-    margin: 10px 12px 16px;
-    padding: 12px;
-    border-radius: var(--bf-r-control);
-    background: var(--bf-surface-2);
-    border: 1px solid var(--bf-line);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-
   .bf-avatar {
     width: 34px;
     height: 34px;
@@ -255,25 +244,6 @@
     height: 30px;
     flex-basis: 30px;
     font-size: 12px;
-  }
-
-  .bf-nav-user-name {
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--bf-ink);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
-  }
-
-  .bf-nav-user-role {
-    font-size: 11.5px;
-    color: var(--bf-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: block;
   }
 
   /* Collapsed (desktop): 72px icon-only, label hiện qua tooltip `title`. */
@@ -650,30 +620,10 @@
     border-color: var(--bf-ink);
   }
 
-  .bf-btn-ghost {
-    background: transparent;
-    color: var(--bf-ink);
-    border-color: var(--bf-line);
-  }
-
-  .bf-btn-ghost:hover:not(:disabled) {
-    background: var(--bf-surface-2);
-  }
-
   .bf-btn-sm {
     padding: 8px 16px;
     font-size: 12px;
     font-weight: 600;
-  }
-
-  .bf-btn-dark {
-    background: #0f172a;
-    color: #fff;
-    padding: 12px 24px;
-  }
-
-  .bf-btn-dark:hover:not(:disabled) {
-    background: #1e293b;
   }
 
   /* ---------- Form ---------- */
@@ -765,11 +715,6 @@
     white-space: nowrap;
   }
 
-  .bf-badge-ok {
-    background: var(--bf-ok-bg);
-    color: var(--bf-ok);
-  }
-
   .bf-badge-busy {
     background: var(--bf-busy-bg);
     color: var(--bf-busy);
@@ -778,11 +723,6 @@
   .bf-badge-risk {
     background: var(--bf-risk-bg);
     color: var(--bf-risk);
-  }
-
-  .bf-badge-idle {
-    background: var(--bf-idle-bg);
-    color: var(--bf-idle);
   }
 
   .bf-badge-info {
@@ -1118,29 +1058,6 @@
   }
 
   /* Nút icon vuông dùng trong cột actions (kèm Ark Tooltip label). */
-  .bf-icon-btn {
-    display: inline-grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    border-radius: var(--bf-r-control);
-    border: 1px solid var(--bf-line-strong);
-    background: var(--bf-surface);
-    color: var(--bf-muted);
-    cursor: pointer;
-    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
-  }
-
-  .bf-icon-btn:hover:not(:disabled) {
-    background: var(--bf-surface-2);
-    color: var(--bf-ink);
-    border-color: var(--bf-ink);
-  }
-
-  .bf-icon-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
 
   /* Phân trang thống nhất: Prev/Next icon buttons + 'Trang X/Y' giữa. */
   .bf-pagination {
@@ -1229,14 +1146,6 @@
     border-top: 1px solid var(--bf-line);
   }
 
-  .bf-form-error-icon {
-    display: inline-grid;
-    place-items: center;
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    vertical-align: -3px;
-  }
 }
 
 /* Utilities-layer overrides (thắng w-full của Menu trigger trong topbar). */
@@ -1245,4 +1154,112 @@
     width: auto;
     max-width: 100%;
   }
+}
+
+/* ==========================================================================
+   Dynamically-referenced recipes — PLAIN CSS, deliberately OUTSIDE any
+   @layer block. Do NOT move these back into `@layer components`.
+   Why: the tailwind.config content scan only matches literal class names
+   in scanned source files. Classes built at runtime via template
+   literals (e.g. `bf-badge-${tone}` in components/ui/badge/StatusBadge.tsx
+   and features/eligibility/components/EligibilityChecklist.tsx,
+   `bf-btn-${variant}` in components/ui/button/Button.tsx) never appear as
+   literals, so Tailwind purges their `@layer components` rules from the
+   production CSS (observed: .bf-badge-ok/.bf-badge-idle missing from served
+   CSS). Unlayered CSS is never purged. This section sits AFTER the
+   utilities layer so these recipes win on equal specificity; class names
+   and declarations are byte-identical to the originals above.
+   ========================================================================== */
+.bf-badge-ok {
+  background: var(--bf-ok-bg);
+  color: var(--bf-ok);
+}
+
+.bf-badge-idle {
+  background: var(--bf-idle-bg);
+  color: var(--bf-idle);
+}
+
+.bf-btn-ghost {
+  background: transparent;
+  color: var(--bf-ink);
+  border-color: var(--bf-line);
+}
+
+.bf-btn-ghost:hover:not(:disabled) {
+  background: var(--bf-surface-2);
+}
+
+.bf-btn-dark {
+  background: #0f172a;
+  color: #fff;
+  padding: 12px 24px;
+}
+
+.bf-btn-dark:hover:not(:disabled) {
+  background: #1e293b;
+}
+
+.bf-nav-user {
+  margin: 10px 12px 16px;
+  padding: 12px;
+  border-radius: var(--bf-r-control);
+  background: var(--bf-surface-2);
+  border: 1px solid var(--bf-line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bf-nav-user-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--bf-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.bf-nav-user-role {
+  font-size: 11.5px;
+  color: var(--bf-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.bf-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--bf-r-control);
+  border: 1px solid var(--bf-line-strong);
+  background: var(--bf-surface);
+  color: var(--bf-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.bf-icon-btn:hover:not(:disabled) {
+  background: var(--bf-surface-2);
+  color: var(--bf-ink);
+  border-color: var(--bf-ink);
+}
+
+.bf-icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.bf-form-error-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: -3px;
 }

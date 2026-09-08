@@ -17,10 +17,33 @@ function conditionLabel(code: string): string {
   }
 }
 
-function badgeFor(passed: boolean | null): { text: string; tone: 'ok' | 'risk' | 'idle' } {
-  if (passed === true) return { text: 'ĐẠT', tone: 'ok' };
-  if (passed === false) return { text: 'KHÔNG ĐẠT', tone: 'risk' };
-  return { text: 'KHÔNG ĐÁNH GIÁ ĐƯỢC', tone: 'idle' };
+export type ConditionBadgeTone = 'ok' | 'risk' | 'busy' | 'idle' | 'info';
+
+/**
+ * Map (passed, reasonCode) → badge { label, tone } theo contract
+ * eligibility.policy.ts. Nhãn title-case tiếng Việt; tone dùng hệ
+ * `.bf-badge-*` hiện có. reasonCode lạ → fallback theo `passed`.
+ */
+export function badgeFor(
+  passed: boolean | null,
+  reasonCode: string,
+): { label: string; tone: ConditionBadgeTone } {
+  switch (reasonCode) {
+    case 'OK': return { label: 'Đạt', tone: 'ok' };
+    case 'RESOURCE_LOCKED': return { label: 'Bị khóa', tone: 'risk' };
+    case 'RESOURCE_INACTIVE': return { label: 'Ngừng hoạt động', tone: 'busy' };
+    case 'TRADE_NOT_FOUND': return { label: 'Ngành nghề không tồn tại', tone: 'risk' };
+    case 'TRADE_INACTIVE': return { label: 'Ngành nghề ngừng hoạt động', tone: 'busy' };
+    case 'SKILL_LEVEL_TOO_LOW': return { label: 'Kỹ năng không đủ', tone: 'risk' };
+    case 'CAPABILITY_DATA_MISSING': return { label: 'Thiếu dữ liệu năng lực', tone: 'busy' };
+    case 'NO_ACTIVE_MEMBERS': return { label: 'Không có thành viên hoạt động', tone: 'risk' };
+    case 'NOT_REQUESTED': return { label: 'Không áp dụng', tone: 'idle' };
+    case 'NOT_EVALUABLE': return { label: 'Không đánh giá được', tone: 'idle' };
+    default:
+      if (passed === true) return { label: 'Đạt', tone: 'ok' };
+      if (passed === false) return { label: 'Không đạt', tone: 'risk' };
+      return { label: 'Không đánh giá được', tone: 'idle' };
+  }
 }
 
 /**
@@ -73,22 +96,32 @@ export function EligibilityChecklist({
     return <p style={{ margin: 0, color: 'var(--bf-muted)' }}>Không có dữ liệu.</p>;
   }
 
+  const passedCount = result.conditions.filter((c) => c.passed === true).length;
+  const naCount = result.conditions.filter((c) => c.passed === null).length;
+
   return (
     <div style={{ display: 'grid', gap: '0.75rem' }}>
       <Alert tone={result.eligible ? 'success' : 'error'}>
-        {result.eligible ? 'Đủ điều kiện nhận việc — cho phép phân công' : 'Không đủ điều kiện nhận việc — chặn phân công mới, lịch sử vẫn giữ'}
+        <span className={`bf-badge bf-badge-${result.eligible ? 'ok' : 'risk'}`} style={{ marginRight: '0.5rem' }}>
+          {result.eligible ? 'Đủ điều kiện' : 'Không đủ điều kiện'}
+        </span>
+        {result.eligible ? '— cho phép phân công mới' : '— chặn phân công mới, lịch sử vẫn giữ'}
       </Alert>
+
+      <p style={{ margin: 0, color: 'var(--bf-muted)', fontSize: '0.85rem' }}>
+        {passedCount}/{result.conditions.length} điều kiện đạt · {naCount} không áp dụng
+      </p>
 
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: compact ? '0.5rem' : '0.75rem' }}>
         {result.conditions.map((c: EligibilityCondition) => {
-          const badge = badgeFor(c.passed);
+          const badge = badgeFor(c.passed, c.reasonCode);
           return (
             <li
               key={c.code}
               style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}
             >
               <span className={`bf-badge bf-badge-${badge.tone}`} style={{ flexShrink: 0, marginTop: 2 }}>
-                {badge.text}
+                {badge.label}
               </span>
               <span style={{ minWidth: 0 }}>
                 <span style={{ display: 'block', fontWeight: 600, fontSize: '0.9rem' }}>
