@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { TransitionProjectStatusUseCase } from './transition-project-status.use-case';
 import { ProjectRepositoryPort } from '../../domain/repository/project-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 import { ProjectStatus } from '../../domain/service/project.policy';
 
@@ -36,6 +37,7 @@ describe('TransitionProjectStatusUseCase PRJ-SRS-002 (issue #33)', () => {
   let projectRepo: jest.Mocked<ProjectRepositoryPort>;
   let audit: jest.Mocked<AuditPort>;
   let tx: jest.Mocked<TransactionPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: TransitionProjectStatusUseCase;
 
   beforeEach(() => {
@@ -48,12 +50,17 @@ describe('TransitionProjectStatusUseCase PRJ-SRS-002 (issue #33)', () => {
       createWithClient: jest.fn(),
       saveWithClient: jest.fn(),
       insertManagerMembershipWithClient: jest.fn(),
+      findActiveMemberWithClient: jest.fn(async () => null),
     } as unknown as jest.Mocked<ProjectRepositoryPort>;
     audit = { log: jest.fn(), logWithClient: jest.fn() } as unknown as jest.Mocked<AuditPort>;
     tx = {
       withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({})),
     } as unknown as jest.Mocked<TransactionPort>;
-    useCase = new TransitionProjectStatusUseCase(projectRepo, audit, tx);
+    scope = {
+      assertProjectWriteScope: jest.fn(async () => ({ isAdminBypass: false })),
+      assertWriteScopeTxCheck: jest.fn(),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new TransitionProjectStatusUseCase(projectRepo, audit, tx, scope);
   });
 
   function setStatuses(pre: ProjectStatus, fresh: ProjectStatus): void {
@@ -207,5 +214,27 @@ describe('TransitionProjectStatusUseCase PRJ-SRS-002 (issue #33)', () => {
     (audit.logWithClient as unknown as jest.Mock).mockRejectedValue(new Error('audit down'));
     const err = await useCase.execute({ projectId: PID, action: 'ACTIVATE', actorUserId: ACTOR }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InternalServerErrorException);
+  });
+
+  it('PRJ-SRS-006: guard write-scope trước pre-read 404 (revoked replay alreadyInState vẫn 403)', async () => {
+    setStatuses('PAUSED', 'PAUSED');
+    (scope.assertProjectWriteScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    const err = await useCase
+      .execute({ projectId: PID, action: 'PAUSE', reason: 'lý do', actorUserId: ACTOR })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(projectRepo.findProfileById).not.toHaveBeenCalled();
+    expect(projectRepo.saveWithClient).not.toHaveBeenCalled();
+  });
+
+  it('PRJ-SRS-006: re-check trong cùng tx sau lock, trước mutation', async () => {
+    setStatuses('DRAFT', 'DRAFT');
+    await useCase.execute({ projectId: PID, action: 'ACTIVATE', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] });
+    expect(scope.assertProjectWriteScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, projectId: PID }),
+    );
+    expect(scope.assertWriteScopeTxCheck).toHaveBeenCalledWith(false, null);
   });
 });

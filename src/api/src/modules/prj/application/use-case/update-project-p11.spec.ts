@@ -3,6 +3,7 @@ import { ProjectRepositoryPort } from '../../domain/repository/project-repositor
 import { UserRepositoryPort } from '../../../iam/domain/repository/user-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 
 const PID = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +42,7 @@ describe('UpdateProjectUseCase P11 manager-change membership (issue #36)', () =>
   let userRepo: jest.Mocked<UserRepositoryPort>;
   let audit: jest.Mocked<AuditPort>;
   let tx: jest.Mocked<TransactionPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: UpdateProjectUseCase;
 
   beforeEach(() => {
@@ -64,7 +66,11 @@ describe('UpdateProjectUseCase P11 manager-change membership (issue #36)', () =>
     tx = {
       withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({})),
     } as unknown as jest.Mocked<TransactionPort>;
-    useCase = new UpdateProjectUseCase(projectRepo, userRepo, audit, tx);
+    scope = {
+      assertProjectWriteScope: jest.fn(async () => ({ isAdminBypass: false })),
+      assertWriteScopeTxCheck: jest.fn(),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new UpdateProjectUseCase(projectRepo, userRepo, audit, tx, scope);
   });
 
   it('manager đổi + chưa member → insert MANAGER membership cùng client (sau save, trước audit)', async () => {
@@ -102,14 +108,18 @@ describe('UpdateProjectUseCase P11 manager-change membership (issue #36)', () =>
     });
   });
 
-  it('manager không đổi (không gửi / gửi đúng id cũ) → không đụng memberships', async () => {
+  it('manager không đổi (không gửi / gửi đúng id cũ) → không đụng memberships manager', async () => {
     userRepo.findById.mockResolvedValue(activeUser(MANAGER) as never);
     await useCase.execute({ projectId: PID, name: 'Dự án B', actorUserId: ACTOR });
-    expect(projectRepo.findActiveMemberWithClient).not.toHaveBeenCalled();
+    // PRJ-SRS-006: findActiveMemberWithClient chỉ gọi cho actor scope re-check
+    // trong tx (userId=ACTOR), không cho manager logic.
+    expect(projectRepo.findActiveMemberWithClient).toHaveBeenCalledTimes(1);
+    expect(projectRepo.findActiveMemberWithClient).toHaveBeenCalledWith(expect.anything(), PID, ACTOR);
     expect(projectRepo.insertManagerMembershipWithClient).not.toHaveBeenCalled();
 
     await useCase.execute({ projectId: PID, managerId: MANAGER, actorUserId: ACTOR });
-    expect(projectRepo.findActiveMemberWithClient).not.toHaveBeenCalled();
+    const calls = (projectRepo.findActiveMemberWithClient as jest.Mock).mock.calls as Array<[unknown, string, string]>;
+    expect(calls.every((c) => c[2] === ACTOR)).toBe(true);
     expect(projectRepo.insertManagerMembershipWithClient).not.toHaveBeenCalled();
   });
 

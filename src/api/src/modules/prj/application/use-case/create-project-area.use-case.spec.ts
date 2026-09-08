@@ -3,6 +3,7 @@ import { CreateProjectAreaUseCase } from './create-project-area.use-case';
 import { ProjectRepositoryPort, ProjectAreaRepositoryPort, ProjectAreaRow } from '../../domain/repository/project-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 
 const PID = '11111111-1111-4111-8111-111111111111';
@@ -46,12 +47,14 @@ describe('CreateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
   let areaRepo: jest.Mocked<ProjectAreaRepositoryPort>;
   let audit: jest.Mocked<AuditPort>;
   let tx: jest.Mocked<TransactionPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: CreateProjectAreaUseCase;
 
   beforeEach(() => {
     projectRepo = {
       findById: jest.fn(async () => makeProject()),
       findForUpdateWithClient: jest.fn(async () => ({ entity: makeProject(), managerName: 'Tran Manager' })),
+      findActiveMemberWithClient: jest.fn(async () => null),
     } as unknown as jest.Mocked<ProjectRepositoryPort>;
     areaRepo = {
       isActiveProjectMember: jest.fn(async () => true),
@@ -65,16 +68,24 @@ describe('CreateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     tx = {
       withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({} as never)),
     } as unknown as jest.Mocked<TransactionPort>;
-    useCase = new CreateProjectAreaUseCase(projectRepo, areaRepo, audit, tx);
+    scope = {
+      assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
+      assertMemberScopeTxCheck: jest.fn(),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new CreateProjectAreaUseCase(projectRepo, areaRepo, audit, tx, scope);
   });
 
   it('happy (ADMIN bypass): FOR UPDATE project → insert → audit PRJ_PROJECT_AREA_ADDED (before null, after + projectCode)', async () => {
+    (scope.assertProjectMemberScope as jest.Mock).mockResolvedValueOnce({ isAdminBypass: true });
     const out = await useCase.execute({
       projectId: PID, code: 'KV-01', name: 'Khu A', actorUserId: ACTOR, actorRoles: ['ADMIN'],
     });
     expect(out.area.name).toBe('Khu A');
     expect(out.area.code).toBe('KV-01');
-    expect(areaRepo.isActiveProjectMember).not.toHaveBeenCalled();
+    expect(scope.assertProjectMemberScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, actorRoles: ['ADMIN'], projectId: PID }),
+    );
+    expect(scope.assertMemberScopeTxCheck).toHaveBeenCalledWith(true, null);
     expect(projectRepo.findForUpdateWithClient).toHaveBeenCalledWith(expect.anything(), PID);
     expect(areaRepo.insertAreaWithClient).toHaveBeenCalledWith(
       expect.anything(),
@@ -94,12 +105,16 @@ describe('CreateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     expect(payload.afterData).toEqual(expect.objectContaining({ name: 'Khu A', projectCode: 'PRJ-001' }));
   });
 
-  it('member PM: scope check qua isActiveProjectMember; non-member PM → 403', async () => {
+  it('member PM: scope check qua ProjectScopeService; non-member PM → 403', async () => {
     await useCase.execute({
       projectId: PID, name: 'Khu A', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'],
     });
-    expect(areaRepo.isActiveProjectMember).toHaveBeenCalledWith(PID, ACTOR);
-    (areaRepo.isActiveProjectMember as jest.Mock).mockResolvedValue(false);
+    expect(scope.assertProjectMemberScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, actorRoles: ['PROJECT_MANAGER'], projectId: PID }),
+    );
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
     (areaRepo.insertAreaWithClient as jest.Mock).mockClear();
     (audit.logWithClient as jest.Mock).mockClear();
     const err = await useCase
@@ -181,7 +196,7 @@ describe('CreateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InternalServerErrorException);
     const noTxAudit = new CreateProjectAreaUseCase(
-      projectRepo, areaRepo, { log: jest.fn() } as unknown as AuditPort, tx,
+      projectRepo, areaRepo, { log: jest.fn() } as unknown as AuditPort, tx, scope,
     );
     const err2 = await noTxAudit
       .execute({ projectId: PID, name: 'Khu A', actorUserId: ACTOR, actorRoles: ['ADMIN'] })

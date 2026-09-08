@@ -80,6 +80,6 @@ import { JwtAuthGuard } from './api/rest/guard/jwt-auth.guard';
     { provide: TRANSACTION_PORT, useClass: PgTransactionManager },
     // TOKEN_REVOCATION_PORT is provided app-wide by TokenRevocationModule (shared singleton)
   ],
-  exports: [JwtAuthGuard, JwtTokenService, USER_REPOSITORY, ROLE_REPOSITORY, TOKEN_PORT],
+  exports: [JwtAuthGuard, JwtTokenService, USER_REPOSITORY, ROLE_REPOSITORY, TOKEN_PORT, ProjectScopeService],
 })
 export class IamModule {}

@@ -3,7 +3,7 @@ import {
   View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet,
 } from 'react-native';
 import { router } from 'expo-router';
-import { getProject, LoginError, type ProjectSummary } from '../../api/client';
+import { getProject, listProjectMembers, LoginError, type ProjectSummary, type ProjectMember } from '../../api/client';
 
 function formatDateTime(value: string): string {
   const d = new Date(value);
@@ -22,15 +22,27 @@ function Field({ label, value, labelId }: { label: string; value: string; labelI
 
 export function ProjectDetailScreen({ token, projectId }: { token: string; projectId: string }) {
   const [project, setProject] = React.useState<ProjectSummary | null>(null);
+  const [members, setMembers] = React.useState<ProjectMember[] | null>(null);
+  const [membersError, setMembersError] = React.useState<LoginError | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<LoginError | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
+    setMembersError(null);
     try {
       const result = await getProject(token, projectId);
       setProject(result);
+      // Detail 200 proves in-scope membership, so the members read (same
+      // scope) is expected to 200 as well. A 403 here can only mean a
+      // mid-flight revoke — surfaced inline, never leaking other data.
+      try {
+        setMembers(await listProjectMembers(token, projectId));
+      } catch (e) {
+        setMembers(null);
+        setMembersError(e instanceof LoginError ? e : new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0));
+      }
     } catch (e) {
       setError(e instanceof LoginError ? e : new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0));
     } finally {
@@ -129,6 +141,35 @@ export function ProjectDetailScreen({ token, projectId }: { token: string; proje
         <Field label="Quản lý (managerId)" value={project.managerId} labelId="project manager" />
         <Field label="Ngày tạo" value={formatDateTime(project.createdAt)} labelId="project created at" />
         <Field label="Cập nhật lần cuối" value={formatDateTime(project.updatedAt)} labelId="project updated at" />
+
+        <Text accessibilityRole="header" style={styles.sectionTitle}>Thành viên</Text>
+        {members ? (
+          members.length === 0 ? (
+            <Text style={styles.hint}>Chưa có thành viên nào</Text>
+          ) : (
+            members.map((m) => (
+              <View key={m.id} style={styles.memberRow}>
+                <Text style={styles.memberName}>{m.userName ?? m.userCode ?? m.userId}</Text>
+                <Text style={styles.hint}>Vai trò: {m.projectRole}{m.userCode ? ` · ${m.userCode}` : ''}</Text>
+              </View>
+            ))
+          )
+        ) : (
+          <View style={styles.membersFallback}>
+            <Text style={styles.hint}>
+              {membersError?.status === 403
+                ? 'Bạn không còn quyền xem thành viên dự án này'
+                : 'Không tải được danh sách thành viên'}
+            </Text>
+            <Pressable
+              accessibilityRole="button" accessibilityLabel="retry project members"
+              accessibilityState={{ busy: loading }}
+              onPress={load} style={[styles.button, styles.secondaryButton]}
+            >
+              {loading ? <ActivityIndicator size="small" color="#374151" /> : <Text style={[styles.buttonText, styles.secondaryButtonText]}>Thử lại</Text>}
+            </Pressable>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -139,6 +180,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb', padding: 24, gap: 12 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 20, gap: 12 },
   title: { fontSize: 24, fontWeight: '700', color: '#111827' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginTop: 4 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   code: { fontSize: 13, fontWeight: '700', color: '#374151' },
   badge: { fontSize: 12, fontWeight: '700', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9999, overflow: 'hidden' },
@@ -146,6 +188,9 @@ const styles = StyleSheet.create({
   field: { gap: 2, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 8 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#6b7280' },
   fieldValue: { fontSize: 15, color: '#111827' },
+  memberRow: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10, gap: 2 },
+  memberName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  membersFallback: { gap: 8, alignItems: 'center' },
   hint: { fontSize: 14, color: '#6b7280', textAlign: 'center' },
   errorBox: { backgroundColor: '#fef2f2', borderColor: '#fecaca', borderWidth: 1, borderRadius: 8, padding: 12, width: '100%' },
   errorText: { color: '#b91c1c', fontSize: 14, textAlign: 'center' },

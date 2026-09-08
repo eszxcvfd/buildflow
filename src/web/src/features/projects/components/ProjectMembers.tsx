@@ -10,11 +10,12 @@ import {
   type ApiError,
 } from '@/lib/api/projects';
 import { listWorkers, type Worker } from '@/lib/api/workers';
+import { useCanManageProjects } from '@/lib/auth/roles';
 import { PROJECT_REASON_MAX_LENGTH } from './ProjectStatusDialog';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
-import { EmptyState } from '@/components/ui/empty-state/EmptyState';
+import { EmptyState, EmptyProfileIcon } from '@/components/ui/empty-state/EmptyState';
 import { Input } from '@/components/ui/input/Input';
 import { Select } from '@/components/ui/select/Select';
 import { toast } from '@/components/ui/toast/Toaster';
@@ -67,6 +68,13 @@ function membershipPeriod(m: ProjectMember): string {
 
 /**
  * PRJ-SRS-005 (issue #36) — quản lý thành viên dự án (mirror CrewMembers #30).
+ * PRJ-SRS-006 (issue #37) — reads mở cho mọi ACTIVE member (kể cả WORKER/QC/
+ * VIEWER): danh sách + lịch sử hiển thị cho bất kỳ ai load được; write
+ * controls (form thêm, nút xóa) gated bởi canManageProjects (ADMIN +
+ * PROJECT_MANAGER global, fail-closed — server authoritative kiểm tra
+ * membership MANAGER/COORDINATOR, 403 → message graceful). 403 ở list nghĩa
+ * là ngoài scope → EmptyState 'Bạn không phải thành viên dự án này' + icon,
+ * KHÔNG Alert đỏ.
  * - Danh sách active (+ worker-name lookup fallback khi API không join tên).
  * - Thêm: user select listWorkers({status:'ACTIVE',limit:100}) + lọc text client
  *   (tên/mã NV/email, label 'tên · mã NV') + role select 4 giá trị
@@ -78,6 +86,8 @@ function membershipPeriod(m: ProjectMember): string {
  *   period joined→left, role).
  */
 export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
+  // Write-gate client-side (server là authoritative theo scope membership).
+  const canManage = useCanManageProjects();
   const [members, setMembers] = React.useState<ProjectMember[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -199,7 +209,7 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
       } else if (e2.status === 401) {
         setAddGlobalError('Phiên hết hạn, vui lòng đăng nhập lại.');
       } else if (e2.status === 403) {
-        setAddGlobalError('Không có quyền — cần ADMIN hoặc PROJECT_MANAGER.');
+        setAddGlobalError('Không có quyền — cần ADMIN hoặc là quản lý/điều phối viên của dự án (403).');
       } else {
         setAddGlobalError(e2.message || 'Thêm thành viên thất bại');
       }
@@ -243,7 +253,7 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
         setRemoveGlobalError('Thành viên này là quản lý hiện tại của dự án — đổi quản lý qua Sửa hồ sơ.');
       } else if (e2.fieldErrors?.reason?.length) setRemoveFieldError(e2.fieldErrors.reason.join(' '));
       else if (e2.status === 401) setRemoveGlobalError('Phiên hết hạn, vui lòng đăng nhập lại.');
-      else if (e2.status === 403) setRemoveGlobalError('Không có quyền — cần ADMIN hoặc PROJECT_MANAGER.');
+      else if (e2.status === 403) setRemoveGlobalError('Không có quyền — cần ADMIN hoặc là quản lý/điều phối viên của dự án (403).');
       else setRemoveGlobalError(e2.message || 'Xóa thành viên thất bại');
     } finally {
       setRemovePendingId(null);
@@ -262,16 +272,21 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
         </Card>
       );
     }
+    // PRJ-SRS-006 — 403 ở members-read nghĩa là ngoài scope (không phải ACTIVE
+    // member): EmptyState trung tính + icon, KHÔNG Alert đỏ.
     if (error.status === 403) {
       return (
-        <Card>
-          <Alert tone="error">Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER (403)</Alert>
-          <div style={{ marginTop: '0.75rem' }}>
+        <EmptyState
+          title="Bạn không phải thành viên dự án này"
+          icon={<EmptyProfileIcon />}
+          action={
             <Button variant="secondary" onClick={reloadMembers}>
               Thử lại
             </Button>
-          </div>
-        </Card>
+          }
+        >
+          Liên hệ quản lý dự án để được thêm vào, hoặc quay lại danh sách dự án của bạn.
+        </EmptyState>
       );
     }
     return (
@@ -351,7 +366,9 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
                     </div>
                   ) : null}
                 </div>
-                {m.isActive && !isManagerRow(m) ? (
+                {/* PRJ-SRS-006 — nút xóa gated bởi canManage (fail-closed);
+                    member thường (WORKER/QC/VIEWER) chỉ xem danh sách. */}
+                {canManage && m.isActive && !isManagerRow(m) ? (
                   <Button variant="secondary" onClick={() => openRemoveConfirm(m)} disabled={removePendingId === m.id}>
                     Xóa khỏi dự án
                   </Button>
@@ -415,6 +432,9 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
         </div>
       ) : null}
 
+      {/* PRJ-SRS-006 — form thêm gated bởi canManage (fail-closed); member
+          thường chỉ xem danh sách + lịch sử. */}
+      {canManage ? (
       <form onSubmit={(e) => void handleAdd(e)} style={{ display: 'grid', gap: '0.5rem' }}>
         <p style={{ margin: 0, fontWeight: 600 }}>Thêm thành viên</p>
         {addSuccess ? <Alert tone="success">{addSuccess}</Alert> : null}
@@ -482,6 +502,7 @@ export function ProjectMembers({ projectId, managerId, onChanged }: Props) {
           </Button>
         </div>
       </form>
+      ) : null}
 
       <div style={{ display: 'grid', gap: '0.5rem' }}>
         <p style={{ margin: 0, fontWeight: 600 }}>Lịch sử thành viên</p>

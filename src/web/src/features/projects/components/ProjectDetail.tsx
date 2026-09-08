@@ -18,6 +18,7 @@ import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
+import { EmptyState, EmptyProfileIcon } from '@/components/ui/empty-state/EmptyState';
 import { StatusBadge } from '@/components/ui/badge/StatusBadge';
 import { toast } from '@/components/ui/toast/Toaster';
 
@@ -48,6 +49,11 @@ function statusLabel(status: string): string {
  * với `ProjectStatusDialog` (actions theo transition map L1 của trạng thái hiện
  * tại, gated bởi canManageProjects — ADMIN + PROJECT_MANAGER, fail-closed).
  * CTA 'Tạo dự án'/'Sửa hồ sơ' gated bởi canManageProjects() (fail-closed).
+ * PRJ-SRS-006 (issue #37) — list server-scope nên detail 403 (deep-link cũ /
+ * bị thu hồi membership) render graceful: EmptyState 'Bạn không phải thành
+ * viên dự án này' + icon + link về danh sách, KHÔNG Alert đỏ; members section
+ * mở cho mọi member load được (WORKER/QC/VIEWER xem teammates); writes vẫn
+ * role-gate + 403 graceful (server kiểm tra membership MANAGER/COORDINATOR).
  */
 export function ProjectDetail({ id }: { id: string }) {
   const [project, setProject] = React.useState<Project | null>(null);
@@ -168,7 +174,7 @@ export function ProjectDetail({ id }: { id: string }) {
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) setDialogServerMessage('Phiên hết hạn, vui lòng đăng nhập lại.');
-      else if (err.status === 403) setDialogServerMessage('Không có quyền chuyển trạng thái — cần ADMIN hoặc PROJECT_MANAGER (403).');
+      else if (err.status === 403) setDialogServerMessage('Không có quyền chuyển trạng thái — cần ADMIN hoặc là quản lý/điều phối viên của dự án (403).');
       else if (err.status === 404) setDialogServerMessage('Không tìm thấy dự án (404).');
       else if (err.status === 409 && err.code === 'INVALID_TRANSITION') {
         const allowed = (err.allowedTransitions ?? [])
@@ -199,13 +205,24 @@ export function ProjectDetail({ id }: { id: string }) {
         </Card>
       );
     }
+    // PRJ-SRS-006 — 403 detail = ngoài scope (deep-link cũ / bị thu hồi quyền):
+    // graceful EmptyState + icon + lối về danh sách, KHÔNG Alert đỏ, không
+    // hint nội dung project ngoài scope.
     if (error.status === 403) {
       return (
         <Card>
-          <Alert tone="error">Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER (403)</Alert>
-          <div style={{ marginTop: '0.75rem' }}>
-            <Button variant="secondary" onClick={() => void load()}>Thử lại</Button>
-          </div>
+          <EmptyState
+            title="Bạn không phải thành viên dự án này"
+            icon={<EmptyProfileIcon />}
+            action={
+              <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Button variant="secondary" onClick={() => void load()}>Thử lại</Button>
+                <a className="bf-btn bf-btn-secondary" href="/projects">Về danh sách dự án</a>
+              </div>
+            }
+          >
+            Dự án này không còn trong phạm vi của bạn — có thể liên kết đã cũ hoặc quyền thành viên vừa bị thu hồi.
+          </EmptyState>
         </Card>
       );
     }

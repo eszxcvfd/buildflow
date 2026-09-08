@@ -52,6 +52,15 @@ import { TokenPayload } from '../../../../iam/application/port/token.port';
   */
 const PROJECT_WRITE_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 
+/**
+ * PRJ-SRS-006 (issue #37) — actor server-derived tu JWT (`JwtAuthGuard` da gan
+ * `req.user`). Khong gate global role o day: use case enforce project-scope
+ * (403 khi ngoai scope). Client khong the gia actor (JWT signed, login cap).
+ */
+function projectActor(req: Request): TokenPayload {
+  return (req as unknown as { user: TokenPayload }).user;
+}
+
 function assertProjectWriteAccess(req: Request): TokenPayload {
   return requireRoles(
     req as unknown as { user?: { roles?: string[] } },
@@ -127,7 +136,7 @@ export class PrjProjectsController {
     @Body() dto: UpdateProjectDto,
     @Req() req: Request,
   ) {
-    const actor = assertProjectWriteAccess(req);
+    const actor = projectActor(req);
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
     const { entity, managerName } = await this.updateProject.execute({
@@ -142,6 +151,7 @@ export class PrjProjectsController {
       code: dto.code ?? undefined,
       status: dto.status ?? undefined,
       actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
@@ -156,7 +166,7 @@ export class PrjProjectsController {
     @Body() dto: TransitionProjectStatusDto,
     @Req() req: Request,
   ) {
-    const actor = assertProjectWriteAccess(req);
+    const actor = projectActor(req);
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
     const { entity, managerName, alreadyInState } = await this.transitionStatus.execute({
@@ -164,6 +174,7 @@ export class PrjProjectsController {
       action: dto.action,
       reason: dto.reason ?? null,
       actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
@@ -174,7 +185,8 @@ export class PrjProjectsController {
   /**
    * PRJ-SRS-005 (issue #36, M1/M5) — tra cứu thành viên dự án.
    * Default chỉ active; `?includeInactive=true` toàn bộ lịch sử (`joined_at` DESC).
-   * Roles = PROJECT_WRITE_ROLES trên cả read (M5); current data → no-store.
+   * PRJ-SRS-006 (issue #37): mở cho mọi ACTIVE member + ADMIN (use-case guard) — xem ENDPOINTS.md §15;
+   * current data → no-store.
    */
   @Get(':id/members')
   @Header('Cache-Control', 'no-store')
@@ -183,10 +195,16 @@ export class PrjProjectsController {
     @Req() req: Request,
     @Query('includeInactive') includeInactive?: string,
   ) {
-    assertProjectWriteAccess(req);
+    const actor = projectActor(req);
+    const meta = getMeta(req);
     const { members } = await this.listProjectMembers.execute({
       projectId: id,
       includeInactive: includeInactive === 'true' || includeInactive === '1',
+      actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
     });
     return { data: toProjectMemberListResponse(members), total: members.length };
   }
@@ -204,7 +222,7 @@ export class PrjProjectsController {
     @Body() dto: AddProjectMemberDto,
     @Req() req: Request,
   ) {
-    const actor = assertProjectWriteAccess(req);
+    const actor = projectActor(req);
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
     const { member } = await this.addProjectMember.execute({
@@ -212,6 +230,7 @@ export class PrjProjectsController {
       userId: dto.userId,
       projectRole: dto.projectRole,
       actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
@@ -232,7 +251,7 @@ export class PrjProjectsController {
     @Req() req: Request,
     @Body() dto?: RemoveProjectMemberDto,
   ) {
-    const actor = assertProjectWriteAccess(req);
+    const actor = projectActor(req);
     const meta = getMeta(req);
     assertStrictCorrelationId(meta.correlationId);
     const { member, alreadyRemoved } = await this.removeProjectMember.execute({
@@ -240,6 +259,7 @@ export class PrjProjectsController {
       memberId,
       reason: dto?.reason ?? null,
       actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,

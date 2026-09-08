@@ -1,10 +1,11 @@
-import { BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { UpdateProjectUseCase } from './update-project.use-case';
 import { ProjectRepositoryPort } from '../../domain/repository/project-repository.port';
 import { UserRepositoryPort } from '../../../iam/domain/repository/user-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
 import { ProjectEntity } from '../../domain/entity/project.entity';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 
 const PID = '11111111-1111-4111-8111-111111111111';
 const MANAGER = '22222222-2222-4222-8222-222222222222';
@@ -39,6 +40,7 @@ describe('UpdateProjectUseCase PRJ-SRS-001 (issue #32)', () => {
   let userRepo: jest.Mocked<UserRepositoryPort>;
   let audit: jest.Mocked<AuditPort>;
   let tx: jest.Mocked<TransactionPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: UpdateProjectUseCase;
 
   beforeEach(() => {
@@ -57,7 +59,11 @@ describe('UpdateProjectUseCase PRJ-SRS-001 (issue #32)', () => {
     tx = {
       withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({})),
     } as unknown as jest.Mocked<TransactionPort>;
-    useCase = new UpdateProjectUseCase(projectRepo, userRepo, audit, tx);
+    scope = {
+      assertProjectWriteScope: jest.fn(async () => ({ isAdminBypass: false })),
+      assertWriteScopeTxCheck: jest.fn(),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new UpdateProjectUseCase(projectRepo, userRepo, audit, tx, scope);
   });
 
   it('happy: SELECT FOR UPDATE → apply → save → audit before/after (full rows)', async () => {
@@ -172,5 +178,26 @@ describe('UpdateProjectUseCase PRJ-SRS-001 (issue #32)', () => {
     (audit.logWithClient as unknown as jest.Mock).mockRejectedValue(new Error('audit down'));
     const err = await useCase.execute({ projectId: PID, name: 'X', actorUserId: ACTOR }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InternalServerErrorException);
+  });
+
+  it('PRJ-SRS-006: guard write-scope trước 404/validation, actor roles server-derived', async () => {
+    await useCase.execute({ projectId: PID, name: 'X', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] });
+    expect(scope.assertProjectWriteScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, actorRoles: ['PROJECT_MANAGER'], projectId: PID }),
+    );
+    // Re-check trong cùng tx sau lock, trước mutation.
+    expect(scope.assertWriteScopeTxCheck).toHaveBeenCalledWith(false, null);
+    expect(projectRepo.saveWithClient).toHaveBeenCalled();
+  });
+
+  it('PRJ-SRS-006: ngoài scope → 403 từ guard, không chạm mutation/audit', async () => {
+    (scope.assertProjectWriteScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    const err = await useCase.execute({ projectId: PID, name: 'X', actorUserId: ACTOR }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(projectRepo.findById).not.toHaveBeenCalled();
+    expect(projectRepo.saveWithClient).not.toHaveBeenCalled();
+    expect(audit.logWithClient).not.toHaveBeenCalled();
   });
 });

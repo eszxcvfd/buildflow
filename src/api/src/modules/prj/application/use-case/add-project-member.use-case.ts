@@ -5,6 +5,7 @@ import { USER_REPOSITORY, UserRepositoryPort } from '../../../iam/domain/reposit
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { normalizeProjectMemberRole, AddableProjectMemberRole } from '../../domain/service/project-member.policy';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 
 export interface AddProjectMemberInput {
   projectId: string;
@@ -12,6 +13,8 @@ export interface AddProjectMemberInput {
   /** Role thô từ transport (`COORDINATOR`|`QC`|`WORKER`|`VIEWER`; `MANAGER` → 400). */
   projectRole: string;
   actorUserId: string;
+  /** Roles server-derived từ JWT (write-scope: ADMIN bypass hoặc member MANAGER/COORDINATOR). */
+  actorRoles?: string[];
   ipAddress?: string | null;
   userAgent?: string | null;
   correlationId?: string | null;
@@ -53,9 +56,21 @@ export class AddProjectMemberUseCase {
     @Inject(USER_REPOSITORY) private readonly userRepo: UserRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: AddProjectMemberInput): Promise<AddProjectMemberOutput> {
+    // PRJ-SRS-006 (issue #37): write-scope TRƯỚC mọi 404/validation nghiệp vụ
+    // (anti-leak: non-member luôn 403 bất kể project tồn tại hay không).
+    const { isAdminBypass } = await this.scope.assertProjectWriteScope({
+      userId: input.actorUserId,
+      actorRoles: input.actorRoles ?? [],
+      projectId: input.projectId,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+
     if (!input.userId || !UUID_RE.test(String(input.userId))) {
       throw fieldError('userId', 'Người dùng không hợp lệ');
     }
@@ -82,6 +97,15 @@ export class AddProjectMemberUseCase {
       // M6: lock project row trong tx ngay trước insert (mirror status use-case).
       const locked = await this.projectRepo.findForUpdateWithClient(client, input.projectId);
       if (!locked) throw new NotFoundException('Không tìm thấy dự án');
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx (revoke commit giữa
+      // outer check và mutation → 403 ở đây → rollback, không partial-write).
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertWriteScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
 
       const dup = await this.projectRepo.findActiveMemberWithClient(client, input.projectId, userId);
       if (dup) {

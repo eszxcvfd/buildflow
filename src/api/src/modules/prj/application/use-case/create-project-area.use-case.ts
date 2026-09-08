@@ -10,6 +10,7 @@ import {
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { normalizeProjectAreaCode, normalizeProjectAreaName } from '../../domain/service/project-area.policy';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { assertProjectAreaScope } from './project-area-scope';
 
 export interface CreateProjectAreaInput {
@@ -57,6 +58,9 @@ function duplicateCode409(): ConflictException {
  * - Audit `PRJ_PROJECT_AREA_ADDED` (`entityType` `PROJECT`, `entityId`=projectId,
  *   tx-embedded `logWithClient`, before null / after area row + `projectCode`);
  *   audit fail → 500 rollback (catch-all).
+ * - PRJ-SRS-006 (issue #37): scope A4 qua `ProjectScopeService`
+ *   (API chung — xem `project-area-scope.ts`); ADMIN bypass trên write này
+ *   được audit; re-check membership trong cùng tx sau lock.
  */
 @Injectable()
 export class CreateProjectAreaUseCase {
@@ -65,6 +69,7 @@ export class CreateProjectAreaUseCase {
     @Inject(PRJ_PROJECT_AREA_REPOSITORY) private readonly areaRepo: ProjectAreaRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: CreateProjectAreaInput): Promise<CreateProjectAreaOutput> {
@@ -84,10 +89,13 @@ export class CreateProjectAreaUseCase {
 
     const project = await this.projectRepo.findById(input.projectId);
     if (!project) throw new NotFoundException('Không tìm thấy dự án');
-    await assertProjectAreaScope(this.areaRepo, {
+    const { isAdminBypass } = await assertProjectAreaScope(this.scope, {
       projectId: input.projectId,
       actorUserId: input.actorUserId,
       actorRoles: input.actorRoles,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
     });
 
     const projectCode = project.code;
@@ -96,6 +104,14 @@ export class CreateProjectAreaUseCase {
     await this.tx.withTransaction(async (client: PoolClient) => {
       const locked = await this.projectRepo.findForUpdateWithClient(client, input.projectId);
       if (!locked) throw new NotFoundException('Không tìm thấy dự án');
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx sau lock.
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertMemberScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
 
       const dupName = await this.areaRepo.findActiveAreaByNameWithClient(client, input.projectId, name);
       if (dupName) throw duplicateName409();

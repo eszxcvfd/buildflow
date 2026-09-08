@@ -167,13 +167,19 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       expect(updateMock.execute).toHaveBeenCalled();
     });
 
-    it('STAFF/WORKER mọi write → 403, không gọi use case', async () => {
+    it('STAFF/WORKER create → 403 (create chua co project-scope); update → chuyen actor xuong use case (scope #37)', async () => {
       await expect(controller.create(createBody() as never, staffReq() as never)).rejects.toThrow(ForbiddenException);
       await expect(controller.create(createBody() as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
-      await expect(controller.update(PID, { name: 'X' } as never, staffReq() as never)).rejects.toThrow(ForbiddenException);
-      await expect(controller.update(PID, { name: 'X' } as never, workerReq() as never)).rejects.toThrow(ForbiddenException);
       expect(createMock.execute).not.toHaveBeenCalled();
-      expect(updateMock.execute).not.toHaveBeenCalled();
+      // PRJ-SRS-006: controller khong gate global role cho update — use case enforce project-scope.
+      await controller.update(PID, { name: 'X' } as never, staffReq() as never);
+      await controller.update(PID, { name: 'X' } as never, workerReq() as never);
+      expect(updateMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, name: 'X', actorUserId: 'u-1', actorRoles: ['STAFF'] }),
+      );
+      expect(updateMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, name: 'X', actorUserId: 'u-1', actorRoles: ['WORKER'] }),
+      );
     });
 
     it('anon → 401: controller gắn JwtAuthGuard; guard thiếu Bearer → Unauthorized', async () => {
@@ -282,14 +288,15 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
       expect(out).toEqual(expect.objectContaining({ alreadyInState: true }));
     });
 
-    it('STAFF/WORKER → 403, không gọi use case', async () => {
-      await expect(controller.transition(PID, { action: 'ACTIVATE' } as never, staffReq() as never)).rejects.toThrow(
-        ForbiddenException,
+    it('STAFF/WORKER → chuyen actor xuong use case (scope #37 enforce 403 khi ngoai scope)', async () => {
+      await controller.transition(PID, { action: 'ACTIVATE' } as never, staffReq() as never);
+      await controller.transition(PID, { action: 'ACTIVATE' } as never, workerReq() as never);
+      expect(transitionMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, action: 'ACTIVATE', actorUserId: 'u-1', actorRoles: ['STAFF'] }),
       );
-      await expect(controller.transition(PID, { action: 'ACTIVATE' } as never, workerReq() as never)).rejects.toThrow(
-        ForbiddenException,
+      expect(transitionMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, action: 'ACTIVATE', actorUserId: 'u-1', actorRoles: ['WORKER'] }),
       );
-      expect(transitionMock.execute).not.toHaveBeenCalled();
     });
 
     it('X-Correlation-Id sai UUID → 400 strict, không gọi use case', async () => {
@@ -324,7 +331,9 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
   describe('members PRJ-SRS-005 (issue #36, M1/M5)', () => {
     it('ADMIN + PROJECT_MANAGER list/add/remove ok; response đủ ProjectMemberDto', async () => {
       const listed = await controller.listMembers(PID, adminReq() as never, undefined);
-      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: false });
+      expect(listMembersMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, includeInactive: false, actorUserId: 'u-1', actorRoles: ['ADMIN'] }),
+      );
       expect(listed).toEqual({
         data: [
           expect.objectContaining({
@@ -355,27 +364,27 @@ describe('PrjProjectsController PRJ-SRS-001 (issue #32)', () => {
 
     it('includeInactive=true/1 → true; thiếu/khác → false', async () => {
       await controller.listMembers(PID, adminReq() as never, 'true');
-      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: true });
+      expect(listMembersMock.execute).toHaveBeenCalledWith(expect.objectContaining({ projectId: PID, includeInactive: true }));
       await controller.listMembers(PID, adminReq() as never, '1');
-      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: true });
+      expect(listMembersMock.execute).toHaveBeenCalledWith(expect.objectContaining({ projectId: PID, includeInactive: true }));
       await controller.listMembers(PID, adminReq() as never, '0');
-      expect(listMembersMock.execute).toHaveBeenCalledWith({ projectId: PID, includeInactive: false });
+      expect(listMembersMock.execute).toHaveBeenCalledWith(expect.objectContaining({ projectId: PID, includeInactive: false }));
     });
 
-    it('STAFF/WORKER mọi member endpoint → 403, không gọi use case', async () => {
-      await expect(controller.listMembers(PID, staffReq() as never, undefined)).rejects.toThrow(ForbiddenException);
-      await expect(
-        controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, staffReq() as never),
-      ).rejects.toThrow(ForbiddenException);
-      await expect(
-        controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, workerReq() as never),
-      ).rejects.toThrow(ForbiddenException);
-      await expect(controller.removeMember(PID, MEMBER_ID, workerReq() as never, undefined as never)).rejects.toThrow(
-        ForbiddenException,
+    it('STAFF/WORKER → chuyen actor xuong use case (scope #37: member moi role duoc read, write can MANAGER/COORDINATOR)', async () => {
+      await controller.listMembers(PID, staffReq() as never, undefined);
+      expect(listMembersMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, actorUserId: 'u-1', actorRoles: ['STAFF'] }),
       );
-      expect(listMembersMock.execute).not.toHaveBeenCalled();
-      expect(addMemberMock.execute).not.toHaveBeenCalled();
-      expect(removeMemberMock.execute).not.toHaveBeenCalled();
+      await controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, staffReq() as never);
+      await controller.addMember(PID, { userId: USER_ID, projectRole: 'WORKER' } as never, workerReq() as never);
+      expect(addMemberMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, actorUserId: 'u-1', actorRoles: ['WORKER'] }),
+      );
+      await controller.removeMember(PID, MEMBER_ID, workerReq() as never, undefined as never);
+      expect(removeMemberMock.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: PID, memberId: MEMBER_ID, actorUserId: 'u-1', actorRoles: ['WORKER'] }),
+      );
     });
 
     it('X-Correlation-Id sai UUID trên writes → 400 strict, không gọi use case (GET list miễn)', async () => {

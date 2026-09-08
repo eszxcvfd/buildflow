@@ -112,6 +112,15 @@ describe('ProjectDetail PRJ-SRS-001 (issue #32)', () => {
     await waitFor(() => expect(screen.getByText(/Không tìm thấy dự án \(404\)/)).not.toBeNull());
   });
 
+  it('403 ngoài scope → graceful page + link về danh sách, KHÔNG Alert đỏ (PRJ-SRS-006)', async () => {
+    setSessionRoles(['WORKER']);
+    getProjectMock.mockRejectedValue({ status: 403, message: 'Forbidden' });
+    render(<ProjectDetail id="old-deep-link" />);
+    await waitFor(() => expect(screen.getByText('Bạn không phải thành viên dự án này')).not.toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Về danh sách dự án' })).not.toBeNull();
+  });
+
   it('nhúng section Thành viên dự án (PRJ-SRS-005, issue #36)', async () => {
     setSessionRoles(['ADMIN']);
     render(<ProjectDetail id="p-1" />);

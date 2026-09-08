@@ -1,6 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ListProjectMembersUseCase } from './list-project-members.use-case';
 import { ProjectRepositoryPort, ProjectMemberRow } from '../../domain/repository/project-repository.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 
 const PID = '11111111-1111-4111-8111-111111111111';
@@ -43,6 +44,7 @@ function makeMember(id: string, isActive: boolean): ProjectMemberRow {
 
 describe('ListProjectMembersUseCase PRJ-SRS-005 (issue #36)', () => {
   let projectRepo: jest.Mocked<ProjectRepositoryPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: ListProjectMembersUseCase;
 
   beforeEach(() => {
@@ -54,25 +56,40 @@ describe('ListProjectMembersUseCase PRJ-SRS-005 (issue #36)', () => {
           : [makeMember('m1', true)],
       ),
     } as unknown as jest.Mocked<ProjectRepositoryPort>;
-    useCase = new ListProjectMembersUseCase(projectRepo);
+    scope = {
+      assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new ListProjectMembersUseCase(projectRepo, scope);
   });
 
   it('default active-only (không includeInactive → repo nhận falsy)', async () => {
-    const out = await useCase.execute({ projectId: PID });
+    const out = await useCase.execute({ projectId: PID, actorUserId: ACTOR });
     expect(out.members).toHaveLength(1);
     expect(out.members[0].isActive).toBe(true);
     expect(projectRepo.listMembers).toHaveBeenCalledWith({ projectId: PID, includeInactive: undefined });
+    expect(scope.assertProjectMemberScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, projectId: PID }),
+    );
   });
 
   it('includeInactive=true → toàn bộ lịch sử (active + inactive)', async () => {
-    const out = await useCase.execute({ projectId: PID, includeInactive: true });
+    const out = await useCase.execute({ projectId: PID, includeInactive: true, actorUserId: ACTOR });
     expect(out.members).toHaveLength(2);
     expect(projectRepo.listMembers).toHaveBeenCalledWith({ projectId: PID, includeInactive: true });
   });
 
   it('project không tồn tại → 404, không gọi listMembers', async () => {
     projectRepo.findById.mockResolvedValue(null);
-    await expect(useCase.execute({ projectId: PID })).rejects.toThrow(NotFoundException);
+    await expect(useCase.execute({ projectId: PID, actorUserId: ACTOR })).rejects.toThrow(NotFoundException);
+    expect(projectRepo.listMembers).not.toHaveBeenCalled();
+  });
+
+  it('PRJ-SRS-006: non-member → 403 từ guard TRƯỚC 404 (anti-leak)', async () => {
+    projectRepo.findById.mockResolvedValue(null);
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
+    await expect(useCase.execute({ projectId: PID, actorUserId: ACTOR })).rejects.toThrow(ForbiddenException);
     expect(projectRepo.listMembers).not.toHaveBeenCalled();
   });
 });

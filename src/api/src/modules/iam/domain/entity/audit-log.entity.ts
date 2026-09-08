@@ -12,6 +12,7 @@ export type AuditAction =
   | 'IAM_ROLE_ASSIGNED'
   | 'IAM_PROFILE_UPDATED'
   | 'PROJECT_SCOPE_ADMIN_BYPASS'
+  | 'PROJECT_SCOPE_DENIED'
   | string;
 
 export type AuditResult = 'SUCCESS' | 'FAILED';

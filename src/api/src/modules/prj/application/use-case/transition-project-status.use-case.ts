@@ -3,6 +3,7 @@ import { PoolClient } from 'pg';
 import { PRJ_PROJECT_REPOSITORY, ProjectRepositoryPort } from '../../domain/repository/project-repository.port';
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 import {
   allowedActionsFor,
@@ -22,6 +23,8 @@ export interface TransitionProjectStatusInput {
   action: string;
   reason?: string | null;
   actorUserId: string;
+  /** Roles server-derived từ JWT (write-scope: ADMIN bypass hoặc member MANAGER/COORDINATOR). */
+  actorRoles?: string[];
   ipAddress?: string | null;
   userAgent?: string | null;
   correlationId?: string | null;
@@ -49,8 +52,9 @@ function invalidTransition(from: ProjectStatus, action: string): ConflictExcepti
 
 /**
  * PRJ-SRS-002 (issue #33) — lifecycle trạng thái dự án (L1-L6).
- * - Endpoint `PATCH /api/v1/projects/:id/status`, roles = PROJECT_WRITE_ROLES
- *   (L2; per-project scope write check defer #37).
+ * - Endpoint `PATCH /api/v1/projects/:id/status` (L2; per-project scope write
+ *   check enforce từ #37 — PRJ-SRS-006: ADMIN bypass audited HOẶC ACTIVE member
+ *   MANAGER/COORDINATOR; xem ENDPOINTS.md §15).
  * - Transition map L1 duy nhất; action không hợp lệ với trạng thái hiện tại →
  *   409 `INVALID_TRANSITION` kèm `allowedTransitions` (action chưa biết → 400).
  * - Reason bắt buộc 1-500 cho PAUSE/CLOSE/REOPEN → thiếu là 400 fieldErrors `{reason}`
@@ -71,9 +75,21 @@ export class TransitionProjectStatusUseCase {
     @Inject(PRJ_PROJECT_REPOSITORY) private readonly projectRepo: ProjectRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: TransitionProjectStatusInput): Promise<TransitionProjectStatusOutput> {
+    // PRJ-SRS-006 (issue #37): write-scope TRƯỚC pre-read 404 (anti-leak:
+    // non-member luôn 403; kể cả alreadyInState repeat cũng 403 khi revoked).
+    const { isAdminBypass } = await this.scope.assertProjectWriteScope({
+      userId: input.actorUserId,
+      actorRoles: input.actorRoles ?? [],
+      projectId: input.projectId,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+
     if (!isProjectStatusAction(input.action)) {
       throw new BadRequestException(`Action không hợp lệ: ${String(input.action)}`);
     }
@@ -104,6 +120,15 @@ export class TransitionProjectStatusUseCase {
     await this.tx.withTransaction(async (client: PoolClient) => {
       const current = await this.projectRepo.findForUpdateWithClient(client, input.projectId);
       if (!current) throw new NotFoundException('Không tìm thấy dự án');
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx, ngay sau lock, trước
+      // mutation (revoke mid-flight → 403 → rollback).
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertWriteScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
 
       // Re-đánh giá trên row mới nhất (L4): race có thể đã đổi trạng thái.
       if (isAlreadyInProjectState(current.entity.status, action)) {

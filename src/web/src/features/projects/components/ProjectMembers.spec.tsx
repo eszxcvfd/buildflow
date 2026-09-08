@@ -64,9 +64,35 @@ function worker(overrides = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  window.localStorage.clear();
+  // Mặc định ADMIN để write controls (form thêm / nút xóa) hiển thị;
+  // test read-only ghi đè bằng role WORKER.
+  window.localStorage.setItem(
+    'buildflow.auth.v1',
+    JSON.stringify({
+      accessToken: 'token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      user: { id: 'u-1', email: 'a@b.c', fullName: 'A', status: 'ACTIVE', userType: 'STAFF' },
+      roles: [{ id: 'r-0', code: 'ADMIN', name: 'ADMIN' }],
+      projectIds: [],
+    }),
+  );
   listMembersMock.mockResolvedValue({ data: [member()], total: 1 });
   listWorkersMock.mockResolvedValue({ data: [worker()], total: 1, limit: 100, offset: 0 });
 });
+
+function setSessionRoles(codes: string[]) {
+  window.localStorage.setItem(
+    'buildflow.auth.v1',
+    JSON.stringify({
+      accessToken: 'token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      user: { id: 'u-1', email: 'a@b.c', fullName: 'A', status: 'ACTIVE', userType: 'STAFF' },
+      roles: codes.map((code, i) => ({ id: `r-${i}`, code, name: code })),
+      projectIds: [],
+    }),
+  );
+}
 
 /**
  * Ark Select interaction: open the labelled combobox, then choose the option.
@@ -177,13 +203,46 @@ describe('ProjectMembers PRJ-SRS-005 (issue #36)', () => {
     await waitFor(() => expect(screen.getByText('Đã rời')).not.toBeNull());
   });
 
-  it('403 hiển thị permission message + retry', async () => {
+  it('403 ngoài scope → empty state trung tính + icon, KHÔNG Alert đỏ (PRJ-SRS-006)', async () => {
     listMembersMock.mockRejectedValueOnce({ status: 403, message: 'Forbidden' });
     render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
     await waitFor(
-      () => expect(screen.getByText('Không có quyền truy cập — cần ADMIN hoặc PROJECT_MANAGER (403)')).not.toBeNull(),
+      () => expect(screen.getByText('Bạn không phải thành viên dự án này')).not.toBeNull(),
     );
+    // Không báo lỗi đỏ.
+    expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     await waitFor(() => expect(listMembersMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('WORKER member đọc được danh sách nhưng không thấy form thêm / nút xóa (PRJ-SRS-006)', async () => {
+    setSessionRoles(['WORKER']);
+    render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
+    // List vẫn hiển thị teammates.
+    await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    // Write controls bị ẩn (fail-closed).
+    expect(screen.queryByRole('button', { name: 'Thêm vào dự án' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Xóa khỏi dự án' })).toBeNull();
+    expect(screen.queryByText('Thêm thành viên')).toBeNull();
+  });
+
+  it('ADMIN thấy form thêm + nút xóa (write-gate mở)', async () => {
+    render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
+    await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    expect(screen.getByText('Thêm thành viên')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Thêm vào dự án' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Xóa khỏi dự án' })).not.toBeNull();
+  });
+
+  it('403 khi thêm → message graceful membership (PRJ-SRS-006)', async () => {
+    addMemberMock.mockRejectedValue({ status: 403, message: 'Forbidden' });
+    render(<ProjectMembers projectId={PROJECT_ID} managerId={MANAGER_ID} />);
+    await waitFor(() => expect(screen.getByText(/Nguyen Van M/)).not.toBeNull());
+    await chooseOption('Người dùng', 'Tran Thi Moi · NV-009');
+    await chooseOption('Vai trò trong dự án', 'QC');
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm vào dự án' }));
+    await waitFor(
+      () => expect(screen.getByText('Không có quyền — cần ADMIN hoặc là quản lý/điều phối viên của dự án (403).')).not.toBeNull(),
+    );
   });
 });

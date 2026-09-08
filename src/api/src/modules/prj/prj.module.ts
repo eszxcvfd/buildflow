@@ -31,6 +31,7 @@ import { HASHER_PORT } from '../iam/application/port/hasher.port';
 import { TOKEN_PORT } from '../iam/application/port/token.port';
 import { PgUserRepository } from '../iam/infrastructure/database/pg-user.repository';
 import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
+import { IamModule } from '../iam/iam.module';
 
 /**
  * PRJ-SRS-001 (issue #32) — prj module (clean architecture, mirror org module).
@@ -38,8 +39,12 @@ import { USER_REPOSITORY } from '../iam/domain/repository/user-repository.port';
  * ENDPOINTS.md §10. Fine-grained project-scope write checks defer #37.
  * PRJ-SRS-004 (issue #35) — thêm catalog loại công việc (`WorkTypesController`,
  * xem ENDPOINTS.md §14); roles read+write = ADMIN + PROJECT_MANAGER.
+ * PRJ-SRS-006 (issue #37) — import `IamModule` để dùng chung singleton
+ * `ProjectScopeService` (API scope chung iam+prj); work-types là catalog toàn
+ * cục, KHÔNG qua scope này.
  */
 @Module({
+  imports: [IamModule],
   controllers: [PrjProjectsController, WorkTypesController],
   providers: [
     CreateProjectUseCase,

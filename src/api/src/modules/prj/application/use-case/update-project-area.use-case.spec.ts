@@ -3,6 +3,7 @@ import { UpdateProjectAreaUseCase } from './update-project-area.use-case';
 import { ProjectRepositoryPort, ProjectAreaRepositoryPort, ProjectAreaRow } from '../../domain/repository/project-repository.port';
 import { AuditPort } from '../../../iam/application/port/audit.port';
 import { TransactionPort } from '../../../iam/application/port/transaction.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 
 const PID = '11111111-1111-4111-8111-111111111111';
@@ -47,11 +48,13 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
   let areaRepo: jest.Mocked<ProjectAreaRepositoryPort>;
   let audit: jest.Mocked<AuditPort>;
   let tx: jest.Mocked<TransactionPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: UpdateProjectAreaUseCase;
 
   beforeEach(() => {
     projectRepo = {
       findById: jest.fn(async () => makeProject()),
+      findActiveMemberWithClient: jest.fn(async () => null),
     } as unknown as jest.Mocked<ProjectRepositoryPort>;
     areaRepo = {
       findAreaById: jest.fn(async () => makeArea()),
@@ -67,7 +70,11 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
     tx = {
       withTransaction: jest.fn(async (fn: (c: unknown) => Promise<unknown>) => fn({} as never)),
     } as unknown as jest.Mocked<TransactionPort>;
-    useCase = new UpdateProjectAreaUseCase(projectRepo, areaRepo, audit, tx);
+    scope = {
+      assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
+      assertMemberScopeTxCheck: jest.fn(),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new UpdateProjectAreaUseCase(projectRepo, areaRepo, audit, tx, scope);
   });
 
   it('happy rename: before/after tại chỗ + projectCode, reason vào cột audit và afterData', async () => {
@@ -153,7 +160,9 @@ describe('UpdateProjectAreaUseCase PRJ-SRS-003 (issue #34)', () => {
   });
 
   it('scope: non-member PM → 403; area sai project → 404; project 404', async () => {
-    (areaRepo.isActiveProjectMember as jest.Mock).mockResolvedValue(false);
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
     const forbidden = await useCase
       .execute({ projectId: PID, areaId: AID, name: 'Khu B', actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })
       .catch((e: unknown) => e);

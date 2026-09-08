@@ -1,0 +1,51 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "workerA": "thang.nguyen@vinacons.vn",
+  "workerB": "hau.le@vinacons.vn",
+  "projectA": "b60000a1-0001-4000-8000-000000000001",
+  "projectB": "b60000b2-0002-4000-8000-000000000002",
+  "codeA": "DA-AN-PHU",
+  "codeB": "DA-SONG-HONG",
+  "auditBaseline": "2328",
+  "auditFinal": "2344",
+  "rest": "0",
+  "results": [
+    {
+      "id": "T1",
+      "ok": true,
+      "note": "GET/PATCH B → 403 không leak, data B nguyên vẹn; UI graceful + back-link, không alert đỏ"
+    },
+    {
+      "id": "T2",
+      "ok": true,
+      "note": "API list có A không B (n=2); UI khớp"
+    },
+    {
+      "id": "T3",
+      "ok": true,
+      "note": "admin GET B 200; audit BYPASS id=704275e5-a0fc-46ca-a21d-8df48030dba6; UI detail hiện tên B"
+    },
+    {
+      "id": "T4",
+      "ok": true,
+      "note": "member A 200 thấy [Trịnh Văn Đông|Nguyễn Văn Thắng|Trần Quốc Điều]; non-member 403 + audit DENIED id=d19e90d7-46ed-4eaf-9c6c-10529b429299"
+    },
+    {
+      "id": "T5",
+      "ok": true,
+      "note": "revoke bởi MANAGER 200; GET/PATCH kế tiếp 403; tên A giữ 'Khu dân cư An Phú'; list loại A"
+    },
+    {
+      "id": "T6",
+      "ok": true,
+      "note": "mobile list scope đúng (B, không A); detail B + members; deep-link A 403-safe không leak"
+    },
+    {
+      "id": "T7",
+      "ok": true,
+      "note": "MANAGER tạo area A 201 persist; non-member tạo area B 403, không bản ghi lạ"
+    }
+  ]
+}

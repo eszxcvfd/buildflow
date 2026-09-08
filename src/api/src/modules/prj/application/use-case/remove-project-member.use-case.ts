@@ -4,12 +4,15 @@ import { PRJ_PROJECT_REPOSITORY, ProjectRepositoryPort, ProjectMemberRow } from 
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { normalizeProjectMemberReason } from '../../domain/service/project-member.policy';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 
 export interface RemoveProjectMemberInput {
   projectId: string;
   memberId: string;
   reason?: string | null;
   actorUserId: string;
+  /** Roles server-derived từ JWT (write-scope: ADMIN bypass hoặc member MANAGER/COORDINATOR). */
+  actorRoles?: string[];
   ipAddress?: string | null;
   userAgent?: string | null;
   correlationId?: string | null;
@@ -50,9 +53,21 @@ export class RemoveProjectMemberUseCase {
     @Inject(PRJ_PROJECT_REPOSITORY) private readonly projectRepo: ProjectRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: RemoveProjectMemberInput): Promise<RemoveProjectMemberOutput> {
+    // PRJ-SRS-006 (issue #37): write-scope TRƯỚC mọi branch (anti-leak:
+    // non-member luôn 403, kể cả reason sai hay memberId lạ).
+    const { isAdminBypass } = await this.scope.assertProjectWriteScope({
+      userId: input.actorUserId,
+      actorRoles: input.actorRoles ?? [],
+      projectId: input.projectId,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+
     let reason: string | null = null;
     try {
       reason = normalizeProjectMemberReason(input.reason);
@@ -74,6 +89,17 @@ export class RemoveProjectMemberUseCase {
       // idempotent nên inactive-manager-membership vẫn 409.
       const locked = await this.projectRepo.findForUpdateWithClient(client, input.projectId);
       if (!locked) throw new NotFoundException('Không tìm thấy dự án');
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx (revoke giữa outer
+      // check và mutation → 403 → rollback). Chạy trước M3 GUARD để revoke
+      // của chính actor cũng bị chặn (không tự xóa mình rồi cho qua).
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertWriteScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
+
       if (existing.userId === locked.entity.managerId) {
         throw coded409(
           'MANAGER_MEMBER',

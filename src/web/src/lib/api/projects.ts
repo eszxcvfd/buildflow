@@ -6,7 +6,9 @@
  * `limit`/`offset` (không search/status/total) nên UI lọc/phân trang phía
  * client trên tối đa 100 bản ghi fetch về — KHÔNG sửa API read trong slice này.
  * Writes (`POST`, `PATCH /api/v1/projects/:id`) do prj module sở hữu,
- * requireRoles ADMIN + PROJECT_MANAGER; PATCH whitelist
+ * create requireRoles ADMIN + PROJECT_MANAGER; PATCH/status/members-writes
+ * enforce project-scope (PRJ-SRS-006, ENDPOINTS §15: ADMIN bypass audited
+ * HOẶC ACTIVE member MANAGER/COORDINATOR). PATCH whitelist
  * {name, description, address, timezone, plannedStartDate, plannedEndDate,
  * managerId} — `code`/`status` trong body → 400 fieldErrors.
  * PRJ-SRS-002 (issue #33) — lifecycle `PATCH /api/v1/projects/:id/status`
@@ -308,16 +310,22 @@ export type ChangeProjectStatusResult = ProjectProfile & {
 };
 
 /**
- * PRJ-SRS-005 (issue #36) — thành viên dự án.
+ * PRJ-SRS-005 (issue #36) + PRJ-SRS-006 (issue #37, ENDPOINTS §15) — thành viên dự án.
  *
  * Contract: GET /api/v1/projects/:id/members (`?includeInactive=true` toàn bộ
- * lịch sử, default chỉ active) → `{ data, total }`; POST `:id/members`
+ * lịch sử, default chỉ active) → `{ data, total }` — reads mở cho mọi ACTIVE
+ * member (mọi project_role, kể cả WORKER/QC/VIEWER) + ADMIN bypass (audited);
+ * ngoài scope → 403 NOT_MEMBER (không leak tồn tại);
+ * POST `:id/members`
  * `{ userId, projectRole }` (`201`; role chỉ COORDINATOR|QC|WORKER|VIEWER —
  * MANAGER → 400 fieldErrors `{projectRole}`, đặt qua PATCH managerId; trùng
  * cùng project → 409 MEMBER_DUPLICATE); DELETE `:id/members/:memberId`
  * `{ reason? }` (soft-deactivate, giữ lịch sử; đã inactive → 200
  * `{ alreadyRemoved: true }` không audit; membership của manager hiện tại →
- * 409 MANAGER_MEMBER). Roles = PROJECT_WRITE_ROLES (ADMIN + PROJECT_MANAGER).
+ * 409 MANAGER_MEMBER). Writes (POST/DELETE) = ADMIN bypass (audited) HOẶC
+ * ACTIVE member MANAGER/COORDINATOR — global PROJECT_MANAGER không membership
+ * → 403. Web giữ role-gate canManageProjects (ADMIN + PROJECT_MANAGER,
+ * fail-closed) cho buttons + 403 graceful (server là authoritative).
  * Reads dùng `cache: 'no-store'`; 400 shape `{ message, fieldErrors }` giữ
  * nguyên fieldErrors server (pattern crews.ts).
  */

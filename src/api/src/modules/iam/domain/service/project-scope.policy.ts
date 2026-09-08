@@ -6,6 +6,19 @@
  */
 export const ADMIN_ROLE_CODE = 'ADMIN';
 
+/**
+ * PRJ-SRS-006 (issue #37) — project roles được phép write trên project đã join:
+ * MANAGER (đặt qua PATCH managerId) và COORDINATOR. QC/WORKER/VIEWER chỉ read
+ * (members list, areas list, project detail/list đã scope).
+ */
+export const PROJECT_MANAGE_ROLES = ['MANAGER', 'COORDINATOR'] as const;
+export type ProjectManageRole = (typeof PROJECT_MANAGE_ROLES)[number];
+
+export function hasProjectManageRole(projectRole: string | null | undefined): boolean {
+  if (!projectRole) return false;
+  return (PROJECT_MANAGE_ROLES as readonly string[]).includes(projectRole);
+}
+
 export interface ProjectScopeDecision {
   allowed: boolean;
   reason: 'ADMIN_BYPASS' | 'MEMBER' | 'NOT_MEMBER' | 'INVALID_PROJECT_ID';

@@ -45,8 +45,12 @@ export function canViewResourceDirectory(codes: string[]): boolean {
 
 /**
  * PRJ-SRS-001 (issue #32) — write dự án: ADMIN + PROJECT_MANAGER được tạo/sửa
- * hồ sơ dự án (khớp API slice: POST + PATCH requireRoles ADMIN/PROJECT_MANAGER).
- * Fail-closed: role lạ, mảng rỗng hoặc alias project_role đều false.
+ * hồ sơ dự án (khớp API slice: POST requireRoles ADMIN/PROJECT_MANAGER).
+ * PRJ-SRS-006 (issue #37) — PATCH/status/members-writes enforce thêm
+ * project-scope membership (MANAGER/COORDINATOR) phía server (authoritative);
+ * client giữ role-gate này (fail-closed) + 403 graceful, không tự suy diễn
+ * membership từ session. Fail-closed: role lạ, mảng rỗng hoặc alias
+ * project_role đều false.
  */
 export function canManageProjects(codes: string[]): boolean {
   const upper = codes.map((c) => c.toUpperCase());

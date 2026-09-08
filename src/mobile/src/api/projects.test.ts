@@ -1,4 +1,4 @@
-import { listProjects, getProject, LoginError } from './client';
+import { listProjects, getProject, listProjectMembers, LoginError } from './client';
 
 const projectBody = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -123,6 +123,56 @@ describe('projects client (PRJ-SRS-006, issue #37)', () => {
     ) as unknown as typeof fetch;
 
     await expect(getProject('tok-1', projectBody.id)).rejects.toMatchObject({
+      name: 'LoginError',
+      status: 401,
+    });
+  });
+
+  const memberBody = {
+    id: 'm1',
+    userId: 'u1',
+    userName: 'Nguyen Van A',
+    userCode: 'NV-001',
+    projectRole: 'WORKER',
+    joinedAt: '2026-01-02T00:00:00.000Z',
+    leftAt: null,
+    isActive: true,
+  };
+
+  it('listProjectMembers 200: GETs /api/v1/projects/:id/members with Bearer token and maps { data }', async () => {
+    const mock = jest.fn(async (url: string, init?: { headers?: Record<string, string> }) => {
+      expect(url).toContain(`/api/v1/projects/${projectBody.id}/members`);
+      expect(init?.headers?.Authorization).toBe('Bearer tok-1');
+      return jsonResponse({ data: [memberBody], total: 1 }, 200);
+    });
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = mock as unknown as typeof fetch;
+
+    const out = await listProjectMembers('tok-1', projectBody.id);
+    expect(out).toHaveLength(1);
+    expect(out[0].userName).toBe('Nguyen Van A');
+    expect(out[0].projectRole).toBe('WORKER');
+  });
+
+  it('listProjectMembers 403: keeps the 403 kind (mid-flight revoke / out-of-scope)', async () => {
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = jest.fn(async () =>
+      jsonResponse({ message: 'Không có quyền truy cập dự án này', statusCode: 403 }, 403),
+    ) as unknown as typeof fetch;
+
+    await expect(listProjectMembers('tok-1', projectBody.id)).rejects.toMatchObject({
+      name: 'LoginError',
+      status: 403,
+    });
+  });
+
+  it('listProjectMembers 401: keeps the 401 kind so screens can link back to login', async () => {
+    // eslint-disable-next-line no-native-reassign
+    global.fetch = jest.fn(async () =>
+      jsonResponse({ message: 'Unauthorized', statusCode: 401 }, 401),
+    ) as unknown as typeof fetch;
+
+    await expect(listProjectMembers('tok-1', projectBody.id)).rejects.toMatchObject({
       name: 'LoginError',
       status: 401,
     });

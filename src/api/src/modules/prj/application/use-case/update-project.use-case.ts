@@ -5,6 +5,7 @@ import { USER_REPOSITORY, UserRepositoryPort } from '../../../iam/domain/reposit
 import { AUDIT_PORT, AuditPort } from '../../../iam/application/port/audit.port';
 import { TRANSACTION_PORT, TransactionPort } from '../../../iam/application/port/transaction.port';
 import { ProjectEntity } from '../../domain/entity/project.entity';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import {
   assertPlannedDates,
   normalizeProjectAddress,
@@ -27,6 +28,8 @@ export interface UpdateProjectInput {
   /** P3: `status` thuộc lifecycle #33 — có mặt trong body → 400 fieldErrors. */
   status?: string;
   actorUserId: string;
+  /** Roles server-derived từ JWT (write-scope: ADMIN bypass hoặc member MANAGER/COORDINATOR). */
+  actorRoles?: string[];
   ipAddress?: string | null;
   userAgent?: string | null;
   correlationId?: string | null;
@@ -75,6 +78,9 @@ function entityFieldFor(msg: string): string {
  *   Khi `managerId` thật sự đổi, `PRJ_PROJECT_UPDATED` afterData kèm
  *   `managerMembership: { userId, autoInserted }` (`autoInserted=true` khi
  *   insert thành công, `false` khi đã là member).
+ * - PRJ-SRS-006 (issue #37): write-scope — ADMIN bypass (audited) HOẶC ACTIVE
+ *   member MANAGER/COORDINATOR; guard trước 404 (anti-leak) + re-check trong
+ *   cùng tx sau lock (revoke mid-flight → 403 rollback).
  */
 @Injectable()
 export class UpdateProjectUseCase {
@@ -83,9 +89,21 @@ export class UpdateProjectUseCase {
     @Inject(USER_REPOSITORY) private readonly userRepo: UserRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: UpdateProjectInput): Promise<UpdateProjectOutput> {
+    // PRJ-SRS-006 (issue #37): write-scope TRƯỚC mọi 404/validation (anti-leak:
+    // non-member luôn 403 bất kể project tồn tại hay không; ADMIN missing → 404).
+    const { isAdminBypass } = await this.scope.assertProjectWriteScope({
+      userId: input.actorUserId,
+      actorRoles: input.actorRoles ?? [],
+      projectId: input.projectId,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+
     if (input.code !== undefined) {
       throw fieldError('code', 'Mã dự án không thể thay đổi');
     }
@@ -149,6 +167,16 @@ export class UpdateProjectUseCase {
     await this.tx.withTransaction(async (client: PoolClient) => {
       const current = await this.projectRepo.findForUpdateWithClient(client, input.projectId);
       if (!current) throw new NotFoundException('Không tìm thấy dự án');
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx, ngay sau lock, trước
+      // mutation (revoke commit giữa outer check và đây → 403 → rollback).
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertWriteScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
+
       const before = { ...current.entity.toPublic(), managerName: current.managerName };
 
       try {

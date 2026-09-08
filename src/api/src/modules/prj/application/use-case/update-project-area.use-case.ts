@@ -14,6 +14,7 @@ import {
   normalizeProjectAreaName,
   normalizeProjectAreaReason,
 } from '../../domain/service/project-area.policy';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { assertProjectAreaScope } from './project-area-scope';
 
 export interface UpdateProjectAreaInput {
@@ -76,6 +77,7 @@ export class UpdateProjectAreaUseCase {
     @Inject(PRJ_PROJECT_AREA_REPOSITORY) private readonly areaRepo: ProjectAreaRepositoryPort,
     @Inject(AUDIT_PORT) private readonly audit: AuditPort,
     @Inject(TRANSACTION_PORT) private readonly tx: TransactionPort,
+    private readonly scope: ProjectScopeService,
   ) {}
 
   async execute(input: UpdateProjectAreaInput): Promise<UpdateProjectAreaOutput> {
@@ -116,10 +118,13 @@ export class UpdateProjectAreaUseCase {
       throw new NotFoundException('Không tìm thấy khu vực trong dự án');
     }
 
-    await assertProjectAreaScope(this.areaRepo, {
+    const { isAdminBypass } = await assertProjectAreaScope(this.scope, {
       projectId: input.projectId,
       actorUserId: input.actorUserId,
       actorRoles: input.actorRoles,
+      correlationId: input.correlationId ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
     });
 
     const projectCode = project.code;
@@ -130,6 +135,15 @@ export class UpdateProjectAreaUseCase {
       if (!current || current.projectId !== input.projectId) {
         throw new NotFoundException('Không tìm thấy khu vực trong dự án');
       }
+
+      // PRJ-SRS-006: re-check membership TRONG cùng tx sau lock (revoke
+      // mid-flight → 403 → rollback, không partial-write).
+      const actorMembership = await this.projectRepo.findActiveMemberWithClient(
+        client,
+        input.projectId,
+        input.actorUserId,
+      );
+      this.scope.assertMemberScopeTxCheck(isAdminBypass, actorMembership?.projectRole ?? null);
 
       const nextName = name !== undefined ? name : current.name;
       const nextCode = code !== undefined ? code : current.code;

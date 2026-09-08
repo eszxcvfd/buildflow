@@ -3,6 +3,8 @@ import {
   isAdminRole,
   filterProjectIdsByScope,
   isValidUuid,
+  hasProjectManageRole,
+  PROJECT_MANAGE_ROLES,
   ADMIN_ROLE_CODE,
 } from './project-scope.policy';
 
@@ -71,5 +73,16 @@ describe('ProjectScopePolicy IAM-SRS-006', () => {
       memberProjectIds: [],
     });
     expect(filtered).toEqual([]);
+  });
+
+  it('PRJ-SRS-006: chi MANAGER/COORDINATOR co quyen write', () => {
+    expect(PROJECT_MANAGE_ROLES).toEqual(['MANAGER', 'COORDINATOR']);
+    expect(hasProjectManageRole('MANAGER')).toBe(true);
+    expect(hasProjectManageRole('COORDINATOR')).toBe(true);
+    expect(hasProjectManageRole('WORKER')).toBe(false);
+    expect(hasProjectManageRole('QC')).toBe(false);
+    expect(hasProjectManageRole('VIEWER')).toBe(false);
+    expect(hasProjectManageRole(null)).toBe(false);
+    expect(hasProjectManageRole(undefined)).toBe(false);
   });
 });

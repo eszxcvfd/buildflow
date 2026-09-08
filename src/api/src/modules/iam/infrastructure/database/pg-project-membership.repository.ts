@@ -41,4 +41,14 @@ export class PgProjectMembershipRepository implements ProjectMembershipRepositor
     );
     return result.rows.map((r: Record<string, unknown>) => String(r['user_id']));
   }
+
+  async findActiveProjectRole(userId: string, projectId: string): Promise<string | null> {
+    const result = await this.pool().query(
+      `SELECT project_role FROM public.project_members
+       WHERE user_id = $1 AND project_id = $2 AND is_active = true LIMIT 1`,
+      [userId, projectId],
+    );
+    if (result.rows.length === 0) return null;
+    return String((result.rows[0] as Record<string, unknown>)['project_role']);
+  }
 }

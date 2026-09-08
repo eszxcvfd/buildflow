@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ListProjectAreasUseCase } from './list-project-areas.use-case';
 import { ProjectRepositoryPort, ProjectAreaRepositoryPort, ProjectAreaRow } from '../../domain/repository/project-repository.port';
+import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { ProjectEntity } from '../../domain/entity/project.entity';
 
 const PID = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +42,7 @@ function makeArea(name: string, isActive: boolean): ProjectAreaRow {
 describe('ListProjectAreasUseCase PRJ-SRS-003 (issue #34)', () => {
   let projectRepo: jest.Mocked<ProjectRepositoryPort>;
   let areaRepo: jest.Mocked<ProjectAreaRepositoryPort>;
+  let scope: jest.Mocked<ProjectScopeService>;
   let useCase: ListProjectAreasUseCase;
 
   beforeEach(() => {
@@ -53,7 +55,10 @@ describe('ListProjectAreasUseCase PRJ-SRS-003 (issue #34)', () => {
         filter.activeOnly ? [makeArea('Khu A', true)] : [makeArea('Khu A', true), makeArea('Khu B', false)],
       ),
     } as unknown as jest.Mocked<ProjectAreaRepositoryPort>;
-    useCase = new ListProjectAreasUseCase(projectRepo, areaRepo);
+    scope = {
+      assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
+    } as unknown as jest.Mocked<ProjectScopeService>;
+    useCase = new ListProjectAreasUseCase(projectRepo, areaRepo, scope);
   });
 
   it('happy: default kèm inactive; activeOnly=true chỉ active', async () => {
@@ -68,8 +73,12 @@ describe('ListProjectAreasUseCase PRJ-SRS-003 (issue #34)', () => {
   it('member WORKER đọc được (WO picker tương lai); non-member PM → 403; project 404', async () => {
     const out = await useCase.execute({ projectId: PID, actorUserId: ACTOR, actorRoles: ['WORKER'] });
     expect(out.areas).toHaveLength(2);
-    expect(areaRepo.isActiveProjectMember).toHaveBeenCalledWith(PID, ACTOR);
-    (areaRepo.isActiveProjectMember as jest.Mock).mockResolvedValue(false);
+    expect(scope.assertProjectMemberScope).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ACTOR, actorRoles: ['WORKER'], projectId: PID, auditBypass: false }),
+    );
+    (scope.assertProjectMemberScope as jest.Mock).mockRejectedValueOnce(
+      new ForbiddenException('Không có quyền truy cập dự án này'),
+    );
     (areaRepo.listAreas as jest.Mock).mockClear();
     const err = await useCase
       .execute({ projectId: PID, actorUserId: ACTOR, actorRoles: ['PROJECT_MANAGER'] })

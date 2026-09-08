@@ -382,3 +382,35 @@ export async function getProject(token: string, id: string): Promise<ProjectSumm
   if (res.ok && body && typeof body === 'object') return body as ProjectSummary;
   throw toProjectError(res.status, body, `Tải dự án thất bại (${res.status})`);
 }
+
+/**
+ * PRJ-SRS-006 (issue #37) — project members read slice.
+ * Contract: GET /api/v1/projects/:id/members → `{ data: ProjectMemberDto[], total }`
+ * (any ACTIVE member may read teammates; ADMIN bypass). 403 = out-of-scope
+ * (anti-leak: also returned when the project does not exist for non-members),
+ * 404 = not found (reachable for ADMIN/in-scope callers), 401 = session dead.
+ */
+export interface ProjectMember {
+  id: string;
+  userId: string;
+  userName: string | null;
+  userCode: string | null;
+  projectRole: string;
+  joinedAt: string;
+  leftAt: string | null;
+  isActive: boolean;
+}
+
+export async function listProjectMembers(token: string, projectId: string): Promise<ProjectMember[]> {
+  const res = await fetch(`${API_URL}/api/v1/projects/${encodeURIComponent(projectId)}/members`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok) {
+    const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    if (Array.isArray(b.data)) return b.data as ProjectMember[];
+    throw new LoginError('Phản hồi danh sách thành viên không hợp lệ', 500);
+  }
+  throw toProjectError(res.status, body, `Tải danh sách thành viên thất bại (${res.status})`);
+}
