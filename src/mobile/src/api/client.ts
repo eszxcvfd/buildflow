@@ -311,3 +311,74 @@ export async function fetchHealthLive(): Promise<HealthLive> {
   if (!res.ok) throw new Error(`live ${res.status}`);
   return res.json();
 }
+
+/**
+ * PRJ-SRS-006 (issue #37) — project access control, Mobile read slice.
+ * Contract (iam-owned reads, scope-integrated, committed at HEAD):
+ * - GET /api/v1/projects?limit&offset → bare array of ProjectSummary
+ *   (ADMIN sees all; non-admin sees only ACTIVE-membership projects).
+ * - GET /api/v1/projects/:id → single ProjectSummary; 403 when the project
+ *   exists but is outside the caller's membership (anti-leak), 404 when it
+ *   does not exist (reachable for ADMIN), 401 on expired/invalid token.
+ * Error semantics mirror the Web client (src/web/src/lib/api/projects.ts):
+ * 401 → expired-session copy, 403 → not-a-member copy, 404 → not-found copy.
+ */
+export interface ProjectSummary {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  managerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListProjectsParams {
+  /** Server giới hạn 1–100 (mặc định 20). */
+  limit?: number;
+  offset?: number;
+}
+
+function toProjectError(status: number, body: unknown, fallback: string): LoginError {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const serverMessage = typeof b.message === 'string' ? b.message : undefined;
+  const code = typeof b.code === 'string' ? b.code : undefined;
+  const copy: Record<number, string> = {
+    401: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+    403: 'Bạn không phải thành viên dự án này',
+    404: 'Không tìm thấy dự án',
+  };
+  return new LoginError(serverMessage ?? copy[status] ?? fallback, status, code);
+}
+
+export async function listProjects(token: string, params: ListProjectsParams = {}): Promise<ProjectSummary[]> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  const query = qs.toString();
+  const res = await fetch(`${API_URL}/api/v1/projects${query ? `?${query}` : ''}`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    // Web parity: never serve a cached project list; harmless on native.
+    cache: 'no-store',
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok) {
+    if (Array.isArray(body)) return body as ProjectSummary[];
+    // Defensive: accept a paginated envelope ({ data: [...] }) if the API
+    // ever wraps the list; the committed contract is a bare array.
+    const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    if (Array.isArray(b.data)) return b.data as ProjectSummary[];
+    throw new LoginError('Phản hồi danh sách dự án không hợp lệ', 500);
+  }
+  throw toProjectError(res.status, body, `Tải danh sách dự án thất bại (${res.status})`);
+}
+
+export async function getProject(token: string, id: string): Promise<ProjectSummary> {
+  const res = await fetch(`${API_URL}/api/v1/projects/${encodeURIComponent(id)}`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body && typeof body === 'object') return body as ProjectSummary;
+  throw toProjectError(res.status, body, `Tải dự án thất bại (${res.status})`);
+}

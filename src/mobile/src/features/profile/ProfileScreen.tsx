@@ -163,6 +163,12 @@ export function ProfileScreen({ token, onPasswordChanged }: { token: string; onP
         >
           <Text style={[styles.buttonText, styles.secondaryButtonText]}>Xem điều kiện nhận việc</Text>
         </Pressable>
+        <Pressable
+          accessibilityRole="button" accessibilityLabel="view projects"
+          onPress={() => router.push('/projects')} style={[styles.button, styles.secondaryButton]}
+        >
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Dự án</Text>
+        </Pressable>
         <Text style={styles.hint}>
           Email, vai trò và trạng thái chỉ đọc — không thể tự thay đổi (IAM-SRS-003).
         </Text>
