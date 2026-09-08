@@ -14,6 +14,7 @@ import {
 import { ProjectMembers } from './ProjectMembers';
 import { ProjectAreas } from './ProjectAreas';
 import { ProjectEditDialog } from './ProjectEditDialog';
+import { WorkOrderCreateDialog } from '@/features/work-orders';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
@@ -49,6 +50,9 @@ function statusLabel(status: string): string {
  * với `ProjectStatusDialog` (actions theo transition map L1 của trạng thái hiện
  * tại, gated bởi canManageProjects — ADMIN + PROJECT_MANAGER, fail-closed).
  * CTA 'Tạo dự án'/'Sửa hồ sơ' gated bởi canManageProjects() (fail-closed).
+ * JOB-SRS-001 (issue #41) — nút 'Tạo Work Order' gated bởi cùng predicate
+ * canManageProjects (server là authoritative: ADMIN bypass hoặc ACTIVE member
+ * MANAGER/COORDINATOR); dialog tạo nháp gắn projectId của trang.
  * PRJ-SRS-006 (issue #37) — list server-scope nên detail 403 (deep-link cũ /
  * bị thu hồi membership) render graceful: EmptyState 'Bạn không phải thành
  * viên dự án này' + icon + link về danh sách, KHÔNG Alert đỏ; members section
@@ -79,6 +83,8 @@ export function ProjectDetail({ id }: { id: string }) {
   // CRUD popup: nút 'Sửa hồ sơ' mở ProjectEditDialog (không điều hướng /edit);
   // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
   const [editOpen, setEditOpen] = React.useState(false);
+  // JOB-SRS-001 — dialog tạo Work Order nháp từ context dự án này.
+  const [woOpen, setWoOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -269,6 +275,11 @@ export function ProjectDetail({ id }: { id: string }) {
                 Sửa hồ sơ
               </Button>
             ) : null}
+            {canManage ? (
+              <Button variant="primary" onClick={() => setWoOpen(true)}>
+                Tạo Work Order
+              </Button>
+            ) : null}
             {canManage && allowedActions.length > 0 ? (
               <>
                 <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Chuyển trạng thái:</span>
@@ -379,6 +390,13 @@ export function ProjectDetail({ id }: { id: string }) {
         onClose={() => setEditOpen(false)}
         onUpdated={() => void load()}
       />
+      {woOpen ? (
+        <WorkOrderCreateDialog
+          open
+          projectId={project.id}
+          onClose={() => setWoOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
