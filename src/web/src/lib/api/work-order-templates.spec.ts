@@ -53,6 +53,12 @@ describe('web work-order-template API client PRJ-SRS-008', () => {
     expect(normalizeWorkOrderTemplate({ ...raw, status: 'ACTIVE' }).isActive).toBe(true);
   });
 
+  it('normalizeWorkOrderTemplate giữ workType kèm sẵn, mặc định null khi API thiếu', () => {
+    expect(normalizeWorkOrderTemplate(raw).workType).toBeNull();
+    const wt = { id: 'w1', code: 'WT-BE-TONG-TC', name: 'Đổ bê tông thủ công' };
+    expect(normalizeWorkOrderTemplate({ ...raw, workType: wt }).workType).toEqual(wt);
+  });
+
   it('searchWorkOrderTemplates dựng query status/workTypeId/search + auth; ALL bỏ status', async () => {
     fetchMock.mockResolvedValue(response(200, { data: [raw], total: 1, limit: 20, offset: 0 }));
     window.localStorage.setItem('buildflow.auth.v1', JSON.stringify({ accessToken: 'jwt-1' }));
