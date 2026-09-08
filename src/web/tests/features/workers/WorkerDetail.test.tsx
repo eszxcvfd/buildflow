@@ -321,7 +321,7 @@ describe('WorkerDetail (ORG-SRS-001 + #27)', () => {
     expect(await screen.findByText('Nguyen Van Tho')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Tạm ngừng' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Chấm dứt' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Sửa hồ sơ' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sửa hồ sơ' })).toBeNull();
     expect(screen.getByText(/cần quyền ADMIN — tài khoản hiện tại chỉ xem/)).toBeTruthy();
     expect(screen.getByText(/Lịch sử trạng thái chỉ dành cho ADMIN/)).toBeTruthy();
     expect(auditMock).not.toHaveBeenCalled();

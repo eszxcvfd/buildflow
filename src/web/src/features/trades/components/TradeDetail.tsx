@@ -7,6 +7,7 @@ import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
 import { toast } from '@/components/ui/toast/Toaster';
+import { TradeEditDialog } from './TradeEditDialog';
 
 export function TradeDetail({ id }: { id: string }) {
   const [trade, setTrade] = React.useState<Trade | null>(null);
@@ -22,6 +23,9 @@ export function TradeDetail({ id }: { id: string }) {
   }, [actionSuccess]);
   const [warning, setWarning] = React.useState<string | null>(null);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  // CRUD popup: nút 'Sửa danh mục' mở TradeEditDialog (không điều hướng /edit);
+  // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -99,9 +103,9 @@ export function TradeDetail({ id }: { id: string }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <a className="bf-btn bf-btn-secondary" href={`/trades/${trade.id}/edit`}>
+            <Button variant="secondary" onClick={() => setEditOpen(true)}>
               Sửa danh mục
-            </a>
+            </Button>
             {!showConfirm ? (
               <Button variant={isActive ? 'secondary' : 'primary'} onClick={() => setShowConfirm(true)}>
                 {isActive ? 'Chuyển sang Ngừng hoạt động' : 'Kích hoạt lại'}
@@ -175,6 +179,13 @@ export function TradeDetail({ id }: { id: string }) {
           thống (audit log, action ORG_TRADE_CREATED/ORG_TRADE_UPDATED/ORG_TRADE_STATUS_CHANGED).
         </p>
       </Card>
+
+      <TradeEditDialog
+        id={trade.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onUpdated={() => void load()}
+      />
     </div>
   );
 }

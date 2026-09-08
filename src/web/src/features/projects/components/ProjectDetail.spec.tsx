@@ -17,6 +17,10 @@ jest.mock('@/lib/api/projects', () => ({
 }));
 jest.mock('@/lib/api/workers', () => ({ listWorkers: jest.fn() }));
 jest.mock('@/lib/api/audit-logs', () => ({ listAuditLogs: jest.fn() }));
+// Dialog Sửa hồ sơ mount ProjectForm (dùng useRouter) — mock như CrewForm.spec.
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), refresh: jest.fn() }),
+}));
 
 const getProjectMock = getProject as jest.Mock;
 const changeProjectStatusMock = changeProjectStatus as jest.Mock;
@@ -69,26 +73,36 @@ describe('ProjectDetail PRJ-SRS-001 (issue #32)', () => {
     expect(screen.getByText(/Vòng đời dự án — PRJ-SRS-002/)).not.toBeNull();
   });
 
-  it('ADMIN thấy link Sửa hồ sơ', async () => {
+  it('ADMIN thấy nút Sửa hồ sơ (popup, không còn link /edit)', async () => {
     setSessionRoles(['ADMIN']);
     render(<ProjectDetail id="p-1" />);
     await waitFor(() => expect(screen.getAllByText('PRJ-001').length).toBeGreaterThan(0));
-    const link = screen.getByRole('link', { name: 'Sửa hồ sơ' });
-    expect(link.getAttribute('href')).toBe('/projects/p-1/edit');
+    const btn = screen.getByRole('button', { name: 'Sửa hồ sơ' });
+    expect(btn.tagName).toBe('BUTTON');
+    expect(screen.queryByRole('link', { name: 'Sửa hồ sơ' })).toBeNull();
   });
 
-  it('PROJECT_MANAGER thấy link Sửa hồ sơ', async () => {
+  it('PROJECT_MANAGER thấy nút Sửa hồ sơ', async () => {
     setSessionRoles(['PROJECT_MANAGER']);
     render(<ProjectDetail id="p-1" />);
     await waitFor(() => expect(screen.getAllByText('PRJ-001').length).toBeGreaterThan(0));
-    expect(screen.getByRole('link', { name: 'Sửa hồ sơ' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Sửa hồ sơ' })).not.toBeNull();
   });
 
-  it('WORKER không thấy link Sửa hồ sơ (fail-closed)', async () => {
+  it('WORKER không thấy nút Sửa hồ sơ (fail-closed)', async () => {
     setSessionRoles(['WORKER']);
     render(<ProjectDetail id="p-1" />);
     await waitFor(() => expect(screen.getAllByText('PRJ-001').length).toBeGreaterThan(0));
-    expect(screen.queryByRole('link', { name: 'Sửa hồ sơ' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sửa hồ sơ' })).toBeNull();
+  });
+
+  it('bấm Sửa hồ sơ → mở dialog Sửa dự án + prefill tên (route /edit giữ standalone)', async () => {
+    setSessionRoles(['ADMIN']);
+    render(<ProjectDetail id="p-1" />);
+    await waitFor(() => expect(screen.getAllByText('PRJ-001').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa hồ sơ' }));
+    await waitFor(() => expect(screen.getByText('Sửa dự án PRJ-001')).not.toBeNull());
+    expect((screen.getByLabelText(/Tên dự án/) as HTMLInputElement).value).toBe('Du an 1');
   });
 
   it('404 hiển thị not-found', async () => {

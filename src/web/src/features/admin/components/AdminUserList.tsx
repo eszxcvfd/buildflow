@@ -14,6 +14,7 @@ import {
   ListToolbar,
   SearchField,
 } from '@/components/ui/list/ListKit';
+import { AdminUserEditDialog } from './AdminUserEditDialog';
 
 export function AdminUserList() {
   const [users, setUsers] = React.useState<AdminUser[]>([]);
@@ -25,6 +26,9 @@ export function AdminUserList() {
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<AdminUserError | null>(null);
   const [confirmTarget, setConfirmTarget] = React.useState<{ user: AdminUser; next: string } | null>(null);
+  // CRUD popup (Pinback /admin/users/:id/edit): nút 'Sửa' mở AdminUserEditDialog
+  // (không điều hướng /edit); route /edit giữ hoạt động độc lập cho E2E drivers.
+  const [editId, setEditId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -236,7 +240,14 @@ export function AdminUserList() {
                           </Button>
                         ) : null}
                         <Tooltip content="Sửa hồ sơ tài khoản">
-                          <a className="bf-detail-link" href={`/admin/users/${u.id}/edit`}>Sửa</a>
+                          <button
+                            type="button"
+                            className="bf-detail-link"
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                            onClick={() => setEditId(u.id)}
+                          >
+                            Sửa
+                          </button>
                         </Tooltip>
                         <Tooltip content="Gán vai trò">
                           <a className="bf-detail-link" href={`/admin/users/${u.id}/roles`}>Vai trò</a>
@@ -250,6 +261,15 @@ export function AdminUserList() {
           </div>
         </Card>
       )}
+
+      {editId ? (
+        <AdminUserEditDialog
+          id={editId}
+          open
+          onClose={() => setEditId(null)}
+          onUpdated={() => void load()}
+        />
+      ) : null}
     </div>
   );
 }

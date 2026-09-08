@@ -13,6 +13,7 @@ import {
 } from './ProjectStatusDialog';
 import { ProjectMembers } from './ProjectMembers';
 import { ProjectAreas } from './ProjectAreas';
+import { ProjectEditDialog } from './ProjectEditDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
@@ -69,6 +70,9 @@ export function ProjectDetail({ id }: { id: string }) {
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);
+  // CRUD popup: nút 'Sửa hồ sơ' mở ProjectEditDialog (không điều hướng /edit);
+  // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -244,9 +248,9 @@ export function ProjectDetail({ id }: { id: string }) {
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
             {canManage ? (
-              <a className="bf-btn bf-btn-secondary" href={`/projects/${project.id}/edit`}>
+              <Button variant="secondary" onClick={() => setEditOpen(true)}>
                 Sửa hồ sơ
-              </a>
+              </Button>
             ) : null}
             {canManage && allowedActions.length > 0 ? (
               <>
@@ -351,6 +355,13 @@ export function ProjectDetail({ id }: { id: string }) {
         </p>
         <StatusTimeline key={timelineKey} id={project.id} entityType="PROJECT" />
       </Card>
+
+      <ProjectEditDialog
+        id={project.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onUpdated={() => void load()}
+      />
     </div>
   );
 }

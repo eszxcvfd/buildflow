@@ -15,6 +15,7 @@ import {
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline, statusTimelineHref, TimelineExternalIcon } from '@/features/resources/components/StatusTimeline';
 import { WorkerCrews } from './WorkerCrews';
+import { WorkerEditDialog } from './WorkerEditDialog';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -65,6 +66,9 @@ export function WorkerDetail({ id }: { id: string }) {
   const [confirmAction, setConfirmAction] = React.useState<ResourceAction | null>(null);
   const [openCheck, setOpenCheck] = React.useState<OpenWorkCheck>({ state: 'loading' });
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
+  // CRUD popup: nút 'Sửa hồ sơ' mở WorkerEditDialog (không điều hướng /edit);
+  // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
+  const [editOpen, setEditOpen] = React.useState(false);
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);
   // ORG-SRS-008 (issue #31) — nguồn duy nhất cho 'Điều kiện phân công':
@@ -215,9 +219,9 @@ export function WorkerDetail({ id }: { id: string }) {
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
             {isAdmin ? (
               <>
-                <a className="bf-btn bf-btn-secondary" href={`/workers/${worker.id}/edit`}>
+                <Button variant="secondary" onClick={() => setEditOpen(true)}>
                   Sửa hồ sơ
-                </a>
+                </Button>
                 {isActive ? (
                   <>
                     <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
@@ -339,6 +343,13 @@ export function WorkerDetail({ id }: { id: string }) {
           </p>
         )}
       </Card>
+
+      <WorkerEditDialog
+        id={worker.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onUpdated={() => void load()}
+      />
     </div>
   );
 }

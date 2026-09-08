@@ -49,7 +49,8 @@ describe('TradeDetail (ORG-SRS-003)', () => {
     expect(screen.getByText('TR-001')).toBeTruthy();
     expect(screen.getByText('Được phép — chọn được cho worker/loại công việc/work order mới')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Chuyển sang Ngừng hoạt động' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Sửa danh mục' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sửa danh mục' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Sửa danh mục' })).toBeNull();
   });
 
   it('renders inactive trade with blocked assignment info', async () => {

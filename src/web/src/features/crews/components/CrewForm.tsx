@@ -168,7 +168,8 @@ export function CrewForm({ mode, initial, onSuccess, onCancel }: Props) {
         await updateCrew(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật đội thi công thành công');
         toast.success({ title: 'Cập nhật đội thi công thành công' });
-        setTimeout(() => router.push(`/crews/${initial.id}`), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push(`/crews/${initial.id}`), 800);
       }
     } catch (e) {
       setFormError(e);

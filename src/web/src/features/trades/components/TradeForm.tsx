@@ -83,7 +83,8 @@ export function TradeForm({ mode, initial, onSuccess, onCancel }: Props) {
         await updateTrade(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật ngành nghề thành công');
         toast.success({ title: 'Cập nhật ngành nghề thành công' });
-        setTimeout(() => router.push(`/trades/${initial.id}`), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push(`/trades/${initial.id}`), 800);
       }
     } catch (e) {
       setFormError(e);

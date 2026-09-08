@@ -99,7 +99,8 @@ export function ContractorForm({ mode, initial, onSuccess, onCancel }: Props) {
         await updateContractor(initial.id, buildPayload());
         setGlobalSuccess('Cập nhật nhà thầu thành công');
         toast.success({ title: 'Cập nhật nhà thầu thành công' });
-        setTimeout(() => router.push(`/contractors/${initial.id}`), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push(`/contractors/${initial.id}`), 800);
       }
     } catch (e) {
       setFormError(e);

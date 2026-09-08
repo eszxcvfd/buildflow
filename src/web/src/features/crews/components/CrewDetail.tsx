@@ -14,6 +14,7 @@ import {
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { CrewMembers } from './CrewMembers';
+import { CrewEditDialog } from './CrewEditDialog';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -53,6 +54,9 @@ export function CrewDetail({ id }: { id: string }) {
   const [eligResult, setEligResult] = React.useState<CrewEligibilityResult | null>(null);
   const [eligLoading, setEligLoading] = React.useState(true);
   const [eligError, setEligError] = React.useState<EligibilityApiError | null>(null);
+  // CRUD popup: nút 'Sửa hồ sơ' mở CrewEditDialog (không điều hướng /edit);
+  // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -201,9 +205,9 @@ export function CrewDetail({ id }: { id: string }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <a className="bf-btn bf-btn-secondary" href={`/crews/${crew.id}/edit`}>
+            <Button variant="secondary" onClick={() => setEditOpen(true)}>
               Sửa hồ sơ
-            </a>
+            </Button>
             {isActive ? (
               <>
                 <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
@@ -336,6 +340,13 @@ export function CrewDetail({ id }: { id: string }) {
         </p>
         <StatusTimeline key={timelineKey} id={crew.id} entityType="CREW" />
       </Card>
+
+      <CrewEditDialog
+        id={crew.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onUpdated={() => void load()}
+      />
     </div>
   );
 }

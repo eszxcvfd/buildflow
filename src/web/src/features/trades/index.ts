@@ -5,4 +5,5 @@ export { TradeList } from './components/TradeList';
 export { TradeDetail } from './components/TradeDetail';
 export { TradeForm } from './components/TradeForm';
 export { TradeCreateDialog } from './components/TradeCreateDialog';
+export { TradeEditDialog } from './components/TradeEditDialog';
 export { TradesView } from './components/TradesView';

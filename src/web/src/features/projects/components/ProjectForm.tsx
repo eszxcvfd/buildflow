@@ -161,7 +161,8 @@ export function ProjectForm({ mode, initial, onSuccess, onCancel }: Props) {
         await updateProject(initial.id, buildUpdatePayload());
         setGlobalSuccess('Cập nhật dự án thành công');
         toast.success({ title: 'Cập nhật dự án thành công' });
-        setTimeout(() => router.push(`/projects/${initial.id}`), 800);
+        if (onSuccess) onSuccess();
+        else setTimeout(() => router.push(`/projects/${initial.id}`), 800);
       }
     } catch (e) {
       setFormError(e);

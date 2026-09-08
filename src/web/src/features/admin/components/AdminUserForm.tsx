@@ -125,7 +125,7 @@ export function AdminUserCreateForm() {
   );
 }
 
-export function AdminUserEditForm({ userId }: { userId: string }) {
+export function AdminUserEditForm({ userId, onSuccess, onCancel }: { userId: string; onSuccess?: () => void; onCancel?: () => void }) {
   const [initial, setInitial] = React.useState<AdminUser | null>(null);
   const [values, setValues] = React.useState({ email: '', fullName: '', phone: '', employeeCode: '', userType: 'STAFF' });
   const [loading, setLoading] = React.useState(true);
@@ -180,6 +180,7 @@ export function AdminUserEditForm({ userId }: { userId: string }) {
       });
       setSuccess(true);
       toast.success({ title: 'Đã cập nhật tài khoản' });
+      onSuccess?.();
     } catch (err) {
       const e2 = err as AdminUserError;
       if (e2.fieldErrors) setFieldErrors(e2.fieldErrors);
@@ -251,7 +252,11 @@ export function AdminUserEditForm({ userId }: { userId: string }) {
         </div>
         <div className="bf-form-actions">
           <Button type="submit" loading={saving} aria-busy={saving}>Lưu thay đổi</Button>
-          <a href="/admin/users">Hủy</a>
+          {onCancel ? (
+            <Button type="button" variant="secondary" onClick={onCancel}>Hủy</Button>
+          ) : (
+            <a href="/admin/users">Hủy</a>
+          )}
         </div>
       </form>
     </Card>

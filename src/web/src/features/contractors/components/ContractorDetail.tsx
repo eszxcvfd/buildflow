@@ -11,6 +11,7 @@ import {
 } from '@/features/resources/components/ResourceStatusDialog';
 import { StatusTimeline } from '@/features/resources/components/StatusTimeline';
 import { useIsAdmin } from '@/lib/auth/roles';
+import { ContractorEditDialog } from './ContractorEditDialog';
 import { Alert } from '@/components/ui/alert/Alert';
 import { Button } from '@/components/ui/button/Button';
 import { Card } from '@/components/ui/card/Card';
@@ -47,6 +48,9 @@ export function ContractorDetail({ id }: { id: string }) {
   const [dialogServerMessage, setDialogServerMessage] = React.useState<string | null>(null);
   const [dialogReasonError, setDialogReasonError] = React.useState<string | null>(null);
   const [timelineKey, setTimelineKey] = React.useState(0);
+  // CRUD popup: nút 'Sửa hồ sơ' mở ContractorEditDialog (không điều hướng /edit);
+  // route /edit giữ hoạt động độc lập cho E2E drivers goto trực tiếp.
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -156,9 +160,9 @@ export function ContractorDetail({ id }: { id: string }) {
           <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
             {isAdmin ? (
               <>
-                <a className="bf-btn bf-btn-secondary" href={`/contractors/${contractor.id}/edit`}>
+                <Button variant="secondary" onClick={() => setEditOpen(true)}>
                   Sửa hồ sơ
-                </a>
+                </Button>
                 {isActive ? (
                   <>
                     <Button variant="secondary" onClick={() => openDialog('SUSPEND')} disabled={actionLoading}>
@@ -273,6 +277,13 @@ export function ContractorDetail({ id }: { id: string }) {
           </p>
         )}
       </Card>
+
+      <ContractorEditDialog
+        id={contractor.id}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onUpdated={() => void load()}
+      />
     </div>
   );
 }
