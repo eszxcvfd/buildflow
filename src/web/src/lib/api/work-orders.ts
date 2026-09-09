@@ -16,6 +16,21 @@
 
 export type WorkOrderPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 
+export type WorkOrderJobBoardState =
+  | 'AVAILABLE'
+  | 'CLOSED'
+  | 'EXPIRED'
+  | 'ASSIGNED'
+  | 'SCHEDULED';
+
+export interface WorkOrderJobBoard {
+  open: boolean;
+  openFrom: string | null;
+  openUntil: string | null;
+  hasActiveAssignment: boolean;
+  state: WorkOrderJobBoardState;
+}
+
 export interface WorkOrder {
   id: string;
   code: string;
@@ -42,6 +57,11 @@ export interface WorkOrder {
   createdAt: string;
   updatedAt: string;
   version: number;
+  /**
+   * JOB-SRS-004 (issue #44) — badge Job Board server-derived (chỉ `GET :id` +
+   * open/close response; list KHÔNG enrich → absent). Web không tự derive.
+   */
+  jobBoard?: WorkOrderJobBoard | null;
 }
 
 export interface CreateWorkOrderPayload {

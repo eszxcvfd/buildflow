@@ -28,6 +28,9 @@ function makeEntity(id: string, projectId: string, status: 'DRAFT' | 'OPEN' = 'D
     createdBy: ACTOR,
     version: 1,
     requestKey: null,
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });

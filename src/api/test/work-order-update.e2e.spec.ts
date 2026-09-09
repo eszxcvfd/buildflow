@@ -69,6 +69,9 @@ describe('JOB-SRS-003 work-order update (e2e HTTP contract)', () => {
       createdBy: PM_ID,
       version: 1,
       requestKey: null,
+      jobBoardOpen: false,
+      jobBoardOpenFrom: null,
+      jobBoardOpenUntil: null,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
@@ -169,6 +172,8 @@ describe('JOB-SRS-003 work-order update (e2e HTTP contract)', () => {
         return null;
       }),
       findWorkTypeNameById: jest.fn(async () => 'Đổ bê tông'),
+      // Round-1 GetWorkOrderUseCase.hasAssignment fail-closed cần port này (không assignment → rỗng).
+      hasActiveAssignmentByWorkOrderIds: jest.fn(async () => new Set<string>()),
       findProjectStatusById: jest.fn(async (id: string) => ({ id, status: 'ACTIVE' })),
       create: jest.fn(async (e: WorkOrderEntity) => { store.set(e.id, e); }),
       createWithClient: jest.fn(async (_c: unknown, e: WorkOrderEntity) => { store.set(e.id, e); }),

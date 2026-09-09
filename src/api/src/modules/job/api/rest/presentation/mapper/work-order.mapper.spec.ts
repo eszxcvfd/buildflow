@@ -31,6 +31,9 @@ function makeEntity(): WorkOrderEntity {
     createdBy: IDS.actor,
     version: 1,
     requestKey: '6c1f4f0e-2b7a-4d3e-9c8b-1a2f3e4d5c6b',
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   });
@@ -98,5 +101,34 @@ describe('work-order.mapper (JOB-SRS-001)', () => {
     const bare = toWorkOrderListResponse([makeEntity()], { workTypeRefs: new Map(), projectRefs: new Map() });
     expect(bare[0].workTypeName).toBeUndefined();
     expect(bare[0].projectName).toBeUndefined();
+  });
+
+  it('JOB-SRS-004: không truyền hasActiveAssignment → response KHÔNG có jobBoard (list)', () => {
+    const dto = toWorkOrderResponse(makeEntity(), { workTypeName: 'Đổ bê tông' });
+    expect('jobBoard' in dto).toBe(false);
+  });
+
+  it('JOB-SRS-004: GET :id trả jobBoard + state server-derived', () => {
+    const open = new WorkOrderEntity({
+      ...makeEntity().getProps(),
+      status: 'OPEN',
+      jobBoardOpen: true,
+      jobBoardOpenFrom: new Date('2026-09-01T08:00:00.000Z'),
+      jobBoardOpenUntil: new Date('2026-12-01T08:00:00.000Z'),
+    });
+    const dto = toWorkOrderResponse(open, { hasActiveAssignment: false });
+    expect(dto.jobBoard).toMatchObject({
+      open: true,
+      openFrom: '2026-09-01T08:00:00.000Z',
+      openUntil: '2026-12-01T08:00:00.000Z',
+      hasActiveAssignment: false,
+      state: 'AVAILABLE',
+    });
+
+    const assigned = toWorkOrderResponse(open, { hasActiveAssignment: true });
+    expect(assigned.jobBoard?.state).toBe('ASSIGNED');
+
+    const closed = toWorkOrderResponse(makeEntity(), { hasActiveAssignment: false });
+    expect(closed.jobBoard).toMatchObject({ open: false, state: 'CLOSED' });
   });
 });

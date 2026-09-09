@@ -1,0 +1,62 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "digits": "317422",
+  "title": "Thi công dầm sàn tầng 3 khu KQ-01 317422",
+  "workOrderId": "7598bc30-2eb2-4144-b07a-59df036ae8a0",
+  "workOrderCode": "WO-MTTVUQ0A0AJT",
+  "praId": "10000000-0000-4000-8000-000000000001",
+  "auditRows": "6",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S0",
+      "ok": true,
+      "note": "WO WO-MTTVUQ0A0AJT DRAFT version 1, publish-check ready"
+    },
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "200 OPEN+AVAILABLE, version 1→2, audit OPENED=1, history=1"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "200 alreadyOpen, version giữ 2, audit OPENED=1"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "200 READY+CLOSED, version→3, audit CLOSED=1"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "200 alreadyClosed, audit CLOSED=1"
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "UI badge không nút; API open+close 403"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "UI hiện notice 409 + Tải lại (version hiện tại 5)"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "client-validate until>from, lỗi đúng input, không gọi API"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "close giữ assignment ACTIVE nguyên trạng (status/assigned_at/ended_at/responded_at)"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "200+200, 1 winner + 1 alreadyOpen, version 1→2 một lần, audit=1"
+    }
+  ]
+}

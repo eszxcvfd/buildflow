@@ -1,0 +1,62 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "digits": "061747",
+  "title": "Thi công dầm sàn tầng 3 khu KQ-01 061747",
+  "workOrderId": "6dbdf32b-a63f-4469-bbe7-085f27c24709",
+  "workOrderCode": "WO-MTTXHKIRF4S7",
+  "praId": "10000000-0000-4000-8000-000000000001",
+  "auditRows": "5",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S0",
+      "ok": true,
+      "note": "WO WO-MTTXHKIRF4S7 DRAFT version 1, publish-check ready"
+    },
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "200 OPEN+AVAILABLE, version 1→2, audit OPENED=1, history=1"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "200 alreadyOpen, version giữ 2, audit OPENED=1"
+    },
+    {
+      "id": "S3",
+      "ok": false,
+      "note": "page.goto: Page crashed\nCall log:\n  - navigating to \"http://localhost:3001/work-orders/6dbdf32b-a63f-4469-bbe7-085f27c24709\", waiting until \"networkidle\"\n"
+    },
+    {
+      "id": "S4",
+      "ok": false,
+      "note": "thiếu alreadyClosed: {\"id\":\"6dbdf32b-a63f-4469-bbe7-085f27c24709\",\"code\":\"WO-MTTXHKIRF4S7\",\"projectId\":\"10000000-0000-4000-8000-000000000001\",\"areaId\":\"589c0681-eec2-4a25-ac39-f91f866d507e\",\"workTypeId\":\"e2e4b200-0000-4000-8000-0000000000b3\",\"requiredTradeId\":\"11111111-1111-4111-8111-111111111111\",\"title\":\"Thi công dầm "
+    },
+    {
+      "id": "S5",
+      "ok": true,
+      "note": "UI badge không nút; API open+close 403"
+    },
+    {
+      "id": "S6",
+      "ok": false,
+      "note": "page.goto: Page crashed\nCall log:\n  - navigating to \"http://localhost:3001/work-orders/6dbdf32b-a63f-4469-bbe7-085f27c24709\", waiting until \"networkidle\"\n"
+    },
+    {
+      "id": "S7",
+      "ok": false,
+      "note": "page.goto: Page crashed\nCall log:\n  - navigating to \"http://localhost:3001/work-orders/6dbdf32b-a63f-4469-bbe7-085f27c24709\", waiting until \"networkidle\"\n"
+    },
+    {
+      "id": "S8",
+      "ok": true,
+      "note": "close giữ assignment ACTIVE nguyên trạng (status/assigned_at/ended_at/responded_at)"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "200+200, 1 winner + 1 alreadyOpen, version 1→2 một lần, audit=1"
+    }
+  ]
+}

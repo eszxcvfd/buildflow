@@ -1,4 +1,5 @@
 import {
+  Allow,
   IsIn,
   IsInt,
   IsISO8601,
@@ -13,6 +14,7 @@ import {
 } from 'class-validator';
 import { WorkOrderPriority } from '../../../../domain/service/work-order.policy';
 import { WorkOrderStatus } from '../../../../domain/entity/work-order.entity';
+import { JobBoardState } from '../../../../domain/service/work-order-job-board.policy';
 
 /**
  * Dữ liệu bổ sung theo loại công việc (`custom_fields`, J8): object phẳng
@@ -50,6 +52,21 @@ export interface WorkOrderResponseDto {
   updatedAt: string;
   version: number;
   idempotentReplay?: boolean;
+  /**
+   * JOB-SRS-004 (#44) — badge Job Board server-derived (chỉ `GET :id` +
+   * open/close response; list KHÔNG enrich). `state` derive từ
+   * `work-order-job-board.policy.ts` (`ASSIGNED` ưu tiên cao nhất,
+   * `CANCELLED/WORK_DONE/CLOSED` không map thành `ASSIGNED`).
+   */
+  jobBoard?: {
+    open: boolean;
+    openFrom: string | null;
+    openUntil: string | null;
+    hasActiveAssignment: boolean;
+    state: JobBoardState;
+  };
+  alreadyOpen?: boolean;
+  alreadyClosed?: boolean;
 }
 
 /**
@@ -189,5 +206,45 @@ export class UpdateWorkOrderDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
+  reason?: string | null;
+}
+
+/**
+ * JOB-SRS-004 (issue #44) — DTO mở Job Board.
+ * - F005: DTO chỉ giữ whitelist (`@Allow` — `forbidNonWhitelisted` vẫn
+ *   chặn field lạ); MỌI validation nghiệp vụ do use-case đảm nhiệm
+ *   (single-validator) để `400` luôn có `{code, fieldErrors}`:
+ *   `jobBoardOpenFrom` absent → default now server (ruling F003: + board
+ *   đang mở → replay `alreadyOpen`); `jobBoardOpenUntil` absent/null →
+ *   không hạn; ISO thiếu offset → 400 `JOB_BOARD_WINDOW_INVALID`;
+ *   cross-field (`until > from`, `until` tương lai) → 400
+ *   `JOB_BOARD_WINDOW_INVALID`; `expectedVersion` (int ≥1) →
+ *   400 `JOB_BOARD_VERSION_INVALID`; `reason` (≤500) →
+ *   400 `JOB_BOARD_REASON_TOO_LONG`.
+ */
+export class OpenJobBoardDto {
+  @Allow()
+  jobBoardOpenFrom?: string | null;
+
+  @Allow()
+  jobBoardOpenUntil?: string | null;
+
+  @Allow()
+  expectedVersion?: number | null;
+
+  @Allow()
+  reason?: string | null;
+}
+
+/**
+ * JOB-SRS-004 (issue #44) — DTO đóng Job Board (không đụng assignments —
+ * AC3; from/until giữ nguyên làm lịch sử). F005: whitelist-only như
+ * `OpenJobBoardDto` (use-case single-validator).
+ */
+export class CloseJobBoardDto {
+  @Allow()
+  expectedVersion?: number | null;
+
+  @Allow()
   reason?: string | null;
 }

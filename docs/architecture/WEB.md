@@ -193,6 +193,16 @@ Bằng chứng tối thiểu cho web change là typecheck/lint/build tương ứ
 - [ ] API contract và generated client đã được route nếu có thay đổi.
 - [ ] Proof đúng lane trong [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md).
 
+## 10. Job Board work order (JOB-SRS-004, `#44` — consumer contract, UI ở stage sau)
+
+API đã chốt (xem `ENDPOINTS.md` §19); web chỉ consume, không tự derive trạng thái.
+
+- Badge đọc từ `GET /api/v1/work-orders/:id` → `jobBoard.state` (server-derived): `AVAILABLE` = `Đang nhận việc` / `CLOSED` = `Đã đóng` / `EXPIRED` = `Hết hạn` (kèm cảnh báo "đóng rồi mở lại để đặt cửa sổ mới") / `ASSIGNED` = `Đã có người nhận` / `SCHEDULED` = `Chưa mở cửa sổ`. Web không query thứ hai, không tự tính từ `from`/`until`. `state` lạ (ngoài enum — không kỳ vọng, phòng contract lệch) → fallback trung tính "Không xác định", không crash, không badge sai (F011).
+- Actions (gate `canManage`, server mới là lớp bảo mật thật — gọi trực tiếp khi thiếu quyền → `403`): `DRAFT`/`READY` + board đóng → "Mở Job Board"; `OPEN` + board đóng → "Mở lại Job Board"; board mở → "Đóng Job Board" (confirm kèm note "việc đã phân công không bị hủy"). `WORKER`/`VIEWER`: ẩn nút.
+- Dialog mở: 2 ô `datetime-local` (đến optional) → client bắt buộc convert `new Date(v).toISOString()` (picker naive mất offset — R6; server reject ISO thiếu offset `400 JOB_BOARD_WINDOW_INVALID`; dialog luôn gửi cả hai ô hoặc để trống `from` = replay intent giữ window đã lưu — until-only update KHÔNG hỗ trợ, F023), client-validate `until > from` + `until` tương lai; `X-Correlation-Id` UUID tự sinh; `fieldErrors` (`JOB_BOARD_WINDOW_INVALID`) render đúng dưới từng input; stock-Nest 400 `{ message: string[] }` giữ đủ message + `fieldErrors._global` (F026 — mirror `work-orders.ts:257-266`); `409 WORK_ORDER_CONFLICT` → Alert "đã bị thay đổi" + nút Tải lại; `409 JOB_BOARD_ALREADY_OPEN` → tự refetch `GET :id` trước rồi hiện Alert (F011). Mở lại khi đã mở (replay) → `200 alreadyOpen` kể cả version stale (idempotency-wins F024).
+- Sau thao tác: re-fetch `GET :id` → badge/nút cập nhật; toast success; `409 JOB_BOARD_HAS_ASSIGNEE` → thông báo đã có người nhận. Cờ `alreadyOpen`/`alreadyClosed` nằm top-level response (không trong `jobBoard`). So sánh window server-side FULL-MS (F016: lệch ms dù cùng giây → `409`).
+- Đủ states: loading (disable + aria-busy), empty (—), success, validation per-field, error theo `code`, forbidden, retry.
+
 ## References
 
 - [Next.js documentation](https://nextjs.org/docs)

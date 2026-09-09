@@ -23,7 +23,9 @@ import { CreateWorkOrderUseCase } from '../../../application/use-case/create-wor
 import { GetWorkOrderUseCase } from '../../../application/use-case/get-work-order.use-case';
 import { SearchWorkOrdersUseCase, SearchWorkOrdersStatus } from '../../../application/use-case/search-work-orders.use-case';
 import { UpdateWorkOrderUseCase } from '../../../application/use-case/update-work-order.use-case';
-import { CreateWorkOrderDto, UpdateWorkOrderDto } from '../presentation/dto/work-order.dto';
+import { OpenWorkOrderJobBoardUseCase } from '../../../application/use-case/open-work-order-job-board.use-case';
+import { CloseWorkOrderJobBoardUseCase } from '../../../application/use-case/close-work-order-job-board.use-case';
+import { CloseJobBoardDto, CreateWorkOrderDto, OpenJobBoardDto, UpdateWorkOrderDto } from '../presentation/dto/work-order.dto';
 import { toWorkOrderListResponse, toWorkOrderResponse } from '../presentation/mapper/work-order.mapper';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 import { WorkOrderPriority } from '../../../domain/service/work-order.policy';
@@ -110,6 +112,8 @@ export class WorkOrdersController {
     private readonly getWorkOrder: GetWorkOrderUseCase,
     private readonly searchWorkOrders: SearchWorkOrdersUseCase,
     private readonly updateWorkOrder: UpdateWorkOrderUseCase,
+    private readonly openJobBoard: OpenWorkOrderJobBoardUseCase,
+    private readonly closeJobBoard: CloseWorkOrderJobBoardUseCase,
   ) {}
 
   @Post()
@@ -208,7 +212,7 @@ export class WorkOrdersController {
   ) {
     const actor = workOrderActor(req);
     const meta = getMeta(req);
-    const { entity, workTypeName } = await this.getWorkOrder.execute({
+    const { entity, workTypeName, hasActiveAssignment } = await this.getWorkOrder.execute({
       workOrderId: id,
       actorUserId: actor.sub,
       actorRoles: actor.roles ?? [],
@@ -216,7 +220,7 @@ export class WorkOrdersController {
       userAgent: meta.userAgent,
       correlationId: meta.correlationId,
     });
-    return toWorkOrderResponse(entity, { workTypeName });
+    return toWorkOrderResponse(entity, { workTypeName, hasActiveAssignment });
   }
 
   @Patch(':id')
@@ -249,5 +253,68 @@ export class WorkOrdersController {
       correlationId: meta.correlationId,
     });
     return toWorkOrderResponse(entity, { workTypeName });
+  }
+
+  /**
+   * JOB-SRS-004 (issue #44) — mở/đóng Job Board (command, luôn `200` —
+   * mirror `POST /work-types/:id/status`). Write-scope của project chứa WO
+   * (resolve từ WO row — anti-leak như PATCH); strict `X-Correlation-Id`;
+   * whitelist body. Response WO summary + `jobBoard` + cờ idempotent
+   * (`alreadyOpen`/`alreadyClosed`).
+   */
+  @Post(':id/job-board/open')
+  @HttpCode(200)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async openBoard(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Body() dto: OpenJobBoardDto,
+    @Req() req: Request,
+  ) {
+    const actor = workOrderActor(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { entity, workTypeName, hasActiveAssignment, alreadyOpen } = await this.openJobBoard.execute({
+      workOrderId: id,
+      jobBoardOpenFrom: dto.jobBoardOpenFrom,
+      jobBoardOpenUntil: dto.jobBoardOpenUntil,
+      expectedVersion: dto.expectedVersion,
+      reason: dto.reason,
+      actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return {
+      ...toWorkOrderResponse(entity, { workTypeName, hasActiveAssignment }),
+      ...(alreadyOpen ? { alreadyOpen: true } : {}),
+    };
+  }
+
+  @Post(':id/job-board/close')
+  @HttpCode(200)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }))
+  async closeBoard(
+    @Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string,
+    @Body() dto: CloseJobBoardDto,
+    @Req() req: Request,
+  ) {
+    const actor = workOrderActor(req);
+    const meta = getMeta(req);
+    assertStrictCorrelationId(meta.correlationId);
+    const { entity, workTypeName, hasActiveAssignment, alreadyClosed } = await this.closeJobBoard.execute({
+      workOrderId: id,
+      expectedVersion: dto.expectedVersion,
+      reason: dto.reason,
+      actorUserId: actor.sub,
+      actorRoles: actor.roles ?? [],
+      ipAddress: meta.ip,
+      userAgent: meta.userAgent,
+      correlationId: meta.correlationId,
+    });
+    return {
+      ...toWorkOrderResponse(entity, { workTypeName, hasActiveAssignment }),
+      ...(alreadyClosed ? { alreadyClosed: true } : {}),
+    };
   }
 }

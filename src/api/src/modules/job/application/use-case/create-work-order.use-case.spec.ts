@@ -36,6 +36,9 @@ function makeEntity(code = 'WO-2026-A1'): WorkOrderEntity {
     createdBy: IDS.actor,
     version: 1,
     requestKey: null,
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });

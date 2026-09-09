@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { GetWorkOrderUseCase } from './get-work-order.use-case';
 import { WorkOrderEntity } from '../../domain/entity/work-order.entity';
 import { WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
@@ -34,6 +34,9 @@ function makeEntity(): WorkOrderEntity {
     createdBy: IDS.admin,
     version: 1,
     requestKey: null,
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });
@@ -43,6 +46,7 @@ function setup(memberIds: string[] = [IDS.member]) {
   const repo = {
     findById: jest.fn(async (id: string) => (id === IDS.wo ? makeEntity() : null)),
     findWorkTypeNameById: jest.fn(async () => 'Đổ bê tông'),
+    hasActiveAssignmentByWorkOrderIds: jest.fn(async () => new Set<string>()),
   } as unknown as WorkOrderRepositoryPort & { findById: jest.Mock };
   const scope = {
     assertProjectMemberScope: jest.fn(async ({ userId, actorRoles }: { userId: string; actorRoles: string[] }) => {
@@ -92,6 +96,7 @@ describe('GetWorkOrderUseCase (JOB-SRS-001)', () => {
     const repo = {
       findById: jest.fn(async () => assigned),
       findWorkTypeNameById: jest.fn(async () => 'Đổ bê tông'),
+      hasActiveAssignmentByWorkOrderIds: jest.fn(async () => new Set<string>()),
     } as unknown as WorkOrderRepositoryPort & { findById: jest.Mock };
     const scope = {
       assertProjectMemberScope: jest.fn(async () => ({ isAdminBypass: false })),
@@ -100,5 +105,13 @@ describe('GetWorkOrderUseCase (JOB-SRS-001)', () => {
     const out = await uc.execute({ workOrderId: IDS.wo, actorUserId: IDS.member, actorRoles: ['WORKER'] });
     expect(out.entity.status).toBe('ASSIGNED');
     expect(out.entity.isDraft()).toBe(false);
+  });
+
+  it('F001: port thiếu hasActiveAssignmentByWorkOrderIds → 500 fail-closed (không fail-open false)', async () => {
+    const { uc, repo } = setup();
+    delete (repo as unknown as Record<string, unknown>).hasActiveAssignmentByWorkOrderIds;
+    await expect(
+      uc.execute({ workOrderId: IDS.wo, actorUserId: IDS.member, actorRoles: ['WORKER'] }),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 });

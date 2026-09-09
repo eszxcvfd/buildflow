@@ -1,11 +1,18 @@
 import { WorkOrderEntity } from '../../../../domain/entity/work-order.entity';
 import { WorkOrderListRef } from '../../../../domain/repository/work-order-repository.port';
+import { deriveJobBoardState } from '../../../../domain/service/work-order-job-board.policy';
 import { WorkOrderResponseDto } from '../dto/work-order.dto';
 
 export interface WorkOrderResponseOptions {
   workTypeName?: string | null;
   projectName?: string | null;
   idempotentReplay?: boolean;
+  /**
+   * JOB-SRS-004 (#44) — truyền khi caller đã resolve assignment (GET :id,
+   * open/close). Khi `undefined`, response KHÔNG chứa `jobBoard` (list —
+   * không enrichment, defer #45).
+   */
+  hasActiveAssignment?: boolean;
 }
 
 /**
@@ -43,6 +50,21 @@ export function toWorkOrderResponse(
   if (options?.workTypeName !== undefined) response.workTypeName = options.workTypeName;
   if (options?.projectName !== undefined) response.projectName = options.projectName;
   if (options?.idempotentReplay !== undefined) response.idempotentReplay = options.idempotentReplay;
+  if (options?.hasActiveAssignment !== undefined) {
+    response.jobBoard = {
+      open: pub.jobBoardOpen,
+      openFrom: pub.jobBoardOpenFrom ? pub.jobBoardOpenFrom.toISOString() : null,
+      openUntil: pub.jobBoardOpenUntil ? pub.jobBoardOpenUntil.toISOString() : null,
+      hasActiveAssignment: options.hasActiveAssignment,
+      state: deriveJobBoardState({
+        status: pub.status,
+        jobBoardOpen: pub.jobBoardOpen,
+        jobBoardOpenFrom: pub.jobBoardOpenFrom,
+        jobBoardOpenUntil: pub.jobBoardOpenUntil,
+        hasActiveAssignment: options.hasActiveAssignment,
+      }),
+    };
+  }
   return response;
 }
 

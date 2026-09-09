@@ -40,6 +40,9 @@ function makeEntity(status: WorkOrderStatus = 'DRAFT', version = 1): WorkOrderEn
     createdBy: IDS.actor,
     version,
     requestKey: null,
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });

@@ -50,6 +50,14 @@ export interface WorkOrderProps {
   dueAt: Date | null;
   plannedHeadcount: number | null;
   /**
+   * Job Board (JOB-SRS-004 #44): flag + cửa sổ nhận việc
+   * (`work_orders.job_board_open/from/until`, migration 0001 — không migration
+   * mới). Board đóng vẫn GIỮ from/until làm lịch sử (close không xóa).
+   */
+  jobBoardOpen: boolean;
+  jobBoardOpenFrom: Date | null;
+  jobBoardOpenUntil: Date | null;
+  /**
    * Dữ liệu bổ sung theo loại công việc (`work_orders.custom_fields`,
    * migration 0011) — giá trị các `required_fields` tùy chỉnh của work-type.
    */
@@ -122,6 +130,9 @@ export class WorkOrderEntity {
   get plannedEndAt(): Date | null { return this.props.plannedEndAt; }
   get dueAt(): Date | null { return this.props.dueAt; }
   get plannedHeadcount(): number | null { return this.props.plannedHeadcount; }
+  get jobBoardOpen(): boolean { return this.props.jobBoardOpen; }
+  get jobBoardOpenFrom(): Date | null { return this.props.jobBoardOpenFrom; }
+  get jobBoardOpenUntil(): Date | null { return this.props.jobBoardOpenUntil; }
   get customFields(): WorkOrderCustomFields { return { ...this.props.customFields }; }
   get createdBy(): string { return this.props.createdBy; }
   get version(): number { return this.props.version; }
@@ -158,6 +169,9 @@ export class WorkOrderEntity {
     plannedEndAt: Date | null;
     plannedHeadcount: number | null;
     dueAt: Date | null;
+    jobBoardOpen: boolean;
+    jobBoardOpenFrom: Date | null;
+    jobBoardOpenUntil: Date | null;
     customFields: WorkOrderCustomFields;
     createdBy: string;
     version: number;

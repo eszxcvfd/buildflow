@@ -163,6 +163,8 @@ describe('JOB-SRS-001 work-orders (e2e HTTP contract)', () => {
         return null;
       }),
       findWorkTypeNameById: jest.fn(async (id: string) => (id === ACTIVE_TYPE ? 'Đổ bê tông' : null)),
+      // Round-1 GetWorkOrderUseCase.hasAssignment fail-closed cần port này (không assignment → rỗng).
+      hasActiveAssignmentByWorkOrderIds: jest.fn(async () => new Set<string>()),
       findWorkTypeRefs: jest.fn(async (ids: string[]) => {
         const m = new Map<string, { id: string; code: string; name: string }>();
         for (const id of ids) {

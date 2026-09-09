@@ -31,6 +31,9 @@ function makeEntity(): WorkOrderEntity {
     createdBy: IDS.actor,
     version: 1,
     requestKey: null,
+    jobBoardOpen: false,
+    jobBoardOpenFrom: null,
+    jobBoardOpenUntil: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   });
@@ -69,8 +72,14 @@ describe('WorkOrdersController (JOB-SRS-001)', () => {
     const updateWorkOrder = {
       execute: jest.fn(async () => ({ entity: makeEntity(), workTypeName: 'Đổ bê tông', exceptionEdit: false, noOp: false })),
     };
-    const controller = new WorkOrdersController(createWorkOrder as never, getWorkOrder as never, searchWorkOrders as never, updateWorkOrder as never);
-    return { controller, createWorkOrder, getWorkOrder, searchWorkOrders, updateWorkOrder };
+    const openJobBoard = {
+      execute: jest.fn(async () => ({ entity: makeEntity(), workTypeName: 'Đổ bê tông', hasActiveAssignment: false, alreadyOpen: false })),
+    };
+    const closeJobBoard = {
+      execute: jest.fn(async () => ({ entity: makeEntity(), workTypeName: 'Đổ bê tông', hasActiveAssignment: false, alreadyClosed: false })),
+    };
+    const controller = new WorkOrdersController(createWorkOrder as never, getWorkOrder as never, searchWorkOrders as never, updateWorkOrder as never, openJobBoard as never, closeJobBoard as never);
+    return { controller, createWorkOrder, getWorkOrder, searchWorkOrders, updateWorkOrder, openJobBoard, closeJobBoard };
   }
 
   it('POST create: forward actor server-derived + meta; 201 mặc định', async () => {
@@ -209,5 +218,86 @@ describe('WorkOrdersController (JOB-SRS-001)', () => {
       controller.update(IDS.wo, { description: 'X' } as never, reqWithUser(['PROJECT_MANAGER'], 'not-a-uuid') as never),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(updateWorkOrder.execute).not.toHaveBeenCalled();
+  });
+
+  it('POST :id/job-board/open: forward actor + window + meta; response có jobBoard', async () => {
+    const { controller, openJobBoard } = setup();
+    const out = await controller.openBoard(
+      IDS.wo,
+      { jobBoardOpenFrom: '2026-10-15T08:00:00.000Z', jobBoardOpenUntil: '2026-10-20T08:00:00.000Z', expectedVersion: 1 } as never,
+      reqWithUser(['PROJECT_MANAGER'], IDS.corr) as never,
+    );
+    expect(openJobBoard.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workOrderId: IDS.wo,
+        jobBoardOpenFrom: '2026-10-15T08:00:00.000Z',
+        jobBoardOpenUntil: '2026-10-20T08:00:00.000Z',
+        expectedVersion: 1,
+        actorUserId: IDS.actor,
+        actorRoles: ['PROJECT_MANAGER'],
+        correlationId: IDS.corr,
+      }),
+    );
+    expect(out).toMatchObject({ id: IDS.wo, jobBoard: expect.objectContaining({ open: false }) });
+    expect('alreadyOpen' in (out as Record<string, unknown>)).toBe(false);
+  });
+
+  it('POST :id/job-board/open replay → alreadyOpen: true', async () => {
+    const { controller, openJobBoard } = setup();
+    openJobBoard.execute.mockResolvedValueOnce({
+      entity: makeEntity(),
+      workTypeName: 'Đổ bê tông',
+      hasActiveAssignment: false,
+      alreadyOpen: true,
+    });
+    const out = await controller.openBoard(
+      IDS.wo,
+      { jobBoardOpenFrom: '2026-10-15T08:00:00.000Z' } as never,
+      reqWithUser(['PROJECT_MANAGER'], IDS.corr) as never,
+    );
+    expect(out).toMatchObject({ alreadyOpen: true, jobBoard: expect.objectContaining({}) });
+  });
+
+  it('POST :id/job-board/open: X-Correlation-Id sai → 400', async () => {
+    const { controller, openJobBoard } = setup();
+    await expect(
+      controller.openBoard(IDS.wo, {} as never, reqWithUser(['PROJECT_MANAGER'], 'not-a-uuid') as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(openJobBoard.execute).not.toHaveBeenCalled();
+  });
+
+  it('POST :id/job-board/close: forward actor + meta; replay → alreadyClosed', async () => {
+    const { controller, closeJobBoard } = setup();
+    const out = await controller.closeBoard(
+      IDS.wo,
+      { expectedVersion: 2, reason: 'Tạm dừng nhận việc' } as never,
+      reqWithUser(['PROJECT_MANAGER'], IDS.corr) as never,
+    );
+    expect(closeJobBoard.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workOrderId: IDS.wo,
+        expectedVersion: 2,
+        reason: 'Tạm dừng nhận việc',
+        actorUserId: IDS.actor,
+        correlationId: IDS.corr,
+      }),
+    );
+    expect(out).toMatchObject({ id: IDS.wo, jobBoard: expect.objectContaining({ open: false }) });
+    closeJobBoard.execute.mockResolvedValueOnce({
+      entity: makeEntity(),
+      workTypeName: 'Đổ bê tông',
+      hasActiveAssignment: false,
+      alreadyClosed: true,
+    });
+    const replay = await controller.closeBoard(IDS.wo, {} as never, reqWithUser(['PROJECT_MANAGER']) as never);
+    expect(replay).toMatchObject({ alreadyClosed: true });
+  });
+
+  it('POST :id/job-board/close: X-Correlation-Id sai → 400', async () => {
+    const { controller, closeJobBoard } = setup();
+    await expect(
+      controller.closeBoard(IDS.wo, {} as never, reqWithUser(['PROJECT_MANAGER'], 'nope') as never),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(closeJobBoard.execute).not.toHaveBeenCalled();
   });
 });

@@ -45,6 +45,9 @@ function mapRow(row: Row): WorkOrderEntity {
     customFields,
     createdBy: String(row['created_by']),
     version: Number(row['version'] ?? 1),
+    jobBoardOpen: Boolean(row['job_board_open'] ?? false),
+    jobBoardOpenFrom: row['job_board_open_from'] ? new Date(String(row['job_board_open_from'])) : null,
+    jobBoardOpenUntil: row['job_board_open_until'] ? new Date(String(row['job_board_open_until'])) : null,
     requestKey: (row['request_key'] as string | null) ?? null,
     createdAt: new Date(String(row['created_at'])),
     updatedAt: new Date(String(row['updated_at'])),
@@ -54,7 +57,9 @@ function mapRow(row: Row): WorkOrderEntity {
 const WORK_ORDER_COLUMNS =
   'id, code, project_id, area_id, work_type_id, required_trade_id, title, ' +
   'description, instructions, priority, status, planned_start_at, planned_end_at, due_at, ' +
-  'planned_headcount, custom_fields, created_by, version, request_key, created_at, updated_at';
+  'planned_headcount, custom_fields, created_by, version, ' +
+  'job_board_open, job_board_open_from, job_board_open_until, ' +
+  'request_key, created_at, updated_at';
 
 @Injectable()
 export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
@@ -226,8 +231,10 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
       `INSERT INTO public.work_orders
         (id, code, project_id, area_id, work_type_id, required_trade_id, title,
          description, instructions, priority, status, planned_start_at, planned_end_at,
-         planned_headcount, custom_fields, created_by, version, request_key, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+         planned_headcount, custom_fields, created_by, version,
+         job_board_open, job_board_open_from, job_board_open_until,
+         request_key, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
       [
         p.id,
         p.code,
@@ -246,6 +253,9 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
         JSON.stringify(p.customFields ?? {}),
         p.createdBy,
         p.version,
+        p.jobBoardOpen ?? false,
+        p.jobBoardOpenFrom ?? null,
+        p.jobBoardOpenUntil ?? null,
         p.requestKey ?? null,
         p.createdAt,
         p.updatedAt,
@@ -296,5 +306,96 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
         ],
     );
     return result.rowCount ?? 0;
+  }
+
+  /**
+   * JOB-SRS-004 (#44) — guarded UPDATE mở/đóng Job Board (open + close
+   * chung). `updateWithClient` (#43) KHÔNG đụng các cột `job_board_*` (PATCH
+   * không được clobber board — regression R3).
+   */
+  async updateJobBoardWithClient(
+    client: PoolClient,
+    input: {
+      workOrderId: string;
+      jobBoardOpen: boolean;
+      jobBoardOpenFrom: Date | null;
+      jobBoardOpenUntil: Date | null;
+      toStatus: WorkOrderStatus;
+      expectedVersion?: number | null;
+    },
+  ): Promise<number> {
+    const guard = input.expectedVersion !== undefined && input.expectedVersion !== null;
+    if (input.jobBoardOpen) {
+      const result = await client.query(
+        `UPDATE public.work_orders
+            SET job_board_open = true, job_board_open_from = $2, job_board_open_until = $3,
+                status = $4, version = version + 1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1${guard ? ' AND version = $5' : ''}
+             AND job_board_open = false
+             AND status IN ('DRAFT','READY','OPEN')
+             AND NOT EXISTS (SELECT 1 FROM public.assignments a
+                             WHERE a.work_order_id = work_orders.id
+                               AND a.status IN ('PENDING_ACCEPTANCE','ACTIVE'))`,
+        guard
+          ? [input.workOrderId, input.jobBoardOpenFrom, input.jobBoardOpenUntil, input.toStatus, input.expectedVersion]
+          : [input.workOrderId, input.jobBoardOpenFrom, input.jobBoardOpenUntil, input.toStatus],
+      );
+      return result.rowCount ?? 0;
+    }
+    const result = await client.query(
+      `UPDATE public.work_orders
+          SET job_board_open = false,
+              status = CASE WHEN status = 'OPEN' THEN 'READY' ELSE status END,
+              version = version + 1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1${guard ? ' AND version = $2' : ''}
+           AND job_board_open = true AND status NOT IN ('CANCELLED')`,
+      guard ? [input.workOrderId, input.expectedVersion] : [input.workOrderId],
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
+   * JOB-SRS-004 (#44) — writer `work_order_state_history` (bảng có từ 0001
+   * nhưng chưa từng có writer — R7). `reason varchar(500)` nên caller cap 500.
+   */
+  async insertStateHistoryWithClient(
+    client: PoolClient,
+    input: {
+      workOrderId: string;
+      fromStatus: WorkOrderStatus | null;
+      toStatus: WorkOrderStatus;
+      changedBy: string;
+      reason: string | null;
+      correlationId: string | null;
+    },
+  ): Promise<void> {
+    await client.query(
+      `INSERT INTO public.work_order_state_history
+         (id, work_order_id, from_status, to_status, changed_by, reason, correlation_id)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)`,
+      [
+        input.workOrderId,
+        input.fromStatus,
+        input.toStatus,
+        input.changedBy,
+        input.reason,
+        input.correlationId,
+      ],
+    );
+  }
+
+  async hasActiveAssignmentByWorkOrderIds(ids: string[]): Promise<Set<string>> {
+    const found = new Set<string>();
+    if (ids.length === 0) return found;
+    const r = await this.pool().query(
+      `SELECT work_order_id FROM public.assignments
+        WHERE work_order_id = ANY($1::uuid[])
+          AND status IN ('PENDING_ACCEPTANCE','ACTIVE')`,
+      [ids],
+    );
+    for (const row of r.rows as Row[]) {
+      found.add(String(row['work_order_id']));
+    }
+    return found;
   }
 }

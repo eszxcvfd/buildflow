@@ -1,4 +1,4 @@
-import { Inject, Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, ForbiddenException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { JOB_WORK_ORDER_REPOSITORY, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
 import { ProjectScopeService } from '../../../iam/application/service/project-scope.service';
 import { isAdminRole } from '../../../iam/domain/service/project-scope.policy';
@@ -18,6 +18,8 @@ export interface GetWorkOrderOutput {
   entity: WorkOrderEntity;
   /** Tên loại công việc cho response summary (`workTypeName?`). */
   workTypeName: string | null;
+  /** True khi WO có assignment PENDING/ACTIVE (badge `jobBoard.state`). */
+  hasActiveAssignment: boolean;
 }
 
 /**
@@ -51,7 +53,7 @@ export class GetWorkOrderUseCase {
         userAgent: input.userAgent ?? null,
       });
       const workTypeName = await this.workOrderRepo.findWorkTypeNameById(entity.workTypeId);
-      return { entity, workTypeName };
+      return { entity, workTypeName, hasActiveAssignment: await this.hasAssignment(entity.id) };
     }
 
     const entity = await this.workOrderRepo.findById(input.workOrderId);
@@ -65,6 +67,18 @@ export class GetWorkOrderUseCase {
       userAgent: input.userAgent ?? null,
     });
     const workTypeName = await this.workOrderRepo.findWorkTypeNameById(entity.workTypeId);
-    return { entity, workTypeName };
+    return { entity, workTypeName, hasActiveAssignment: await this.hasAssignment(entity.id) };
+  }
+
+  /**
+   * F001 — fail-closed: port method thiếu là lỗi wiring máy chủ → 500,
+   * KHÔNG fail-open `false` (badge `ASSIGNED` rớt thành `CLOSED`).
+   */
+  private async hasAssignment(workOrderId: string): Promise<boolean> {
+    if (!this.workOrderRepo.hasActiveAssignmentByWorkOrderIds) {
+      throw new InternalServerErrorException('Không thể kiểm tra phân công công việc');
+    }
+    const found = await this.workOrderRepo.hasActiveAssignmentByWorkOrderIds([workOrderId]);
+    return found.has(workOrderId);
   }
 }

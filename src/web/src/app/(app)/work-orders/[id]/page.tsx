@@ -10,6 +10,8 @@ import {
 import { listTrades } from '@/lib/api/trades';
 import { listProjectAreas } from '@/lib/api/projects';
 import { WorkOrderEditDialog } from '@/features/work-orders/components/WorkOrderEditDialog';
+import { WorkOrderJobBoardCard } from '@/features/work-orders/components/WorkOrderJobBoardCard';
+import { WorkOrderJobBoardDialog } from '@/features/work-orders/components/WorkOrderJobBoardDialog';
 import { WorkOrderReadinessPanel } from '@/features/work-orders/components/WorkOrderReadinessPanel';
 import { useCanManageProjects, useIsAdmin } from '@/lib/auth/roles';
 import { Alert } from '@/components/ui/alert/Alert';
@@ -19,6 +21,12 @@ import { Card } from '@/components/ui/card/Card';
 const WORK_ORDER_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Nháp',
   READY: 'Sẵn sàng',
+  OPEN: 'Mở',
+  ASSIGNED: 'Đã gán',
+  IN_PROGRESS: 'Đang làm',
+  WORK_DONE: 'Hoàn tất',
+  CLOSED: 'Đóng',
+  CANCELLED: 'Hủy',
 };
 
 const WORK_ORDER_PRIORITY_LABELS: Record<string, string> = {
@@ -50,6 +58,7 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
   const [checkLoading, setCheckLoading] = React.useState(true);
   const [checkError, setCheckError] = React.useState<ReadinessApiError | null>(null);
   const [editOpen, setEditOpen] = React.useState(false);
+  const [boardDialogOpen, setBoardDialogOpen] = React.useState(false);
   const canManage = useCanManageProjects();
   const isAdmin = useIsAdmin();
 
@@ -253,6 +262,26 @@ export default function WorkOrderDetailPage({ params }: { params: { id: string }
         error={checkError}
         onRetry={() => void loadCheck()}
       />
+
+      {/* JOB-SRS-004 (issue #44) — Job Board card + dialog (badge server-derived). */}
+      <WorkOrderJobBoardCard
+        workOrder={workOrder}
+        canManage={canManage}
+        onRefresh={() => void load()}
+        onRequestOpen={() => setBoardDialogOpen(true)}
+      />
+
+      {boardDialogOpen ? (
+        <WorkOrderJobBoardDialog
+          workOrder={workOrder}
+          onClose={() => setBoardDialogOpen(false)}
+          onOpened={() => {
+            setBoardDialogOpen(false);
+            void load();
+          }}
+          onRefetch={() => void load()}
+        />
+      ) : null}
 
       {editOpen && canEdit ? (
         <WorkOrderEditDialog

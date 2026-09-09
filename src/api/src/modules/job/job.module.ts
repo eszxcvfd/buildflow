@@ -6,6 +6,8 @@ import { GetWorkOrderUseCase } from './application/use-case/get-work-order.use-c
 import { SearchWorkOrdersUseCase } from './application/use-case/search-work-orders.use-case';
 import { UpdateWorkOrderUseCase } from './application/use-case/update-work-order.use-case';
 import { CheckWorkOrderPublishUseCase } from './application/use-case/check-work-order-publish.use-case';
+import { OpenWorkOrderJobBoardUseCase } from './application/use-case/open-work-order-job-board.use-case';
+import { CloseWorkOrderJobBoardUseCase } from './application/use-case/close-work-order-job-board.use-case';
 import { PgWorkOrderRepository } from './infrastructure/database/pg-work-order.repository';
 import { JOB_WORK_ORDER_REPOSITORY } from './domain/repository/work-order-repository.port';
 import { PgWorkOrderPublishCheckReadAdapter } from './infrastructure/database/pg-work-order-publish-check.read-adapter';
@@ -45,6 +47,8 @@ import { IamModule } from '../iam/iam.module';
     SearchWorkOrdersUseCase,
     UpdateWorkOrderUseCase,
     CheckWorkOrderPublishUseCase,
+    OpenWorkOrderJobBoardUseCase,
+    CloseWorkOrderJobBoardUseCase,
     JwtAuthGuard,
     JwtTokenService,
     { provide: JOB_WORK_ORDER_REPOSITORY, useClass: PgWorkOrderRepository },

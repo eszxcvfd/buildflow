@@ -115,6 +115,51 @@ export interface WorkOrderRepositoryPort {
     workOrder: WorkOrderEntity,
     expectedVersion?: number,
   ): Promise<number>;
+  /**
+   * JOB-SRS-004 (#44) — guarded UPDATE mở/đóng Job Board trong tx (open +
+   * close chung, trả rowCount; `0` = race → caller re-read + classify):
+   * - Open: `SET job_board_open=true, from/until, status='OPEN', version+1`
+   *   `WHERE id [AND version] AND job_board_open=false AND status IN
+   *   (DRAFT,READY,OPEN) AND NOT EXISTS (assignment PENDING/ACTIVE)`.
+   * - Close: `SET job_board_open=false, status=CASE OPEN→READY, version+1`
+   *   `WHERE id [AND version] AND job_board_open=true AND status <> CANCELLED`
+   *   (KHÔNG đụng bảng `assignments`).
+   */
+  updateJobBoardWithClient?(
+    client: PoolClient,
+    input: {
+      workOrderId: string;
+      jobBoardOpen: boolean;
+      jobBoardOpenFrom: Date | null;
+      jobBoardOpenUntil: Date | null;
+      /** Trạng thái sau ghi (`OPEN` khi mở; `READY` khi đóng từ OPEN). */
+      toStatus: WorkOrderStatus;
+      expectedVersion?: number | null;
+    },
+  ): Promise<number>;
+  /**
+   * JOB-SRS-004 (#44) — writer `work_order_state_history` qua port (không
+   * inline SQL trong use case). Chỉ gọi khi status đổi (DRAFT/READY→OPEN khi
+   * mở; OPEN→READY khi đóng); INSERT fail → caller 500 rollback.
+   */
+  insertStateHistoryWithClient?(
+    client: PoolClient,
+    input: {
+      workOrderId: string;
+      fromStatus: WorkOrderStatus | null;
+      toStatus: WorkOrderStatus;
+      changedBy: string;
+      reason: string | null;
+      correlationId: string | null;
+    },
+  ): Promise<void>;
+  /**
+   * Batch kiểm tra assignment hiện tại (mirror `findWorkTypeRefs`): MỘT query
+   * (`= ANY($1::uuid[])`), trả id các WO có assignment `PENDING_ACCEPTANCE`
+   * hoặc `ACTIVE` (điều kiện mirror `ux_assignments_current`, 0001:881-883).
+   * Ids rỗng → set rỗng.
+   */
+  hasActiveAssignmentByWorkOrderIds?(ids: string[]): Promise<Set<string>>;
 }
 
 export const JOB_WORK_ORDER_REPOSITORY = Symbol('JOB_WORK_ORDER_REPOSITORY');
