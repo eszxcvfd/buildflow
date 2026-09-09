@@ -37,8 +37,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * gắn `req.user`). KHÔNG gate global role ở đây: write/read enforce
  * project-scope trong use case (403 khi ngoài scope). Client không thể giả
  * actor (JWT signed, login cấp).
+ * JOB-SRS-005 (#45): export để `JobBoardController` tái dùng (tránh duplicate).
  */
-function workOrderActor(req: Request): TokenPayload {
+export function workOrderActor(req: Request): TokenPayload {
   const actor = (req as unknown as { user?: TokenPayload }).user;
   if (!actor || !actor.sub) {
     throw new UnauthorizedException('Phiên hết hạn, vui lòng đăng nhập lại');

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { WorkOrdersController } from './api/rest/controller/work-orders.controller';
+import { JobBoardController } from './api/rest/controller/job-board.controller';
 import { WorkOrderPublishCheckController } from './api/rest/controller/work-order-publish-check.controller';
 import { CreateWorkOrderUseCase } from './application/use-case/create-work-order.use-case';
 import { GetWorkOrderUseCase } from './application/use-case/get-work-order.use-case';
 import { SearchWorkOrdersUseCase } from './application/use-case/search-work-orders.use-case';
+import { SearchJobBoardUseCase } from './application/use-case/search-job-board.use-case';
 import { UpdateWorkOrderUseCase } from './application/use-case/update-work-order.use-case';
 import { CheckWorkOrderPublishUseCase } from './application/use-case/check-work-order-publish.use-case';
 import { OpenWorkOrderJobBoardUseCase } from './application/use-case/open-work-order-job-board.use-case';
@@ -40,11 +42,12 @@ import { IamModule } from '../iam/iam.module';
  */
 @Module({
   imports: [IamModule],
-  controllers: [WorkOrdersController, WorkOrderPublishCheckController],
+  controllers: [WorkOrdersController, WorkOrderPublishCheckController, JobBoardController],
   providers: [
     CreateWorkOrderUseCase,
     GetWorkOrderUseCase,
     SearchWorkOrdersUseCase,
+    SearchJobBoardUseCase,
     UpdateWorkOrderUseCase,
     CheckWorkOrderPublishUseCase,
     OpenWorkOrderJobBoardUseCase,

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { WorkOrderEntity, WorkOrderStatus } from '../../domain/entity/work-order.entity';
 import { WorkOrderPriority } from '../../domain/service/work-order.policy';
-import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
+import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, JobBoardFilter, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -225,6 +225,55 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
     return refs;
   }
 
+  /**
+   * JOB-SRS-005 (issue #45) — list Job Board (BD5): availability predicate
+   * HOÀN TOÀN server-side trong SQL (KHÔNG post-filter — post-filter phá
+   * `total` và page): `status='OPEN' + job_board_open + trong window
+   * (from NULL hoặc <= now; until NULL hoặc strict > now — biên `until==now`
+   * loại, conservative, xem ENDPOINTS §20) + NOT EXISTS assignment
+   * PENDING/ACTIVE + scope (`project_id = ANY(...)` chỉ non-ADMIN).
+   * `now` do caller (use case) capture MỘT lần, truyền vào đây.
+   * `COUNT` trên CÙNG where cho `total`; page
+   * `ORDER BY updated_at DESC, id DESC` (tiebreak `id` deterministic — BD1).
+   */
+  async searchJobBoard(filter: JobBoardFilter): Promise<{ entities: WorkOrderEntity[]; total: number }> {
+    const conditions: string[] = [
+      `w.status = 'OPEN'`,
+      `w.job_board_open = true`,
+      `(w.job_board_open_from IS NULL OR w.job_board_open_from <= $1)`,
+      `(w.job_board_open_until IS NULL OR w.job_board_open_until > $1)`,
+      `NOT EXISTS (SELECT 1 FROM public.assignments a
+                     WHERE a.work_order_id = w.id
+                       AND a.status IN ('PENDING_ACCEPTANCE','ACTIVE'))`,
+    ];
+    const values: unknown[] = [filter.now];
+    let idx = 2;
+    if (filter.projectIds) {
+      conditions.push(`w.project_id = ANY($${idx++}::uuid[])`);
+      values.push(filter.projectIds);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const countR = await this.pool().query(
+      `SELECT COUNT(*) FROM public.work_orders w ${where}`,
+      values,
+    );
+    const total = Number(countR.rows[0].count);
+
+    // F003 (#45) — Number.isFinite guard TRƯỚC Math.min/max: NaN/Infinity
+    // (không qua controller) → dùng default, không để NaN lọt vào LIMIT/OFFSET.
+    // NOTE: twin clamp trong search() của #41-44 giữ nguyên (out of scope).
+    const rawLimit = Number.isFinite(filter.limit) ? filter.limit : 20;
+    const limit = Math.min(Math.max(rawLimit, 1), 100);
+    const rawOffset = Number.isFinite(filter.offset) ? filter.offset : 0;
+    const offset = Math.max(rawOffset, 0);
+
+    const dataR = await this.pool().query(
+      `SELECT ${WORK_ORDER_COLUMNS} FROM public.work_orders w ${where} ORDER BY w.updated_at DESC, w.id DESC LIMIT $${idx++} OFFSET $${idx++}`,
+      [...values, limit, offset],
+    );
+    return { entities: dataR.rows.map((row: Row) => mapRow(row)), total };
+  }
+
   private async createOnExecutor(executor: Pool | PoolClient, workOrder: WorkOrderEntity): Promise<void> {
     const p = workOrder.getProps();
     await executor.query(
@@ -384,8 +433,46 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
     );
   }
 
-  async hasActiveAssignmentByWorkOrderIds(ids: string[]): Promise<Set<string>> {
-    const found = new Set<string>();
+  /**
+   * JOB-SRS-005 (issue #45) — batch refs cho Job Board card (BD6, mirror
+   * `findProjectRefs`): `public.project_areas` / `public.trades` đều có cột
+   * `id, code, name` từ baseline 0001. Không lọc `is_active`. Ids rỗng → rỗng.
+   */
+  async findAreaRefs(ids: string[]): Promise<Map<string, WorkOrderListRef>> {
+    const refs = new Map<string, WorkOrderListRef>();
+    if (ids.length === 0) return refs;
+    const r = await this.pool().query(
+      'SELECT id, code, name FROM public.project_areas WHERE id = ANY($1::uuid[])',
+      [ids],
+    );
+    for (const row of r.rows as Row[]) {
+      refs.set(String(row['id']), {
+        id: String(row['id']),
+        code: String(row['code']),
+        name: String(row['name']),
+      });
+    }
+    return refs;
+  }
+
+  async findTradeRefs(ids: string[]): Promise<Map<string, WorkOrderListRef>> {
+    const refs = new Map<string, WorkOrderListRef>();
+    if (ids.length === 0) return refs;
+    const r = await this.pool().query(
+      'SELECT id, code, name FROM public.trades WHERE id = ANY($1::uuid[])',
+      [ids],
+    );
+    for (const row of r.rows as Row[]) {
+      refs.set(String(row['id']), {
+        id: String(row['id']),
+        code: String(row['code']),
+        name: String(row['name']),
+      });
+    }
+    return refs;
+  }
+
+  async hasActiveAssignmentByWorkOrderIds(ids: string[]): Promise<Set<string>> {    const found = new Set<string>();
     if (ids.length === 0) return found;
     const r = await this.pool().query(
       `SELECT work_order_id FROM public.assignments

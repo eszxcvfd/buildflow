@@ -401,6 +401,148 @@ export interface ProjectMember {
   isActive: boolean;
 }
 
+/**
+ * JOB-SRS-005 (issue #45) — Job Board list, Mobile read slice.
+ * Contract (ENDPOINTS.md §20): GET /api/v1/job-board?limit&offset →
+ * `200 { data: JobBoardItem[], total, limit, offset }` + `Cache-Control: no-store`.
+ * Scope = ACTIVE-membership (ADMIN unrestricted); membership rỗng → 200 empty
+ * (KHÔNG 403); query key lạ bị ignore; item KHÔNG có `createdBy` (no-PII).
+ * Error mapping mirror `toProjectError`: 401 → expired-session copy,
+ * 403 → generic copy, network → kết nối fallback (LoginError status 0).
+ */
+export type JobBoardState = 'AVAILABLE' | 'ASSIGNED' | 'EXPIRED' | 'SCHEDULED' | 'CLOSED';
+
+export interface JobBoardItem {
+  id: string;
+  code: string;
+  title: string;
+  projectId: string;
+  projectName?: string | null;
+  areaId: string | null;
+  areaName?: string | null;
+  workTypeId: string;
+  workTypeName?: string | null;
+  requiredTradeId: string | null;
+  requiredTradeName?: string | null;
+  priority: string;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  plannedHeadcount: number | null;
+  version: number;
+  jobBoard: {
+    open: boolean;
+    openFrom: string | null;
+    openUntil: string | null;
+    state: JobBoardState;
+  };
+}
+
+export interface JobBoardPage {
+  data: JobBoardItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FetchJobBoardParams {
+  /** Server giới hạn 1–100 (mặc định 20). */
+  limit?: number;
+  offset?: number;
+}
+
+function toJobBoardError(status: number, body: unknown, fallback: string): LoginError {
+  const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const serverMessage = typeof b.message === 'string' ? b.message : undefined;
+  const code = typeof b.code === 'string' ? b.code : undefined;
+  // F006 (#45): trích body.fieldErrors → arg 4 của LoginError để screen
+  // render nguyên nhân per-field (server trả { statusCode, message, fieldErrors }).
+  const rawFieldErrors = b.fieldErrors;
+  const fieldErrors =
+    rawFieldErrors && typeof rawFieldErrors === 'object' && !Array.isArray(rawFieldErrors)
+      ? (rawFieldErrors as Record<string, string[]>)
+      : undefined;
+  const copy: Record<number, string> = {
+    401: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+    // 403 defensive-unreachable trên path này (server: membership rỗng → 200
+    // empty, không 403) — giữ copy làm #46-forward-compat (filter projectId
+    // thêm 403-generic ở #46).
+    403: 'Bạn không có quyền xem bảng việc',
+  };
+  return new LoginError(serverMessage ?? copy[status] ?? fallback, status, code, fieldErrors);
+}
+
+export async function fetchJobBoard(token: string, params: FetchJobBoardParams = {}): Promise<JobBoardPage> {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  const query = qs.toString();
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/job-board${query ? `?${query}` : ''}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      // Never serve a cached board — availability changes on every claim.
+      cache: 'no-store',
+    });
+  } catch {
+    throw new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok) {
+    const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    if (Array.isArray(b.data) && typeof b.total === 'number') {
+      return {
+        data: b.data as JobBoardItem[],
+        total: b.total,
+        limit: typeof b.limit === 'number' ? b.limit : (params.limit ?? 20),
+        offset: typeof b.offset === 'number' ? b.offset : (params.offset ?? 0),
+      };
+    }
+    throw new LoginError('Phản hồi bảng việc không hợp lệ', 500);
+  }
+  throw toJobBoardError(res.status, body, `Tải bảng việc thất bại (${res.status})`);
+}
+
+/**
+ * JOB-SRS-005 (issue #45) — preview read-only tối thiểu (BD7): tái dùng
+ * endpoint có sẵn `GET /api/v1/work-orders/:id` (WORKER ACTIVE member được đọc —
+ * ENDPOINTS §17). Shape lỏng: chỉ các field preview cần + `jobBoard.state`
+ * optional (list `GET /work-orders` không enrich — chỉ `GET :id` có).
+ */
+export interface WorkOrderPreview {
+  id: string;
+  code: string;
+  title: string;
+  projectId: string;
+  projectName?: string | null;
+  status: string;
+  priority: string;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  version: number;
+  jobBoard?: {
+    open: boolean;
+    openFrom: string | null;
+    openUntil: string | null;
+    state: JobBoardState;
+    hasActiveAssignment?: boolean;
+  } | null;
+}
+
+export async function fetchWorkOrderPreview(token: string, id: string): Promise<WorkOrderPreview> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/work-orders/${encodeURIComponent(id)}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body && typeof body === 'object') return body as WorkOrderPreview;
+  throw toJobBoardError(res.status, body, `Tải chi tiết công việc thất bại (${res.status})`);
+}
+
 export async function listProjectMembers(token: string, projectId: string): Promise<ProjectMember[]> {
   const res = await fetch(`${API_URL}/api/v1/projects/${encodeURIComponent(projectId)}/members`, {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },

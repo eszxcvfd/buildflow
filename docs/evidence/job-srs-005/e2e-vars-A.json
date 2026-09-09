@@ -1,0 +1,74 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "digits": "254859",
+  "workOrderIds": {
+    "AVAIL": "4ab6cc4f-0e24-4826-8585-df42697da5fb",
+    "ASSIGN": "8b4e9d91-133f-4773-a6cb-feb71c3090dd",
+    "FUTURE": "81a49fe6-6425-45d6-a4f1-b32738aac53d",
+    "EXPIRED": "0905d760-a7ed-4003-bb41-e497f93a05e7",
+    "OUTSCOPE": "560a5793-4a2c-4305-af86-64834868fa24"
+  },
+  "workOrderCodes": {
+    "AVAIL": "WO-MTU1RTWOKX12",
+    "ASSIGN": "WO-MTU1RTXWIPXB",
+    "FUTURE": "WO-MTU1RTZ0SIHC",
+    "EXPIRED": "WO-MTU1RU066CI2",
+    "OUTSCOPE": "WO-MTU1RU15D3FZ"
+  },
+  "auditBefore": "4035",
+  "notifBefore": "0",
+  "auditAfterReads": "4045",
+  "notifAfterReads": "0",
+  "auditFinal": "4046",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S0",
+      "name": "login PM/worker qua API thật + baseline audit/notification",
+      "ok": true,
+      "note": "PM+worker login OK, audit=4035 notif=0"
+    },
+    {
+      "id": "S1",
+      "name": "PM tạo 5 WO demo + mở board (API thật)",
+      "ok": true,
+      "note": "5 WO mở board; excerpt:\nOPEN|t|t|t\nOPEN|t|t|f\nOPEN|t|t|f\nOPEN|t|t|f"
+    },
+    {
+      "id": "S2",
+      "name": "worker thấy đúng WO AVAIL, 4 WO kia vắng mặt + shape BD6",
+      "ok": true,
+      "note": "AVAIL hiện, 4 loại trừ vắng; total=5; DB:\nWO-MTU1RTWOKX12|OPEN|t\nWO-MTU1RTXWIPXB|OPEN|t\nWO-MTU1RTZ0SIHC|OPEN|t\nWO-MTU1RU066CI2|OPEN|t\nassign:\n8b4e9d91-133f-4773-a6cb-feb71c3090dd|PENDING_ACCEPTANCE"
+    },
+    {
+      "id": "S3",
+      "name": "anon 401 / PM thấy OUTSCOPE (scope isolation) / 400 limit / unknown key ignore",
+      "ok": true,
+      "note": "401/scope-isolation/400-fieldErrors/200-ignore đúng; pm total=6"
+    },
+    {
+      "id": "S4",
+      "name": "3 GET liên tiếp: audit/notification delta = 0 (AC7)",
+      "ok": true,
+      "note": "delta audit=0 notif=0 (4045→4045, 0→0)"
+    },
+    {
+      "id": "S5",
+      "name": "seed assignment cho AVAIL → worker refresh → item biến, total giảm",
+      "ok": true,
+      "note": "AVAIL biến khỏi list, total 5→4 (claim mô phỏng ở DB — claim write là #47)"
+    },
+    {
+      "id": "S6",
+      "name": "Expo UI login → profile → job board (screenshots)",
+      "ok": true,
+      "note": "Expo UI login→profile→job board OK, không chữ \"Nhận việc\""
+    },
+    {
+      "id": "S7",
+      "name": "cleanup demo theo id + verify rest=0",
+      "ok": true,
+      "note": "WO rest=0, audit rows=4046"
+    }
+  ]
+}

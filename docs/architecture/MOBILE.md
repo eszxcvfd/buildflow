@@ -57,6 +57,8 @@ Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): `forgot-password`/`re
 
 Màn hình điều kiện nhận việc (ORG-SRS-008, issue #31): route `app/eligibility.tsx` (token gate qua session đã lưu; chưa đăng nhập → gợi ý đăng nhập) render feature `src/features/eligibility/EligibilityScreen.tsx`. Screen gọi typed client `fetchMyEligibility` → `GET /api/v1/eligibility/me`, hiển thị verdict banner (`Đủ điều kiện` / `Chưa đủ điều kiện`) + `checkedAt` + mã đối chiếu (`correlationId`), danh sách condition (`ĐẠT` / `KHÔNG ĐẠT` / `KHÔNG ĐÁNH GIÁ ĐƯỢC` cho `passed` true/false/null) và tư cách thành viên `crews[]` (mã đội · tên · vai trò · hiệu lực). Trạng thái: loading (`ActivityIndicator`), error + `Thử lại`, 404 `RESOURCE_NOT_FOUND` → empty `Tài khoản không có hồ sơ worker`, 401 → gợi ý đăng nhập lại; nút `Kiểm tra lại` re-fetch (stale → force refresh, không blind submit). Entry point: nút `Xem điều kiện nhận việc` trên `ProfileScreen` → `router.push('/eligibility')`. Mobile không suy luận eligibility cục bộ — mọi đánh giá do API trả về.
 
+Màn hình bảng việc (JOB-SRS-005, issue #45): route `app/job-board/index.tsx` (token gate qua session đã lưu, mirror `app/projects/index.tsx`) render feature `src/features/job-board/JobBoardScreen.tsx`; chi tiết `app/job-board/[id].tsx` render `WorkOrderPreviewScreen` mỏng. Screen gọi typed client `fetchJobBoard` → `GET /api/v1/job-board?limit&offset` (contract: [`ENDPOINTS.md §20`](ENDPOINTS.md); envelope `{ data, total, limit, offset }`, `cache: 'no-store'`), card hiển thị code/title/projectName/workTypeName/areaName/requiredTradeName/priority/planned times/window + state badge + CTA `Xem chi tiết` → `/job-board/[id]`; **không render chữ `Nhận việc` trong mọi state** (claim là #47). Preview gọi `fetchWorkOrderPreview` → `GET /api/v1/work-orders/:id` (WORKER được đọc), `state ≠ 'AVAILABLE'` → banner trạng thái, không action. Trạng thái: loading, empty (`Chưa có việc nào đang nhận — kéo xuống để làm mới`), error + `Thử lại`, 401 → đăng nhập lại, 403 defensive-unreachable (server không trả 403 trên path này — membership rỗng → 200 empty; nhánh UI giữ làm #46-forward-compat khi filter `projectId` thêm 403-generic); FlatList + `RefreshControl` pull-to-refresh (reset offset 0) + `onEndReached`/`Tải thêm` pagination (dừng khi loaded === total). Entry point: nút `Bảng việc` trên `ProfileScreen` → `router.push('/job-board')`. Filter theo loại/kỹ năng/khu vực thuộc #46 (deviation BD9).
+
 ## 3. Dependency rules
 
 - Mobile chỉ gọi API qua typed client/adapter; không truy cập database hoặc NestJS source.
@@ -125,7 +127,17 @@ Với mobile ít dùng, proof ưu tiên typecheck/lint và một critical-path d
 
 ## 8. Checklist thêm screen
 
-- [ ] Route thuộc group nào và deep link là gì?
+> **Đã tick cho Job Board (JOB-SRS-005, issue #45):** route `app/job-board/index.tsx` +
+> `app/job-board/[id].tsx` (deep link `/job-board`, `/job-board/:id`; `Stack.Screen`
+> title `Bảng việc`/`Chi tiết việc`); feature public interface tách khỏi route
+> (`JobBoardScreen`/`JobBoardCard`/`WorkOrderPreviewScreen` nhận `token` qua props);
+> đủ states loading/empty/error/retry/401 + 403 defensive-unreachable (#46-forward-compat) + pull-to-refresh + pagination;
+> API model/client theo contract hiện hành ([`ENDPOINTS.md §20`](ENDPOINTS.md));
+> không native dependency mới (chỉ RN primitives); a11y label mọi control;
+> proof route qua [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md) (mobile consumer,
+> contract producer là API — cùng change).
+
+- [x] Route thuộc group nào và deep link là gì?
 - [ ] Feature public interface đã tách khỏi route chưa?
 - [ ] Loading, empty, error, retry, offline và session-expired state đã có chưa?
 - [ ] API model/client là generated/current contract chưa?

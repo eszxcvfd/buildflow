@@ -58,6 +58,23 @@ export interface WorkOrderFilter {
   offset?: number;
 }
 
+/**
+ * JOB-SRS-005 (issue #45) — filter cho `GET /api/v1/job-board` (BD1/BD2/BD5):
+ * scope-first qua `projectIds` (ADMIN → `undefined` = unrestricted;
+ * membership rỗng → caller early-return, không query); offset pagination
+ * (`limit` clamp 1-100 ở repo, `offset` ≥0 — controller đã 400 trước);
+ * `now` capture MỘT lần trong use case, dùng chung cho SQL window lẫn
+ * `deriveJobBoardState` (BD5). KHÔNG có `projectId`/`status`/`search`
+ * (filter là #46 — endpoint cấm filter param, BD2).
+ */
+export interface JobBoardFilter {
+  /** Scope non-ADMIN (`w.project_id = ANY(...)`); `undefined` = ADMIN unrestricted. */
+  projectIds?: string[];
+  limit: number;
+  offset: number;
+  now: Date;
+}
+
 export interface WorkOrderRepositoryPort {
   findById(id: string): Promise<WorkOrderEntity | null>;
   /** Tra cứu theo code, case-insensitive (`lower(code) = lower($1)`). */
@@ -95,6 +112,14 @@ export interface WorkOrderRepositoryPort {
    */
   search(filter: WorkOrderFilter): Promise<{ entities: WorkOrderEntity[]; total: number }>;
   /**
+   * JOB-SRS-005 (issue #45) — list Job Board (`GET /api/v1/job-board`, BD5):
+   * WHERE server-side `status='OPEN' + board mở + trong window + NOT EXISTS
+   * assignment PENDING/ACTIVE + scope` + `COUNT` cùng WHERE + page
+   * (`ORDER BY updated_at DESC, id DESC` — tiebreak `id` deterministic, chỉ
+   * path job-board, không retrofit `search()` — BD1).
+   */
+  searchJobBoard?(filter: JobBoardFilter): Promise<{ entities: WorkOrderEntity[]; total: number }>;
+  /**
    * Batch refs hiển thị cho WO list: MỘT query cho mọi id
    * (`= ANY($1::uuid[])`), tránh N+1 — mirror prj `findWorkTypeRefs`.
    * Không lọc `is_active`. Ids rỗng → map rỗng.
@@ -102,6 +127,17 @@ export interface WorkOrderRepositoryPort {
   findWorkTypeRefs(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
   /** Như `findWorkTypeRefs` nhưng đọc `public.projects` (cột hiển thị `Dự án`). */
   findProjectRefs(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
+  /**
+   * JOB-SRS-005 (issue #45) — batch ref hiển thị cho Job Board card (BD6,
+   * mirror `findProjectRefs`): MỘT query `= ANY($1::uuid[])`, không lọc
+   * `is_active` (WO có thể tham chiếu area/trade đã ngừng mà card vẫn phải
+   * hiện tên thay vì uuid — bullet Must "location" + "skill summary").
+   * Đọc `public.project_areas` / `public.trades` (cột `id, code, name` có từ
+   * baseline 0001). Ids rỗng → map rỗng.
+   */
+  findAreaRefs?(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
+  /** Như `findAreaRefs` nhưng đọc `public.trades` (cột hiển thị `Ngành yêu cầu`). */
+  findTradeRefs?(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
   create(workOrder: WorkOrderEntity): Promise<void>;
   createWithClient?(client: PoolClient, workOrder: WorkOrderEntity): Promise<void>;
   /**
