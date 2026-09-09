@@ -4,8 +4,8 @@
  *
  * Pattern theo docs/evidence/job-srs-003 (playwright-core absolute path,
  * Chrome headless, creds @vinacons.vn, dữ liệu realistic ADR-0003 —
- * không E2E%/test% trong dữ liệu hiển thị; uniqueness bằng suffix digits;
- * cleanup theo id, audit giữ nguyên append-only).
+ * không E2E%/test%/digits trong dữ liệu hiển thị; uniqueness bằng WO code
+ * hệ thống tự sinh + id; cleanup theo id, audit giữ nguyên append-only).
  *
  * Chạy:   node e2e-driver-job-srs-004.cjs [label]
  *           (label optional: `A`/`B`… → vars ghi `e2e-vars-<label>.json`;
@@ -71,8 +71,15 @@ const WORKER = { email: 'thang.nguyen@vinacons.vn', pass: process.env.E2E_WORKER
 /** OUTSIDER non-member mọi project → 403 (thang.nguyen canonical bị LOCKED nên không login được). */
 const OUTSIDER = { email: 'ba.nguyen@vinacons.vn', pass: process.env.E2E_OUTSIDER_PASS ?? 'E2E5W3@2025' };
 
-const DIG = String(Date.now()).slice(-6);
-const TITLE = `Thi công dầm sàn tầng 3 khu KQ-01 ${DIG}`;
+const TITLE = 'Gia cố lan can sảnh chính tháp T1';
+const TITLE_S8 = 'Chống thấm seno mái khu thương mại tầng 2';
+const TITLE_S9 = 'Sơn dặm lan can hành lang tầng 2';
+const DESC_S0 = 'Gia cố lan can sảnh chính, bao gồm mài mối hàn, sơn chống gỉ và kiểm tra độ ổn định tay vịn.';
+const DESC_BUMP_S6 = 'Cập nhật tiến độ gia cố lan can để đồng bộ phiên bản hiển thị.';
+const DESC_S8 = 'Xử lý chống thấm seno mái, vệ sinh bề mặt và quét lớp lót trước khi phủ màng.';
+const DESC_S9 = 'Sơn dặm hoàn thiện lan can hành lang, che chắn mặt sàn trước khi thi công.';
+/** Hậu tố tên shot theo label run — shot mỗi run tên riêng, không đè history. */
+const SHOT_SUFFIX = LABEL ? `-${LABEL}` : '';
 
 const results = [];
 const ok = (id, note = '') => ({ id, ok: true, note });
@@ -91,8 +98,8 @@ async function runStep(id, name, fn) {
   }
 }
 async function snap(page, id, desc) {
-  await page.screenshot({ path: path.join(SHOTS, `${id}.png`), fullPage: false });
-  console.log(`  shot ${id}.png — ${desc}`);
+  await page.screenshot({ path: path.join(SHOTS, `${id}${SHOT_SUFFIX}.png`), fullPage: false });
+  console.log(`  shot ${id}${SHOT_SUFFIX}.png — ${desc}`);
 }
 function psqlT(sql) {
   try {
@@ -204,7 +211,7 @@ async function main() {
     const c = await api('POST', '/api/v1/work-orders', adminTok, {
       projectId: pra.id, workTypeId: btct.id, areaId: kq01.id,
       requiredTradeId: thocat.id,
-      title: TITLE, description: `Mô tả dầm sàn tầng 3 ${DIG}`,
+      title: TITLE, description: DESC_S0,
       plannedStartAt: '2026-10-06T01:00:00.000Z', plannedEndAt: '2026-10-10T10:00:00.000Z',
     });
     if (c.status !== 201) return fail(id, `POST create status=${c.status}: ${JSON.stringify(c.body)}`);
@@ -219,8 +226,8 @@ async function main() {
     await loginWeb(page, PM.email, PM.pass);
     // Shot loading: goto commit rồi chụp ngay (bắt trạng thái "Đang tải" nếu kịp).
     await page.goto(`${WEB}/work-orders/${woId}`, { waitUntil: 'commit' });
-    await page.screenshot({ path: path.join(SHOTS, 'S1-loading.png'), fullPage: false });
-    console.log('  shot S1-loading.png — trang detail ngay sau commit (loading nếu kịp)');
+    await page.screenshot({ path: path.join(SHOTS, `S1-loading${SHOT_SUFFIX}.png`), fullPage: false });
+    console.log(`  shot S1-loading${SHOT_SUFFIX}.png — trang detail ngay sau commit (loading nếu kịp)`);
     await page.waitForFunction((t) => document.body.textContent.includes(t), TITLE, { timeout: 25000 });
     let t = await bodyText(page);
     if (!t.includes('Đã đóng')) return fail(id, 'badge ban đầu kỳ vọng "Đã đóng"');
@@ -337,7 +344,7 @@ async function main() {
     await page.waitForFunction(() => document.body.textContent.includes('Đang nhận việc'), { timeout: 25000 });
     // Bump version qua API (PATCH description) → UI đang giữ version cũ.
     const bump = await api('PATCH', `/api/v1/work-orders/${woId}`, pmTok, {
-      description: `Bump làm cũ UI ${DIG}`,
+      description: DESC_BUMP_S6,
     });
     if (bump.status !== 200) return fail(id, `bump status=${bump.status}: ${JSON.stringify(bump.body)}`);
     ver = unwrap(bump.body).version;
@@ -378,7 +385,7 @@ async function main() {
     const c = await api('POST', '/api/v1/work-orders', pmTok, {
       projectId: pra.id, workTypeId: btct.id, areaId: kq01.id,
       requiredTradeId: thocat.id,
-      title: `${TITLE} S8`, description: `AC3 real-DB ${DIG}`,
+      title: TITLE_S8, description: DESC_S8,
       plannedStartAt: '2026-10-06T01:00:00.000Z', plannedEndAt: '2026-10-10T10:00:00.000Z',
     });
     if (c.status !== 201) return fail(id, `POST create status=${c.status}: ${JSON.stringify(c.body)}`);
@@ -423,7 +430,7 @@ async function main() {
     const c = await api('POST', '/api/v1/work-orders', pmTok, {
       projectId: pra.id, workTypeId: btct.id, areaId: kq01.id,
       requiredTradeId: thocat.id,
-      title: `${TITLE} S9`, description: `AC4 real-DB ${DIG}`,
+      title: TITLE_S9, description: DESC_S9,
       plannedStartAt: '2026-10-06T01:00:00.000Z', plannedEndAt: '2026-10-10T10:00:00.000Z',
     });
     if (c.status !== 201) return fail(id, `POST create status=${c.status}: ${JSON.stringify(c.body)}`);
@@ -459,12 +466,13 @@ async function main() {
     psqlT(`DELETE FROM work_order_state_history WHERE work_order_id='${woId}';`);
     psqlT(`DELETE FROM work_orders WHERE id='${woId}';`);
   }
-  const rest = psqlT(`SELECT count(*) FROM work_orders WHERE title LIKE '%${DIG}%';`);
+  const rest = psqlT(`SELECT count(*) FROM work_orders WHERE id='${woId}';`);
   const auditFinal = psqlT(`SELECT count(*) FROM audit_logs WHERE entity_id='${woId}';`);
   const vars = {
     _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
-    digits: DIG,
+    runLabel: LABEL || null,
     title: TITLE,
+    titlesS8S9: [TITLE_S8, TITLE_S9],
     workOrderId: woId,
     workOrderCode: woCode,
     praId: pra ? pra.id : null,
@@ -475,7 +483,7 @@ async function main() {
   fs.writeFileSync(VARS_PATH, `${JSON.stringify(vars, null, 2)}\n`);
 
   const passed = results.filter((r) => r.ok).length;
-  console.log(`\nTỔNG: ${passed}/${results.length} PASS (digits=${DIG}, code=${woCode}, cleanup WO rest=${rest.trim()}, audit rows=${(auditFinal || '').trim()})`);
+  console.log(`\nTỔNG: ${passed}/${results.length} PASS (label=${LABEL || '-'}, code=${woCode}, cleanup WO rest=${rest.trim()}, audit rows=${(auditFinal || '').trim()})`);
   if (passed !== results.length || rest.trim() !== '0') process.exitCode = 1;
 }
 

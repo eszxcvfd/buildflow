@@ -121,3 +121,53 @@ Bảng dưới ghi kết quả run B; run A-refresh và run C đồng nhất 8/8
    tránh phụ thuộc validation window của #44) — open vẫn 100% API thật.
 4. `total=5` thay vì 1 do 4 WO nhiễu `Dbg 503` có sẵn — assert set-inclusion, không
    assert total tuyệt đối; không xoá dữ liệu người khác.
+
+## 7. Rerun trên dữ liệu vận hành seed (commit eac744f) — 2026-09-09 UTC
+
+> Run `R1`: **8/8 PASS**, `rest=0`, trên DB sau cleanup+seed (`eac744f`).
+> Artifacts: `run-R1.stdout.log` + `e2e-vars-R1.json` (`.log` gitignored — artifact
+> local, xem F017 §đầu file); shots mới tên `-R1` (shots cũ giữ nguyên).
+> Không sửa các mục lịch sử §§1–6. Fixtures UUID (:73-79) giữ nguyên.
+
+**Driver đã sửa** (`e2e-driver-job-srs-005.cjs` — diff pattern cũ → mới):
+
+| Vị trí cũ | Trước | Sau |
+|---|---|---|
+| title S1 (:159) | `` `Sửa chữa mặt bằng ${kind} ${DIG}` `` (kind-code + 6 digits trong title) | `TITLE_BY_KIND` — mỗi kind một nội dung tiếng Việt riêng, không digits: AVAIL `Trát tường khu thương mại tầng 2`, ASSIGN `Cán nền sảnh chính tầng 1`, FUTURE `Sơn lót tường khu thương mại tầng 2`, EXPIRED `Xây tường ngăn khu thương mại tầng 2`, OUTSCOPE `Trát tường căn hộ mẫu block A tầng 3` |
+| rest-check S7 | đã id-based (`WHERE id IN (…)`) — giữ nguyên | giữ nguyên |
+| shots S6 | tên cố định (đè run trước) | hậu tố `-${LABEL}` → `…-R1.png` |
+| uniqueness | suffix digits | WO code hệ thống tự sinh + id (assert S2/S5 theo code/total, S7 theo id) |
+
+S5 (total giảm đúng 1) + S7 (rest=0) + assert semantics giữ nguyên.
+
+**Kết quả run R1** (log `run-R1.stdout.log`, ids/codes `e2e-vars-R1.json`):
+
+| # | Bước | Kết quả |
+|---|---|---|
+| S0 | Login PM + worker + baseline | 🟢 `PM+worker login OK`, `audit=4097 notif=5` |
+| S1 | PM tạo 5 WO + mở board | 🟢 5× `publish-check.ready=true` + open 200; FUTURE/EXPIRED chỉnh window psql; seed assignment `USER/SELF_ACCEPT/PENDING_ACCEPTANCE` |
+| S2 | Worker list đúng tập + shape + pagination | 🟢 `total=1` (chỉ AVAIL; 4 demo kia vắng; seed WO board ĐÓNG + ngoài scope nên không nhiễu — khác run cũ `total=5` thời còn rác `Dbg`, assert set-inclusion theo code không đổi) |
+| S3 | anon 401 / scope isolation / 400 / unknown key | 🟢 PM `total=2` chứa OUTSCOPE PRB |
+| S4 | AC7: 3 GET, delta = 0 | 🟢 `audit 4107→4107, notif 5→5` |
+| S5 | Seed assignment AVAIL → refresh → item biến | 🟢 `total 1→0` (giảm đúng 1; claim mô phỏng ở DB — claim write là #47) |
+| S6 | Expo UI login → profile → job board | 🟢 không chữ "Nhận việc" |
+| S7 | Cleanup id-based | 🟢 `WO rest=0`, audit giữ `4108` rows |
+
+- **rest=0**: `SELECT count(*) FROM work_orders WHERE id IN (5 ids)` → `0`; verify thêm
+  0 WO tồn dư mang 8 tiêu đề realistic mới + query `title ~ '[0-9]{6,}'` của
+  `docs/demo-data.md` §8 trả 0 dòng.
+- **Audit delta**: `audit_logs` `4095` → `4108` (**+13**, nguồn: `docker exec
+  buildflow-postgres-1 psql -U buildflow -d buildflow -t -A -c "SELECT count(*) FROM
+  audit_logs;"` trước/sau run).
+- **Shots mới** (`shots/`, không đè cũ): `S6-login-R1.png`, `S6-logged-in-R1.png`,
+  `S6-profile-R1.png`, `S6-job-board-R1.png`.
+- **User dùng**: giữ `ba.nguyen@vinacons.vn` (ACTIVE, QC member PRA — đúng viewer PRA
+  cho S2/S4/S5/S6; không cần outsider login). Đã kiểm tra user seed mới: `lan.tran`/
+  `hung.vo` chỉ member PRT → worker PRT không thấy WO PRA (scope isolation) nên không
+  thay thế được viewer PRA; `son.nguyen` là MANAGER PRT. Kết luận: giữ canonical,
+  không đoán password.
+
+**Ghi nhận va chạm seed (không phải bug):** S2 `total=1` thay vì `total=5` như run cũ —
+do cleanup `eac744f` đã xóa 4 WO rác `Dbg 503` (đúng kỳ vọng seed); assert theo
+set-inclusion code demo + S5 delta tuyệt đối −1 nên không cần chỉnh driver. S3 PM
+`total=2` (thay vì 6) với cùng lý do. Không quay lại token giả.

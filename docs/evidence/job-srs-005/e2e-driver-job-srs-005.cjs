@@ -4,8 +4,8 @@
  *
  * Pattern theo docs/evidence/job-srs-004 (playwright-core absolute path,
  * Chrome headless, creds @vinacons.vn, dữ liệu realistic —
- * không E2E%/test% trong dữ liệu hiển thị; uniqueness bằng suffix digits;
- * cleanup theo id, audit giữ nguyên append-only).
+ * không E2E%/test%/digits trong dữ liệu hiển thị; uniqueness bằng WO code
+ * hệ thống tự sinh + id; cleanup theo id, audit giữ nguyên append-only).
  *
  * Chạy:   node e2e-driver-job-srs-005.cjs [label]
  *           (label optional: `A`/`B`… → vars ghi `e2e-vars-<label>.json`;
@@ -69,7 +69,14 @@ const VARS_PATH = path.join(__dirname, LABEL ? `e2e-vars-${LABEL}.json` : 'e2e-v
 const PM = { email: 'quoc.tran@vinacons.vn', pass: process.env.E2E_PM_PASS ?? 'E2EPm@2025' };
 const WORKER = { email: 'ba.nguyen@vinacons.vn', pass: process.env.E2E_WORKER_PASS ?? 'E2E5W3@2025' };
 
-const DIG = String(Date.now()).slice(-6);
+/** Tiêu đề realistic riêng từng kind — không digits, phân biệt bằng nội dung. */
+const TITLE_BY_KIND = {
+  AVAIL: 'Trát tường khu thương mại tầng 2',
+  ASSIGN: 'Cán nền sảnh chính tầng 1',
+  FUTURE: 'Sơn lót tường khu thương mại tầng 2',
+  EXPIRED: 'Xây tường ngăn khu thương mại tầng 2',
+  OUTSCOPE: 'Trát tường căn hộ mẫu block A tầng 3',
+};
 const PRA = '10000000-0000-4000-8000-000000000001';
 const PRB = '10000000-0000-4000-8000-000000000002';
 const AREA_KQ01 = '589c0681-eec2-4a25-ac39-f91f866d507e';
@@ -123,7 +130,8 @@ async function api(method, urlPath, token, body, noCorr) {
 
 const vars = {
   _note: 'Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.',
-  digits: DIG,
+  runLabel: LABEL || null,
+  titles: { ...TITLE_BY_KIND },
   workOrderIds: {},
   workOrderCodes: {},
 };
@@ -156,7 +164,7 @@ async function main() {
       { kind: 'OUTSCOPE', projectId: PRB, areaId: AREA_GAA03 },
     ];
     for (const { kind, projectId, areaId } of specs) {
-      const title = `Sửa chữa mặt bằng ${kind} ${DIG}`;
+      const title = TITLE_BY_KIND[kind];
       const create = await api('POST', '/api/v1/work-orders', pmTok, {
         projectId, workTypeId: WT_BTCT, title, areaId,
         requiredTradeId: TRADE_THOCAT, plannedStartAt: '2026-10-06T01:00:00.000Z',
@@ -261,8 +269,8 @@ async function main() {
     try {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
       const shot = async (id, desc) => {
-        await page.screenshot({ path: path.join(SHOTS, `${id}.png`) });
-        console.log(`  shot ${id}.png — ${desc}`);
+        await page.screenshot({ path: path.join(SHOTS, `${id}${LABEL ? `-${LABEL}` : ''}.png`) });
+        console.log(`  shot ${id}${LABEL ? `-${LABEL}` : ''}.png — ${desc}`);
       };
       await page.goto(MOBILE, { waitUntil: 'networkidle', timeout: 60000 });
       await page.getByLabel('email input').fill(WORKER.email);
@@ -302,7 +310,7 @@ async function main() {
 
   fs.writeFileSync(VARS_PATH, JSON.stringify({ ...vars, results }, null, 2));
   const passed = results.filter((r) => r.ok).length;
-  console.log(`\nTỔNG: ${passed}/${results.length} PASS (digits=${DIG}, cleanup WO rest=${vars.rest || '?'}, audit rows=${vars.auditFinal || '?'})`);
+  console.log(`\nTỔNG: ${passed}/${results.length} PASS (label=${LABEL || '-'}, cleanup WO rest=${vars.rest || '?'}, audit rows=${vars.auditFinal || '?'})`);
   if (passed !== results.length) process.exitCode = 1;
 }
 

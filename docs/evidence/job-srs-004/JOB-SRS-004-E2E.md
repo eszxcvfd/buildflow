@@ -155,3 +155,67 @@ S9 (AC4 real-DB) in `statuses`, `db row`, `auditOPENED`:
 statuses: 200,200 alreadyOpen: undefined,true
 db row: OPEN|true|2 auditOPENED: 1
 ```
+
+## 9. Rerun trên dữ liệu vận hành seed (commit eac744f) — 2026-09-09 UTC
+
+> Run `R1`: **10/10 PASS**, `rest=0`, trên DB sau cleanup+seed (`eac744f`).
+> Artifacts: `run-R1.stdout.log` + `e2e-vars-R1.json` (`.log` bị root `.gitignore`
+> rule `*.log` chặn nên là artifact local không commit — cùng precedent các run
+> trước); shots mới tên `-R1` (shots cũ giữ nguyên).
+> Không sửa các mục lịch sử §§1–8.
+
+**Driver đã sửa** (`e2e-driver-job-srs-004.cjs` — diff pattern cũ → mới):
+
+| Vị trí cũ | Trước | Sau |
+|---|---|---|
+| `TITLE` (:74-75) | `Thi công dầm sàn tầng 3 khu KQ-01 ${DIG}` (6 digits trong title hiển thị) | `Gia cố lan can sảnh chính tháp T1` (tiếng Việt thực tế, không digits) |
+| descriptions S0/S6/S8/S9 (:207,340,381,426) | `… ${DIG}` / `Bump làm cũ UI …` / `AC3/AC4 real-DB …` | nội dung nghiệp vụ tiếng Việt (`DESC_S0`, `DESC_BUMP_S6`, `DESC_S8`, `DESC_S9`); S8/S9 dùng tiêu đề riêng (`TITLE_S8` chống thấm seno mái, `TITLE_S9` sơn dặm lan can) thay vì `${TITLE} S8/S9` |
+| rest-check (:462) | `WHERE title LIKE '%${DIG}%'` | `WHERE id='<woId>'` (theo id; cleanup vốn đã by id) |
+| shots | tên cố định (đè run trước) | hậu tố `-${LABEL}` → `…-R1.png` |
+| uniqueness | suffix digits | WO code hệ thống tự sinh (`generateWorkOrderCode`, đã kiểm tra: driver không gửi `code`, server sinh `WO-…` unique — run này `WO-MTUAHE8JS0CY`) + id |
+
+10 step + assert semantics giữ nguyên.
+
+**Kết quả run R1** (WO `WO-MTUAHE8JS0CY`, id `717d851e-…`, log `run-R1.stdout.log`,
+ids `e2e-vars-R1.json`):
+
+| # | Bước | Kết quả |
+|---|---|---|
+| S0 | Setup WO DRAFT đủ readiness | 🟢 `publish-check.ready=true`, version 1 |
+| S1 | PM mở qua UI → badge AVAILABLE | 🟢 `200 OPEN+AVAILABLE`, version 1→2, `audit OPENED=1`, `history=1`, DB `true\|OPEN\|2` |
+| S2 | Double-submit → alreadyOpen | 🟢 version giữ 2, audit OPENED vẫn 1 |
+| S3 | Đóng qua UI → badge CLOSED | 🟢 `200 READY+CLOSED`, DB `false\|READY\|3`, `audit CLOSED=1` |
+| S4 | Double-close → alreadyClosed | 🟢 audit CLOSED vẫn 1 |
+| S5 | QC member: UI không nút + API 403 | 🟢 open+close API → 403 |
+| S6 | 409 conflict UI → notice + Tải lại | 🟢 reload về AVAILABLE (version 5) |
+| S7 | Validation until ≤ from | 🟢 lỗi đúng input, không gọi API |
+| S8 | AC3: close giữ assignment nguyên trạng | 🟢 before == after (4 cột) |
+| S9 | AC4: concurrent open → 1 winner | 🟢 `200+200`, DB `OPEN\|true\|2`, `audit=1` |
+
+- **rest=0**: `SELECT count(*) FROM work_orders WHERE id='<woId>'` → `0` (S8/S9 dọn inline
+  theo id như trước).
+- **Audit delta**: `audit_logs` `4063` → `4095` (**+32**, nguồn: `docker exec
+  buildflow-postgres-1 psql -U buildflow -d buildflow -t -A -c "SELECT count(*) FROM
+  audit_logs;"` trước/sau run; baseline 4063 đã gồm 4 login verify sau khi sửa port —
+  xem sự cố môi trường dưới). Entity-scoped WO run: 6 rows (`auditRows=6` trong
+  `e2e-vars-R1.json`).
+- **Shots mới** (`shots/`, không đè cũ): `S1-loading-R1.png`, `S1-dialog-filled-R1.png`,
+  `S1-opened-R1.png`, `S3-close-confirm-R1.png`, `S3-closed-R1.png`, `S5-no-buttons-R1.png`,
+  `S6-conflict-R1.png`, `S7-validation-R1.png`.
+- **User dùng**: giữ `ba.nguyen@vinacons.vn` (ACTIVE, QC member PRA — đúng role
+  non-write cần cho assert 403 S5; password demo `E2E5W3@2025` dùng được, không đoán).
+  Đã kiểm tra 4 user seed mới (`son/lan/hung/phuc`, `Vinacons@2026`): `lan.tran`/
+  `hung.vo` là WORKER **chỉ member PRT** — sai scope cho kịch bản PRA (S5 cần member
+  PRA không write-role; S2/S6-005 cần viewer PRA) nên không chọn; ghi nhận để tránh
+  đoán password trong tương lai.
+
+**Sự cố môi trường khi rerun (không phải bug driver/seed, đã xử lý):** lần chạy R1 đầu
+tiên FATAL ở login `ba.nguyen` 401 — điều tra thấy host port `3000` đang bị một stack
+shadow cũ (root daemon docker, network `172.21.0.x`, không phải stack Desktop của repo)
+chiếm: API shadow thiếu PRD/PRT, không có user seed, hash cũ → mọi bằng chứng qua
+`localhost:3000` lúc đó đều trỏ nhầm DB. Đã `docker stop buildflow-api-1` (root daemon,
+chỉ stop — giữ data, không đụng `fsm-*`) rồi `docker compose up -d --force-recreate
+--no-build api` (Desktop, **không rebuild**) để lấy lại port; verify `lan.tran` login
+200 + `/projects` đủ 5 code rồi mới rerun R1 thành công. Rủi ro còn lại: root daemon vẫn
+giữ host `5432/6379` (postgres/redis cũ) — script host-side nào dùng `localhost:5432`
+sẽ đọc nhầm DB cũ; evidence trong repo dùng `docker exec` (Desktop daemon) nên đúng.
