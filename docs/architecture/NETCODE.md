@@ -86,6 +86,8 @@ Không retry mù mutation; không log token, credential, PII hoặc raw request 
 
 > JOB-SRS-006 (#46) — xác nhận NETCODE no-op: hai GET job-board (list + `filter-options`) giữ nguyên auth JWT + error shape `{ statusCode, message, fieldErrors }` + `no-store`, không đổi transport/auth/versioning.
 
+> JOB-SRS-007 (#47) — xác nhận NETCODE no-op: `GET /api/v1/job-board/:id` additive-only (route mới, không đổi route/method/auth hiện có), giữ nguyên auth JWT + error shape (`{ statusCode, message, code, fieldErrors? }` cho 409 `JOB_BOARD_CONFIG_INVALID`; `400` stock Nest cho id sai UUID) + `no-store` trên 200, không đổi transport/auth/versioning.
+
 ## 6. Contract change procedure
 
 1. Owner API mô tả use case và schema trong `API.md`/OpenAPI.

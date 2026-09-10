@@ -561,3 +561,64 @@ Worker lọc Job Board theo ngày, dự án, khu vực, loại công việc, k�
 - **BD18 — Audit/notification không có (BD8 parity):** cả hai GET read-only — e2e assert delta audit = 0 sau N GET có filter (AC7 trung thực: slice read-only).
 - **Test contract:** `src/api/test/job-board-filters.e2e.spec.ts` (IN-MEMORY — header trung thực, KHÔNG phải real-DB proof: F1a date overlap + NULL-planned loại / F1b projectId / F1c areaId đơn+lặp / F1d workTypeId đơn+lặp / F1e skill=mine khớp-loại / F1f kết hợp 5 chiều = giao tập đơn / F1g clear = baseline / F2a naive 400 + message múi giờ / F2b from>to 400 2 field / F2c projectId P2 → 403 / F2d skill không-trade → 200 empty / F2e UUID không-tồn-tại → 200 empty / F3 assignment chen → filtered total giảm / F4 page trên filtered + unknown-key ignore / F5 anon 401 + outsider empty (list + options) + PRA không thấy PRB dù gửi mọi filter + ADMIN thấy tất cả / F7 audit delta 0) + unit policy (offset Z/±hh:mm/±hhmm/naive/number/`''`/uuid/skill/from>to) + unit use-cases (403 scope tree, skill-empty, fail-closed, options enrich/empty) + controller spec (400 từng field + 2-field + `''`=absent + forward + options shape + 403 propagate) + PG adapter spec qua pool mock (5 predicate AND + COUNT cùng WHERE + sort giữ + DISTINCT options + trade query mirror org :43).
 - **Không migration mới:** cột `project_id`/`area_id`/`work_type_id`/`required_trade_id`/`planned_start_at`/`planned_end_at` + `resource_trades` + index có sẵn từ baseline 0001.
+
+## 20.2. Job Board detail — JOB-SRS-007 (#47) bounded decisions
+
+Worker mở detail một công việc còn trống từ Job Board, thấy đủ thông tin hiện hành để quyết định tự nhận việc. API slice trong module `job` hiện có (policy thuần mới `job-board-detail.policy.ts` + 3 optional port method + PG adapter + use case mới `GetJobBoardDetailUseCase` + `@Get(':id')` trên `JobBoardController` hiện có + mapper mới `toJobBoardDetailResponse`; không migration mới — `description`/`instructions`/`custom_fields` (0011) + `work_types.required_fields`/`work_type_group`/`config_version` (0007) + `checklist_templates`/`checklist_template_items` + index `(work_type_id, purpose, status)` đã có từ baseline 0001). Closest precedent: `GET /api/v1/work-orders/:id` (§17) về scope-first/anti-leak/`no-store`; list `GET /job-board` (§20) về PII omission/`now` capture/batch refs.
+
+| Method | Path | Auth | Response | Lỗi |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/job-board/:id` | JWT + project read-scope của project chứa WO (mọi ACTIVE member kể cả WORKER; ADMIN bypass) | `200` Job Board detail (shape dưới) + header `Cache-Control: no-store` | `401` anon; `403` generic ngoài scope (**kể cả id không tồn tại** — anti-leak parity §17); `404` ADMIN + id missing; `400` stock Nest khi id sai UUID (pipe-level, trước use-case); `409 { code: 'JOB_BOARD_CONFIG_INVALID' }` khi work-type ref lỗi (withheld toàn bộ detail); `500` fail-closed khi port wiring thiếu |
+
+Response `200` (§3.1 plan — contract cho mobile lane):
+
+```jsonc
+{
+  "id","code","title","status","priority",
+  "projectId","projectName",
+  "areaId","areaName",
+  "workTypeId","workTypeName","workTypeDescription","workTypeRequiredFields","workTypeGroup",
+  "requiredTradeId","requiredTradeName",
+  "plannedStartAt","plannedEndAt","dueAt","plannedHeadcount",
+  "jobBoard": { "open","openFrom","openUntil","state" },  // deriveJobBoardState với now capture 1 lần; KHÔNG hasActiveAssignment
+  "description","instructions",
+  "customFields": {},
+  "checklists": [ { "id","code","name","purpose","version","description",
+    "items": [ { "sequenceNo","title","description","answerType","isRequired","isBlocking","requiresPhoto","minValue","maxValue" } ] } ],
+  "version","createdAt","updatedAt"
+}
+```
+
+Chủ đích OMIT: `createdBy` (PII — kéo dài BD6 §20 sang detail), `requestKey` (parity `work-order.mapper.ts:18-21`), boolean `hasActiveAssignment` (state đã encode — parity list).
+
+- **BD-1 (endpoint):** route mới `GET /api/v1/job-board/:id` (`@Get(':id')` khai báo SAU `filter-options` và `GET ''` — F9; controller spec + e2e R1 assert `/filter-options` vẫn 200). *Loại:* `?include=detail` trên `GET /work-orders/:id` — contract fork có điều kiện trên endpoint dùng chung web #41–#43 (omission `createdBy` theo query param đổi shape đã document §17, đúng ranh giới cấm) + nhân đôi ma trận test permission. BD3 §20 đã duyệt nguyên tắc consumer/shape khác → route riêng; §20 BD7 defer detail chính là slice này. Endpoint mới additive-only, không đụng contract #44–#46.
+- **BD-2 (PII):** OMIT `createdBy` trên worker detail; không đụng `GET /work-orders/:id` (web giữ nguyên).
+- **BD-3 (checklist rule):** `status='ACTIVE' AND (work_type_id = WO.workTypeId OR work_type_id IS NULL)`, **mọi purpose** (`PRE_START`/`INSPECTION`/`WORK_DONE`); nhiều ACTIVE version cùng `code` → giữ `version` cao nhất (unique `(code,version)` F7); items batch 1 query `= ANY($1)` `ORDER BY template_id, sequence_no`. *Loại:* PRE_START-only (hẹp hơn SRS), tính empty là CONFIG_ERROR (mâu thuẫn chữ "reference lỗi" của issue — empty là state hợp lệ).
+- **BD-4 (CTA #48 boundary):** mobile render CTA theo matrix dưới; onPress "Nhận việc" khi AVAILABLE = re-fetch re-check trước, claim command thật thuộc #48 (hint-only, không network command mới ở slice này).
+- **BD-5 (state):** re-fetch (fetch lúc mount + focus + pull-refresh), không ETag/If-Match (state phụ thuộc clock — `EXPIRED`/`SCHEDULED` derive tại read-time, version không chứng minh freshness); `Cache-Control: no-store`; 403 trên re-fetch → xóa detail, render forbidden (AC-7); `version` trả về để #48 dùng `expectedVersion` (optimistic lock #43/#44).
+- **BD-6 (screen):** mobile nâng cấp `WorkOrderPreviewScreen.tsx` tại chỗ (mobile lane, ngoài backend scope).
+- **BD-7 (port):** 3 optional method mới trên `WorkOrderRepositoryPort` (`findWorkTypeDetailById?`, `findActiveChecklistTemplatesByWorkTypeId?`, `findChecklistItemsByTemplateIds?`) — caller fail-closed 500 khi thiếu (mirror F001 `get-work-order.use-case.ts:77-83`); không tạo checklist module (F8).
+
+**Authz read rule:** giữ nguyên rule #41 (F1) — `JwtAuthGuard` → use case: non-ADMIN `findById` (null → 403 generic) → `assertProjectMemberScope` → MỚI fetch related (authorization trước fetch toàn bộ related data). ADMIN bypass qua scope service (missing → 404). WORKER ACTIVE member đã đủ quyền đọc — **không RBAC grant mới**.
+
+**Configuration-error path (§3.5 plan):** `workTypeId` không resolve được work type → **409 `{ code: 'JOB_BOARD_CONFIG_INVALID', message actionable }`**, withheld toàn bộ detail (AC-6 "không hiển thị sai"; FK `work_type_id NOT NULL` khiến nhánh này defensive/wiring). KHÔNG phải config error: checklist 0 template → empty state; area/trade inactive → vẫn hiện tên (refs không lọc `is_active`, parity F3).
+
+**CTA theo state matrix (contract cho mobile — hành động claim là #48):**
+
+| state | CTA | Banner |
+|---|---|---|
+| `AVAILABLE` | Nút "Nhận việc", enabled; onPress = re-fetch re-check | — |
+| `SCHEDULED` | ẩn | "Chưa tới thời điểm nhận việc" + openFrom |
+| `EXPIRED` | ẩn | "Cửa sổ nhận việc đã hết" |
+| `ASSIGNED` | ẩn | "Công việc đã có người nhận" |
+| `CLOSED` | ẩn | "Công việc hiện không nhận" |
+| `jobBoard` vắng (defensive) | ẩn | fail-closed coi như CLOSED |
+
+CTA chỉ derive từ `state` server — hint, không phải security.
+
+**Note cho #48 (claim):** claim command PHẢI re-read detail (re-check scope + state + `expectedVersion`) server-side tại thời điểm ghi (guarded write + scope, không tin kết quả detail cũ); retry/double-submit thuộc #48 (slice này READ-ONLY — e2e assert audit/notification delta = 0 qua N GET).
+
+**Residual R4:** `customFields`/`requiredFields` jsonb free-form do coordinator nhập — đã hiện với member trên web detail; rủi ro dữ liệu cá nhân nếu project lạm dụng — chấp nhận residual (ghi nhận tại đây).
+
+- **Test contract:** `src/api/test/job-board-detail.e2e.spec.ts` (IN-MEMORY — header trung thực, KHÔNG phải real-DB proof: worker trong scope 200 đủ sections §3.1 / non-member 403 (ngoài scope + unknown id) / anon 401 / ADMIN missing 404 + tồn tại 200 / work-type ref lỗi 409 `JOB_BOARD_CONFIG_INVALID` / UUID sai 400 / R1 `/filter-options` vẫn 200 / chèn assignment giữa 2 GET AVAILABLE→ASSIGNED / N GET audit delta 0 / không PII) + unit policy (BD-3 matrix, version cao nhất, empty, config classify) + unit use-case (scope matrix, admin, state derive, checklist resolve, config-error 409, fail-closed 500 từng method, DRAFT/INACTIVE loại) + PG adapter spec qua pool mock (3 query mới: work-type detail + checklist predicate + items batch/order; empty → không query) + mapper spec (shape §3.1 + OMIT `createdBy`/`requestKey`/`hasActiveAssignment`) + controller spec (forward + route metadata GET `:id` + pipe 400 + 401 + không PII).
+- **Không migration mới** (mọi cột đã có: F5–F7). **Không đụng contract #44–#46** (regression suites xanh).

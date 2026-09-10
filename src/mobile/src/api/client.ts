@@ -601,6 +601,100 @@ export async function fetchWorkOrderPreview(token: string, id: string): Promise<
   throw toJobBoardError(res.status, body, `Tải chi tiết công việc thất bại (${res.status})`);
 }
 
+/**
+ * JOB-SRS-007 (issue #47) — chi tiết công việc còn trống cho worker.
+ * Contract: ENDPOINTS.md §20.2 — `GET /api/v1/job-board/:id` (JWT + project
+ * read-scope; `Cache-Control: no-store`). Shape đủ sections §3.1 để worker
+ * quyết định nhận việc; chủ đích OMIT `createdBy` (PII), `requestKey`,
+ * `hasActiveAssignment` (state đã encode). Error map qua `toJobBoardError`:
+ * 401 → hết phiên, 403 → ngoài scope (generic, kể cả id không tồn tại),
+ * 404 → ADMIN + id missing, 409 `JOB_BOARD_CONFIG_INVALID` → work-type ref lỗi.
+ */
+export interface JobBoardChecklistItem {
+  sequenceNo: number;
+  title: string;
+  description: string | null;
+  answerType: string;
+  isRequired: boolean;
+  isBlocking: boolean;
+  requiresPhoto: boolean;
+  minValue: number | null;
+  maxValue: number | null;
+}
+
+export interface JobBoardChecklist {
+  id: string;
+  code: string;
+  name: string;
+  purpose: string;
+  version: number;
+  description: string | null;
+  items: JobBoardChecklistItem[];
+}
+
+export interface JobBoardDetail {
+  id: string;
+  code: string;
+  title: string;
+  status: string;
+  priority: string;
+  projectId: string;
+  projectName?: string | null;
+  areaId: string | null;
+  areaName?: string | null;
+  workTypeId: string;
+  workTypeName: string;
+  workTypeDescription: string | null;
+  /** Dữ liệu cần chuẩn bị (`work_types.required_fields`, F6). */
+  workTypeRequiredFields: unknown;
+  workTypeGroup: string | null;
+  requiredTradeId: string | null;
+  requiredTradeName?: string | null;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  dueAt: string | null;
+  plannedHeadcount: number | null;
+  jobBoard: {
+    open: boolean;
+    openFrom: string | null;
+    openUntil: string | null;
+    state: JobBoardState;
+  } | null;
+  description: string | null;
+  instructions: string | null;
+  /** Dữ liệu chuẩn bị do coordinator nhập (`custom_fields`, 0011). */
+  customFields: Record<string, string | number | boolean>;
+  checklists: JobBoardChecklist[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchJobBoardDetail(token: string, id: string): Promise<JobBoardDetail> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/job-board/${encodeURIComponent(id)}`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      // Never serve a cached detail — state derives at read-time.
+      cache: 'no-store',
+    });
+  } catch {
+    throw new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok && body && typeof body === 'object') {
+    // F002: shape guard mirror siblings (`fetchJobBoard` client.ts:518-528
+    // pattern) — thiếu title/code/workTypeName → LoginError 500, không trả
+    // object rỗng về screen (crash-risk khi render sections).
+    const b = body as Record<string, unknown>;
+    if (typeof b.title !== 'string' || typeof b.code !== 'string' || typeof b.workTypeName !== 'string') {
+      throw new LoginError('Phản hồi chi tiết công việc không hợp lệ', 500);
+    }
+    return body as JobBoardDetail;
+  }
+  throw toJobBoardError(res.status, body, `Tải chi tiết công việc thất bại (${res.status})`);
+}
+
 export async function listProjectMembers(token: string, projectId: string): Promise<ProjectMember[]> {
   const res = await fetch(`${API_URL}/api/v1/projects/${encodeURIComponent(projectId)}/members`, {
     headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },

@@ -72,7 +72,7 @@ describe('JobBoardController filters (JOB-SRS-006 #46)', () => {
         now: new Date('2026-11-01T08:00:00.000Z'),
       })),
     };
-    const controller = new JobBoardController(searchJobBoard as never, filterOptions as never);
+    const controller = new JobBoardController(searchJobBoard as never, filterOptions as never, { execute: jest.fn() } as never);
     return { controller, searchJobBoard, filterOptions };
   }
 

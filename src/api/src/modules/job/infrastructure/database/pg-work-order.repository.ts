@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { WorkOrderEntity, WorkOrderStatus } from '../../domain/entity/work-order.entity';
 import { WorkOrderPriority } from '../../domain/service/work-order.policy';
-import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, JobBoardFilter, JobBoardScopeFilter, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
+import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, ChecklistTemplateItemRow, ChecklistTemplateRow, JobBoardFilter, JobBoardScopeFilter, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort, WorkTypeDetailRef } from '../../domain/repository/work-order-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -593,5 +593,82 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
       found.add(String(row['work_order_id']));
     }
     return found;
+  }
+
+  /**
+   * JOB-SRS-007 (issue #47) — chi tiết loại công việc cho Job Board detail
+   * (F6: `required_fields`/`work_type_group`/`config_version`, 0007).
+   * `required_fields` jsonb (node-pg parse sẵn) trả nguyên — read path không
+   * validate shape free-form của coordinator.
+   */
+  async findWorkTypeDetailById(workTypeId: string): Promise<WorkTypeDetailRef | null> {
+    const r = await this.pool().query(
+      `SELECT id, name, description, required_fields, work_type_group, config_version
+         FROM public.work_types WHERE id = $1 LIMIT 1`,
+      [workTypeId],
+    );
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0] as Row;
+    return {
+      id: String(row['id']),
+      name: String(row['name']),
+      description: (row['description'] as string | null) ?? null,
+      requiredFields: (row['required_fields'] as unknown) ?? [],
+      workTypeGroup: (row['work_type_group'] as string | null) ?? null,
+      configVersion: Number(row['config_version'] ?? 1),
+    };
+  }
+
+  /**
+   * JOB-SRS-007 (issue #47, BD-3) — checklist ACTIVE theo work type + generic
+   * NULL-work-type, mọi purpose (`ix_checklist_template_scope` có sẵn,
+   * 0001:938-941). Không lọc version ở SQL — policy thuần giữ cao nhất.
+   */
+  async findActiveChecklistTemplatesByWorkTypeId(workTypeId: string): Promise<ChecklistTemplateRow[]> {
+    const r = await this.pool().query(
+      `SELECT id, code, name, work_type_id, purpose, version, description, status
+         FROM public.checklist_templates
+        WHERE status = 'ACTIVE' AND (work_type_id = $1::uuid OR work_type_id IS NULL)
+        ORDER BY code ASC, version DESC`,
+      [workTypeId],
+    );
+    return (r.rows as Row[]).map((row) => ({
+      id: String(row['id']),
+      code: String(row['code']),
+      name: String(row['name']),
+      workTypeId: (row['work_type_id'] as string | null) ?? null,
+      purpose: String(row['purpose']),
+      version: Number(row['version']),
+      description: (row['description'] as string | null) ?? null,
+      status: String(row['status']),
+    }));
+  }
+
+  /**
+   * JOB-SRS-007 (issue #47, BD-3) — batch items MỘT query
+   * (`= ANY($1::uuid[])`, `ORDER BY template_id, sequence_no`).
+   */
+  async findChecklistItemsByTemplateIds(templateIds: string[]): Promise<ChecklistTemplateItemRow[]> {
+    if (templateIds.length === 0) return [];
+    const r = await this.pool().query(
+      `SELECT template_id, sequence_no, title, description, answer_type,
+              is_required, is_blocking, requires_photo, min_value, max_value
+         FROM public.checklist_template_items
+        WHERE template_id = ANY($1::uuid[])
+        ORDER BY template_id, sequence_no`,
+      [templateIds],
+    );
+    return (r.rows as Row[]).map((row) => ({
+      templateId: String(row['template_id']),
+      sequenceNo: Number(row['sequence_no']),
+      title: String(row['title']),
+      description: (row['description'] as string | null) ?? null,
+      answerType: String(row['answer_type']),
+      isRequired: Boolean(row['is_required']),
+      isBlocking: Boolean(row['is_blocking']),
+      requiresPhoto: Boolean(row['requires_photo']),
+      minValue: row['min_value'] === null || row['min_value'] === undefined ? null : Number(row['min_value']),
+      maxValue: row['max_value'] === null || row['max_value'] === undefined ? null : Number(row['max_value']),
+    }));
   }
 }

@@ -34,6 +34,15 @@ A checked-in plan should state, as applicable:
 
 ## Current plans
 
+## JOB-SRS-007 job-board detail (issue #47) — backend + mobile lane + evidence
+
+- **Objective:** worker mở detail công việc còn trống từ Job Board (`GET /api/v1/job-board/:id`), thấy đủ thông tin hiện hành để quyết định nhận việc (backend + contract docs + mobile UI + evidence real-DB).
+- **Scope:** `src/api` (policy `job-board-detail.policy.ts` + port/adapter + `GetJobBoardDetailUseCase` + `JobBoardController` + `toJobBoardDetailResponse` + unit/PG/in-memory specs), docs (`ENDPOINTS.md` §20.2, `API.md`, `MOBILE.md`, `NETCODE.md` check-line), `src/mobile` (client `fetchJobBoardDetail` + `JobBoardDetail` + nâng cấp `WorkOrderPreviewScreen` tại chỗ + tests), evidence `docs/evidence/job-srs-007/` (driver + 2 run ALL-PASS + shots `-S7R*`).
+- **Non-goals:** claim (#48 — CTA là placeholder hint-only), eligibility (#49), one-winner (#50), mọi thay đổi contract #44–#46, không migration.
+- **Owners/lane:** cross-workspace Contract lane per `WORK-ROUTING.md` — `src/api` owns contract (§20.2 là contract cho mobile consumer).
+- **Required proof:** `src/api` typecheck + lint + test xanh (gồm T4 + regression #41–#46); `src/mobile` typecheck + lint + test xanh (T5); docker healthy + driver ≥2 runs ALL-PASS (T6).
+- **Status:** backend + mobile + evidence implemented (không commit); closeout (đóng issue) chờ Lead. Plan: `docs/plans-job-srs-007.md`.
+
 ## JOB-SRS-006 job-board filters (issue #46)
 
 - **Objective:** worker lọc Job Board theo ngày/dự án/khu vực/loại công việc/kỹ năng (5 chiều AND-compose, không bypass scope) + FilterSheet/chips mobile + evidence E2E real-DB.

@@ -1,0 +1,14 @@
+PASS S0 login PM/worker qua API thật + baseline audit/notification :: PM+worker login OK, audit=4240 notif=5
+PASS S1 seed 3 WO + mở board qua API thật (A detail chính, B state-change, C ngoài scope) :: 3 WO mở board (A=WO-MTUXB0TC5017 B=WO-MTUXB0V0MB6T C=WO-MTUXB0W51CY1);
+PASS S2 API asserts: 200 đủ sections + checklist, 403/401/400, không PII, R1 filter-options :: 200 đủ 28 keys + checklist {CLT-BT-COT,generic} + 403×2/401/400 + PM-C 200 + R1 200, không PII
+PASS S3 state-change API: PM đóng board B giữa 2 GET → AVAILABLE→CLOSED :: B AVAILABLE(v2) → CLOSED(v3); không command cũ nào từ worker
+PASS S4 read-only: N GET detail 200 → audit/notification delta = 0; 403 → đúng 1 PROJECT_SCOPE_DENIED :: delta audit=0 notif=0 sau 3 GET-200; 403 → 1 PROJECT_SCOPE_DENIED; checklist 5/5, seeded 3/3
+  shot S7-board-S7R3.png — Job Board trên Expo (có WO detail A)
+  shot S7-detail-S7R3.png — Detail A đầy đủ sections + CTA Nhận việc (AVAILABLE)
+  shot S7-claim-hint-S7R3.png — Hint #48 sau re-check (không claim thật)
+  shot S7-changed-S7R3.png — Banner state-changed + CTA biến mất sau khi PM đóng board
+  shot S7-reloaded-S7R3.png — Sau Tải lại: data CLOSED giữ, không gửi command cũ
+PASS S5 Expo UI: board → detail A (sections + CTA) → nhấn → hint #48 → PM đóng → re-check → banner changed :: UI sections + CTA + hint #48 (0 assignment) + banner changed + reload giữ data
+PASS S6 cleanup demo theo id + verify rest=0 :: WO rest=0, asg rest=0, seeded còn 3/3, audit rows=4251
+
+TỔNG: 7/7 PASS (label=S7R3, cleanup WO rest=0, audit rows=4251)

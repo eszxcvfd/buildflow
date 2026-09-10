@@ -33,6 +33,60 @@ export interface ProjectStatusRef {
 }
 
 /**
+ * JOB-SRS-007 (issue #47) — chi tiết loại công việc cho Job Board detail
+ * (`GET /api/v1/job-board/:id`): "dữ liệu cần chuẩn bị" (F6 —
+ * `work_types.required_fields` + `work_type_group` + `config_version`,
+ * migration 0007). `requiredFields` là jsonb free-form do coordinator nhập —
+ * adapter trả nguyên, mapper pass-through (không validate ở read path).
+ */
+export interface WorkTypeDetailRef {
+  id: string;
+  name: string;
+  description: string | null;
+  requiredFields: unknown;
+  workTypeGroup: string | null;
+  configVersion: number;
+}
+
+/**
+ * JOB-SRS-007 (issue #47, BD-3) — dòng `checklist_templates` cho Job Board
+ * detail: chỉ `status='ACTIVE' AND (work_type_id = WO.workTypeId OR
+ * work_type_id IS NULL)`, mọi purpose. Adapter KHÔNG dedupe version — policy
+ * thuần `selectChecklistsForWorkType` giữ version cao nhất mỗi `code`.
+ */
+export interface ChecklistTemplateRow {
+  id: string;
+  code: string;
+  name: string;
+  /** `null` = checklist generic (áp dụng mọi loại công việc). */
+  workTypeId: string | null;
+  purpose: string;
+  version: number;
+  description: string | null;
+  /** SQL đã lọc `ACTIVE`; policy lọc lại defensive (mock bypass SQL). */
+  status: string;
+}
+
+/**
+ * JOB-SRS-007 (issue #47, BD-3) — dòng `checklist_template_items` cho Job
+ * Board detail: batch MỘT query (`template_id = ANY($1::uuid[])`),
+ * `ORDER BY template_id, sequence_no` (tránh N+1, mirror `findAreaRefs`).
+ * Items không thể dangle (FK, F7).
+ */
+export interface ChecklistTemplateItemRow {
+  templateId: string;
+  sequenceNo: number;
+  title: string;
+  description: string | null;
+  answerType: string;
+  isRequired: boolean;
+  isBlocking: boolean;
+  requiresPhoto: boolean;
+  minValue: number | null;
+  maxValue: number | null;
+}
+
+/**
  * Ref hiển thị cho WO list (mirror prj `TemplateWorkTypeRef`): đọc batch
  * MỘT query (`= ANY($1::uuid[])`), tránh N+1. Không lọc `is_active` (WO có
  * thể tham chiếu loại/dự án đã ngừng mà UI vẫn phải hiện tên thay vì
@@ -239,6 +293,25 @@ export interface WorkOrderRepositoryPort {
    * Ids rỗng → set rỗng.
    */
   hasActiveAssignmentByWorkOrderIds?(ids: string[]): Promise<Set<string>>;
+  /**
+   * JOB-SRS-007 (issue #47) — chi tiết loại công việc cho Job Board detail:
+   * đọc `public.work_types` (`name, description, required_fields,
+   * work_type_group, config_version`). Trả null khi không tồn tại → caller
+   * 409 `JOB_BOARD_CONFIG_INVALID` (withheld toàn bộ detail, AC-6).
+   */
+  findWorkTypeDetailById?(workTypeId: string): Promise<WorkTypeDetailRef | null>;
+  /**
+   * JOB-SRS-007 (issue #47, BD-3) — checklist ACTIVE liên quan work type của
+   * WO + generic NULL-work-type, mọi purpose (`status='ACTIVE' AND
+   * (work_type_id = $1 OR work_type_id IS NULL)`). Dedupe version cùng `code`
+   * do policy thuần, không ở SQL.
+   */
+  findActiveChecklistTemplatesByWorkTypeId?(workTypeId: string): Promise<ChecklistTemplateRow[]>;
+  /**
+   * JOB-SRS-007 (issue #47, BD-3) — items của các template (`template_id =
+   * ANY($1::uuid[])`, `ORDER BY template_id, sequence_no`). Ids rỗng → [].
+   */
+  findChecklistItemsByTemplateIds?(templateIds: string[]): Promise<ChecklistTemplateItemRow[]>;
 }
 
 export const JOB_WORK_ORDER_REPOSITORY = Symbol('JOB_WORK_ORDER_REPOSITORY');

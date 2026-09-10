@@ -154,3 +154,69 @@ describe('PgWorkOrderRepository.searchJobBoard (JOB-SRS-005 #45, BD5)', () => {
     expect((query as jest.Mock).mock.calls.length).toBe(callsBefore);
   });
 });
+
+describe('PgWorkOrderRepository job-board detail (JOB-SRS-007 #47, BD-3)', () => {
+  afterEach(() => {
+    delete G.__pgPool;
+  });
+
+  it('findWorkTypeDetailById đọc work_types (F6) — missing → null (caller 409)', async () => {
+    const wt = '44444444-4444-4444-8444-444444444444';
+    const query = setupPool('0', []);
+    (query as jest.Mock).mockResolvedValueOnce({
+      rows: [{ id: wt, name: 'Do be tong', description: null, required_fields: [{ key: 'dien_tich' }], work_type_group: 'Ket cau', config_version: 3 }],
+    });
+    const repo = new PgWorkOrderRepository();
+    const detail = await repo.findWorkTypeDetailById!(wt);
+    expect(query.mock.calls[0][0]).toContain('FROM public.work_types');
+    expect(detail).toEqual({
+      id: wt,
+      name: 'Do be tong',
+      description: null,
+      requiredFields: [{ key: 'dien_tich' }],
+      workTypeGroup: 'Ket cau',
+      configVersion: 3,
+    });
+    (query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+    await expect(repo.findWorkTypeDetailById!(wt)).resolves.toBeNull();
+  });
+
+  it('findActiveChecklistTemplatesByWorkTypeId: ACTIVE + (work_type match OR NULL), mọi purpose', async () => {
+    const query = setupPool('0', []);
+    (query as jest.Mock).mockResolvedValueOnce({
+      rows: [
+        { id: 'a', code: 'CL-PRE', name: 'Kiem tra', work_type_id: '44444444-4444-4444-8444-444444444444', purpose: 'PRE_START', version: 1, description: null, status: 'ACTIVE' },
+        { id: 'b', code: 'CL-GEN', name: 'Chung', work_type_id: null, purpose: 'WORK_DONE', version: 2, description: null, status: 'ACTIVE' },
+      ],
+    });
+    const repo = new PgWorkOrderRepository();
+    const rows = await repo.findActiveChecklistTemplatesByWorkTypeId!('44444444-4444-4444-8444-444444444444');
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain(`FROM public.checklist_templates`);
+    expect(sql).toContain(`status = 'ACTIVE'`);
+    expect(sql).toContain(`work_type_id = $1::uuid OR work_type_id IS NULL`);
+    expect(rows).toHaveLength(2);
+    expect(rows[1].workTypeId).toBeNull();
+    expect(rows[1].purpose).toBe('WORK_DONE');
+  });
+
+  it('findChecklistItemsByTemplateIds: batch = ANY + ORDER BY template_id, sequence_no; rỗng → [] không query', async () => {
+    const query = setupPool('0', []);
+    (query as jest.Mock).mockResolvedValueOnce({
+      rows: [
+        { template_id: 't1', sequence_no: 1, title: 'Muc 1', description: null, answer_type: 'YES_NO', is_required: true, is_blocking: false, requires_photo: false, min_value: null, max_value: null },
+      ],
+    });
+    const repo = new PgWorkOrderRepository();
+    const items = await repo.findChecklistItemsByTemplateIds!(['t1']);
+    const sql = String(query.mock.calls[0][0]);
+    expect(sql).toContain('FROM public.checklist_template_items');
+    expect(sql).toContain('template_id = ANY($1::uuid[])');
+    expect(sql).toContain('ORDER BY template_id, sequence_no');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ templateId: 't1', sequenceNo: 1, answerType: 'YES_NO' });
+    const callsBefore = (query as jest.Mock).mock.calls.length;
+    await expect(repo.findChecklistItemsByTemplateIds!([])).resolves.toEqual([]);
+    expect((query as jest.Mock).mock.calls.length).toBe(callsBefore);
+  });
+});

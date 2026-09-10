@@ -2,6 +2,7 @@ import { WorkOrderEntity } from '../../../../domain/entity/work-order.entity';
 import { WorkOrderListRef } from '../../../../domain/repository/work-order-repository.port';
 import { deriveJobBoardState, JobBoardState } from '../../../../domain/service/work-order-job-board.policy';
 import { WorkOrderPriority } from '../../../../domain/service/work-order.policy';
+import { GetJobBoardDetailOutput } from '../../../../application/use-case/job-board-detail.use-case';
 
 /**
  * JOB-SRS-005 (issue #45) — item Job Board (`GET /api/v1/job-board`, BD6):
@@ -108,4 +109,124 @@ export function toJobBoardListResponse(
   options?: JobBoardListResponseOptions,
 ): JobBoardItemResponse[] {
   return entities.map((entity) => toJobBoardItemResponse(entity, options));
+}
+
+/**
+ * JOB-SRS-007 (issue #47) — chi tiết công việc còn trống
+ * (`GET /api/v1/job-board/:id`, §3.1): đủ sections để worker quyết định nhận
+ * việc (project/area/type + required_fields, trade, planned times + window,
+ * description/instructions, customFields, checklists ACTIVE liên quan +
+ * generic, `jobBoard.state`, version).
+ * Chủ đích OMIT: `createdBy` (PII — kéo dài BD6 sang detail, F3),
+ * `requestKey` (parity `work-order.mapper.ts:18-21`), boolean
+ * `hasActiveAssignment` (state đã encode — parity list).
+ */
+export interface JobBoardDetailResponse {
+  id: string;
+  code: string;
+  title: string;
+  status: string;
+  priority: WorkOrderPriority;
+  projectId: string;
+  projectName?: string | null;
+  areaId: string | null;
+  areaName?: string | null;
+  workTypeId: string;
+  workTypeName: string;
+  workTypeDescription: string | null;
+  /** Dữ liệu cần chuẩn bị (`work_types.required_fields`, F6). */
+  workTypeRequiredFields: unknown;
+  workTypeGroup: string | null;
+  requiredTradeId: string | null;
+  requiredTradeName?: string | null;
+  plannedStartAt: string | null;
+  plannedEndAt: string | null;
+  dueAt: string | null;
+  plannedHeadcount: number | null;
+  jobBoard: {
+    open: boolean;
+    openFrom: string | null;
+    openUntil: string | null;
+    state: JobBoardState;
+  };
+  description: string | null;
+  instructions: string | null;
+  /** Dữ liệu chuẩn bị do coordinator nhập (`custom_fields`, 0011). */
+  customFields: Record<string, string | number | boolean>;
+  checklists: {
+    id: string;
+    code: string;
+    name: string;
+    purpose: string;
+    version: number;
+    description: string | null;
+    items: {
+      sequenceNo: number;
+      title: string;
+      description: string | null;
+      answerType: string;
+      isRequired: boolean;
+      isBlocking: boolean;
+      requiresPhoto: boolean;
+      minValue: number | null;
+      maxValue: number | null;
+    }[];
+  }[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function toJobBoardDetailResponse(output: GetJobBoardDetailOutput): JobBoardDetailResponse {
+  const pub = output.entity.toPublic();
+  return {
+    id: pub.id,
+    code: pub.code,
+    title: pub.title,
+    status: pub.status,
+    priority: pub.priority,
+    projectId: pub.projectId,
+    projectName: output.projectRef ? output.projectRef.name : undefined,
+    areaId: pub.areaId,
+    areaName: output.areaRef ? output.areaRef.name : undefined,
+    workTypeId: pub.workTypeId,
+    workTypeName: output.workTypeDetail.name,
+    workTypeDescription: output.workTypeDetail.description,
+    workTypeRequiredFields: output.workTypeDetail.requiredFields,
+    workTypeGroup: output.workTypeDetail.workTypeGroup,
+    requiredTradeId: pub.requiredTradeId,
+    requiredTradeName: output.tradeRef ? output.tradeRef.name : undefined,
+    plannedStartAt: pub.plannedStartAt ? pub.plannedStartAt.toISOString() : null,
+    plannedEndAt: pub.plannedEndAt ? pub.plannedEndAt.toISOString() : null,
+    dueAt: pub.dueAt ? pub.dueAt.toISOString() : null,
+    plannedHeadcount: pub.plannedHeadcount,
+    jobBoard: {
+      open: pub.jobBoardOpen,
+      openFrom: pub.jobBoardOpenFrom ? pub.jobBoardOpenFrom.toISOString() : null,
+      openUntil: pub.jobBoardOpenUntil ? pub.jobBoardOpenUntil.toISOString() : null,
+      state: deriveJobBoardState({
+        status: pub.status,
+        jobBoardOpen: pub.jobBoardOpen,
+        jobBoardOpenFrom: pub.jobBoardOpenFrom,
+        jobBoardOpenUntil: pub.jobBoardOpenUntil,
+        hasActiveAssignment: output.hasActiveAssignment,
+        now: output.now,
+      }),
+    },
+    description: pub.description,
+    instructions: pub.instructions,
+    customFields: { ...(pub.customFields ?? {}) },
+    checklists: output.checklists.map((c) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      purpose: c.purpose,
+      version: c.version,
+      description: c.description,
+      items: c.items.map((i) => ({ ...i })),
+    })),
+    version: pub.version,
+    createdAt: pub.createdAt.toISOString(),
+    updatedAt: pub.updatedAt.toISOString(),
+  };
 }

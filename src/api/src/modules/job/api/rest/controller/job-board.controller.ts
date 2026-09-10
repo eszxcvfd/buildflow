@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Header,
+  Param,
+  ParseUUIDPipe,
   Query,
   Req,
   UseGuards,
@@ -11,8 +13,9 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../../../../iam/api/rest/guard/jwt-auth.guard';
 import { SearchJobBoardUseCase } from '../../../application/use-case/search-job-board.use-case';
 import { GetJobBoardFilterOptionsUseCase } from '../../../application/use-case/get-job-board-filter-options.use-case';
+import { GetJobBoardDetailUseCase } from '../../../application/use-case/job-board-detail.use-case';
 import { JobBoardFilterError, parseJobBoardFilters } from '../../../domain/service/job-board-filter.policy';
-import { toJobBoardListResponse } from '../presentation/mapper/job-board.mapper';
+import { toJobBoardDetailResponse, toJobBoardListResponse } from '../presentation/mapper/job-board.mapper';
 import { workOrderActor } from './work-orders.controller';
 import { TokenPayload } from '../../../../iam/application/port/token.port';
 
@@ -58,6 +61,10 @@ function actorRolesOf(actor: TokenPayload): string[] {
  *   — `now` top-level là clock server caller dùng chung instant).
  * - Read-only: không tx, không audit nghiệp vụ (BD8/BD18 — parity §17).
  * - `Cache-Control: no-store` (parity list §17).
+ * - JOB-SRS-007 (issue #47, §20.2): `GET /api/v1/job-board/:id` — chi tiết
+ *   công việc còn trống (scope-first #41, OMIT `createdBy`/`requestKey`/
+ *   `hasActiveAssignment`, 409 `JOB_BOARD_CONFIG_INVALID` khi work-type ref
+ *   lỗi). Khai báo SAU `filter-options` và `GET ''` (F9 — tránh nuốt route).
  */
 @Controller('api/v1/job-board')
 @UseGuards(JwtAuthGuard)
@@ -65,6 +72,7 @@ export class JobBoardController {
   constructor(
     private readonly searchJobBoard: SearchJobBoardUseCase,
     private readonly filterOptions: GetJobBoardFilterOptionsUseCase,
+    private readonly jobBoardDetail: GetJobBoardDetailUseCase,
   ) {}
 
   @Get('filter-options')
@@ -152,5 +160,22 @@ export class JobBoardController {
       limit: parsedLimit ?? 20,
       offset: parsedOffset ?? 0,
     };
+  }
+
+  /**
+   * JOB-SRS-007 (issue #47) — chi tiết công việc còn trống. Khai báo SAU
+   * `filter-options` và `GET ''` (F9 — `@Get(':id')` trước sẽ nuốt route).
+   * Id sai UUID → 400 stock Nest (`ParseUUIDPipe`, trước use case).
+   */
+  @Get(':id')
+  @Header('Cache-Control', 'no-store')
+  async detail(@Param('id', new ParseUUIDPipe({ errorHttpStatusCode: 400 })) id: string, @Req() req: Request) {
+    const actor = workOrderActor(req);
+    const output = await this.jobBoardDetail.execute({
+      workOrderId: id,
+      actorUserId: actor.sub,
+      actorRoles: actorRolesOf(actor),
+    });
+    return toJobBoardDetailResponse(output);
   }
 }

@@ -1,0 +1,69 @@
+{
+  "_note": "Throwaway E2E-only demo data (seed/reset per evidence docs). Never production.",
+  "runLabel": "S7R1",
+  "titles": {
+    "A": "[S7R1] Đổ bê tông cột vách sảnh chính",
+    "B": "[S7R1] Đi ống điện âm tường tầng hai",
+    "C": "[S7R1] Đổ bê tông block ngoài scope"
+  },
+  "workOrderIds": {
+    "A": "01cfe089-1632-42db-a405-c1df960e73ab",
+    "B": "1777187c-6b71-4e61-940e-8ef523266064",
+    "C": "095e6921-3055-4632-af83-273840c221aa"
+  },
+  "workOrderCodes": {
+    "A": "WO-MTUWRABCX9EI",
+    "B": "WO-MTUWRACK21OS",
+    "C": "WO-MTUWRADM0XA2"
+  },
+  "auditBefore": "4214",
+  "notifBefore": "5",
+  "detailVersionA": 2,
+  "closedVersionB": 3,
+  "auditFinal": "4225",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S0",
+      "name": "login PM/worker qua API thật + baseline audit/notification",
+      "ok": true,
+      "note": "PM+worker login OK, audit=4214 notif=5"
+    },
+    {
+      "id": "S1",
+      "name": "seed 3 WO + mở board qua API thật (A detail chính, B state-change, C ngoài scope)",
+      "ok": true,
+      "note": "3 WO mở board (A=WO-MTUWRABCX9EI B=WO-MTUWRACK21OS C=WO-MTUWRADM0XA2);\nWO-MTUWRABCX9EI|OPEN|t\nWO-MTUWRACK21OS|OPEN|t\nWO-MTUWRADM0XA2|OPEN|t"
+    },
+    {
+      "id": "S2",
+      "name": "API asserts: 200 đủ sections + checklist, 403/401/400, không PII, R1 filter-options",
+      "ok": true,
+      "note": "200 đủ 26 keys + checklist {CLT-BT-COT,generic} + 403×2/401/400 + PM-C 200 + R1 200, không PII"
+    },
+    {
+      "id": "S3",
+      "name": "state-change API: PM đóng board B giữa 2 GET → AVAILABLE→CLOSED",
+      "ok": true,
+      "note": "B AVAILABLE(v2) → CLOSED(v3); không command cũ nào từ worker"
+    },
+    {
+      "id": "S4",
+      "name": "read-only: N GET detail 200 → audit/notification delta = 0; 403 → đúng 1 PROJECT_SCOPE_DENIED",
+      "ok": true,
+      "note": "delta audit=0 notif=0 sau 3 GET-200; 403 → 1 PROJECT_SCOPE_DENIED; checklist 5/5, seeded 3/3"
+    },
+    {
+      "id": "S5",
+      "name": "Expo UI: board → detail A (sections + CTA) → nhấn → hint #48 → PM đóng → re-check → banner changed",
+      "ok": true,
+      "note": "UI sections + CTA + hint #48 (0 assignment) + banner changed + reload giữ data"
+    },
+    {
+      "id": "S6",
+      "name": "cleanup demo theo id + verify rest=0",
+      "ok": true,
+      "note": "WO rest=0, asg rest=0, seeded còn 3/3, audit rows=4225"
+    }
+  ]
+}

@@ -69,7 +69,7 @@ describe('JobBoardController (JOB-SRS-005 #45)', () => {
         now: new Date('2026-11-01T08:00:00.000Z'),
       })),
     };
-    const controller = new JobBoardController(searchJobBoard as never, filterOptions as never);
+    const controller = new JobBoardController(searchJobBoard as never, filterOptions as never, { execute: jest.fn() } as never);
     return { controller, searchJobBoard, filterOptions };
   }
 
@@ -125,5 +125,64 @@ describe('JobBoardController (JOB-SRS-005 #45)', () => {
     expect(searchJobBoard.execute).toHaveBeenCalledWith(expect.objectContaining({ limit: 10, offset: 5 }));
     expect(res.limit).toBe(10);
     expect(res.offset).toBe(5);
+  });
+});
+
+describe('JobBoardController.detail (JOB-SRS-007 #47)', () => {
+  function setupDetail() {
+    const searchJobBoard = { execute: jest.fn() };
+    const filterOptions = { execute: jest.fn() };
+    const jobBoardDetail = {
+      execute: jest.fn(async () => ({
+        entity: makeEntity(),
+        workTypeDetail: { id: IDS.workType, name: 'Do be tong', description: null, requiredFields: [], workTypeGroup: null, configVersion: 1 },
+        projectRef: null,
+        areaRef: null,
+        tradeRef: null,
+        checklists: [],
+        hasActiveAssignment: false,
+        now: new Date('2026-11-01T08:00:00.000Z'),
+      })),
+    };
+    const controller = new JobBoardController(
+      searchJobBoard as never,
+      filterOptions as never,
+      jobBoardDetail as never,
+    );
+    return { controller, jobBoardDetail };
+  }
+
+  it('forward workOrderId + actor server-derived, không PII trong response', async () => {
+    const { controller, jobBoardDetail } = setupDetail();
+    const res = await controller.detail(IDS.wo, reqWithUser() as never);
+    expect(jobBoardDetail.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ workOrderId: IDS.wo, actorUserId: IDS.actor, actorRoles: ['WORKER'] }),
+    );
+    expect(res).not.toHaveProperty('createdBy');
+    expect(res).not.toHaveProperty('requestKey');
+    expect(res.jobBoard).not.toHaveProperty('hasActiveAssignment');
+    expect(res.checklists).toEqual([]);
+  });
+
+  it('route metadata: GET :id khai báo cho detail (wiring 400 UUID + no-store do e2e chứng minh)', async () => {
+    // ParseUUIDPipe chỉ chạy ở Nest HTTP layer (gọi trực tiếp không qua pipe)
+    // — ở đây assert route path metadata; e2e `job-board-detail.e2e.spec.ts`
+    // chứng minh wiring thật (400 UUID sai, no-store, filter-options 200).
+    const { PATH_METADATA, METHOD_METADATA } = await import('@nestjs/common/constants');
+    const { ParseUUIDPipe } = await import('@nestjs/common');
+    const proto = JobBoardController.prototype as unknown as Record<string, (...args: never[]) => unknown>;
+    expect(Reflect.getMetadata(PATH_METADATA, proto['detail'])).toBe(':id');
+    expect(Reflect.getMetadata(METHOD_METADATA, proto['detail'])).toBe(0);
+    // Pipe cấu hình giống controller: UUID sai → 400
+    const pipe = new ParseUUIDPipe({ errorHttpStatusCode: 400 });
+    await expect(pipe.transform('not-a-uuid', { type: 'param' } as never)).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('anon (không JWT user) → 401, không gọi use case', async () => {
+    const { controller, jobBoardDetail } = setupDetail();
+    await expect(
+      controller.detail(IDS.wo, { headers: {}, ip: '127.0.0.1' } as never),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(jobBoardDetail.execute).not.toHaveBeenCalled();
   });
 });
