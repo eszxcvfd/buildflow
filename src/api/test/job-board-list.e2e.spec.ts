@@ -331,16 +331,24 @@ describe('JOB-SRS-005 job-board list (integration in-memory HTTP contract — mo
     expect(res.body.fieldErrors).toEqual({ limit: ['Limit không hợp lệ (1-100)'] });
   });
 
-  it('AC5/BD4: unknown query key bị ignore (kể cả projectId ngoài scope — endpoint cấm filter)', async () => {
+  it('AC5/BD4: unknown query key bị ignore (không 400, không mở quyền)', async () => {
     const token = await login('worker-e2e-jb@example.com');
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/job-board?projectId=${P2_OUTSIDE}&foo=bar&limit=5`)
+      .get('/api/v1/job-board?foo=bar&limit=5')
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
     // Không 400, không mở quyền: vẫn đúng 2 available P1
     expect(res.body.total).toBe(2);
     expect(res.body.limit).toBe(5);
     expect(res.body.data.map((d: { id: string }) => d.id)).toEqual([AVAIL1, AVAIL2]);
+  });
+
+  it('JOB-SRS-006 (#46, BD12): projectId là filter thật — ngoài scope → 403 (không còn ignore)', async () => {
+    const token = await login('worker-e2e-jb@example.com');
+    await request(app.getHttpServer())
+      .get(`/api/v1/job-board?projectId=${P2_OUTSIDE}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(403);
   });
 
   it('AC3: list → chèn assignment → list lại: item biến, total giảm', async () => {

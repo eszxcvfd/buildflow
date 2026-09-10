@@ -59,19 +59,40 @@ export interface WorkOrderFilter {
 }
 
 /**
- * JOB-SRS-005 (issue #45) — filter cho `GET /api/v1/job-board` (BD1/BD2/BD5):
- * scope-first qua `projectIds` (ADMIN → `undefined` = unrestricted;
- * membership rỗng → caller early-return, không query); offset pagination
- * (`limit` clamp 1-100 ở repo, `offset` ≥0 — controller đã 400 trước);
- * `now` capture MỘT lần trong use case, dùng chung cho SQL window lẫn
- * `deriveJobBoardState` (BD5). KHÔNG có `projectId`/`status`/`search`
- * (filter là #46 — endpoint cấm filter param, BD2).
+ * JOB-SRS-006 (issue #46) — filter cho `GET /api/v1/job-board` (BD10/BD11):
+ * 5 chiều AND-compose vào WHERE SQL server-side (KHÔNG post-filter — giữ
+ * `total` và page đúng, parity BD5): `projectId` đơn, `areaIds`/`workTypeIds`
+ * lặp được, `plannedFrom`/`plannedTo` overlap instant trên PLANNED dates
+ * (không phải board window), `requiredTradeIds` từ `skill=mine`
+ * (server-resolved, client chỉ gửi `skill=mine`). Sort giữ
+ * `updated_at DESC, id DESC` (BD1/D3). Absent filter = hành vi #45 nguyên vẹn.
  */
 export interface JobBoardFilter {
   /** Scope non-ADMIN (`w.project_id = ANY(...)`); `undefined` = ADMIN unrestricted. */
   projectIds?: string[];
+  /** Filter 1 project (`w.project_id = ...` thay `ANY(scope)` khi ∈ scope). */
+  projectId?: string;
+  /** Filter khu vực (`w.area_id = ANY(...)`); id không tồn tại → 200 empty. */
+  areaIds?: string[];
+  /** Filter loại công việc (`w.work_type_id = ANY(...)`). */
+  workTypeIds?: string[];
+  /** Overlap instant: `planned_start_at <= to AND COALESCE(end,start) >= from`. */
+  plannedFrom?: Date;
+  plannedTo?: Date;
+  /**
+   * Match kỹ năng (`w.required_trade_id = ANY(...)`); WO NULL-trade bị loại
+   * khi lọc skill (không xác nhận được match — BD11). Rỗng → caller
+   * early-return empty, không query.
+   */
+  requiredTradeIds?: string[];
   limit: number;
   offset: number;
+  now: Date;
+}
+
+/** Scope + availability cho `GET /api/v1/job-board/filter-options` (BD13). */
+export interface JobBoardScopeFilter {
+  projectIds?: string[];
   now: Date;
 }
 
@@ -138,6 +159,28 @@ export interface WorkOrderRepositoryPort {
   findAreaRefs?(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
   /** Như `findAreaRefs` nhưng đọc `public.trades` (cột hiển thị `Ngành yêu cầu`). */
   findTradeRefs?(ids: string[]): Promise<Map<string, WorkOrderListRef>>;
+  /**
+   * JOB-SRS-006 (issue #46) — trade active của actor cho `skill=mine` (BD11):
+   * đọc thẳng `public.resource_trades`
+   * (`resource_type='USER' AND is_active=true` — mirror đúng điều kiện org
+   * `pg-worker.repository.ts:43`, tránh drift semantics; thin port trong
+   * module `job` vì `OrgModule` không exports — KHÔNG sửa org-lane).
+   * Trả `trade_id[]` (rỗng = không trade active → caller early-return empty).
+   */
+  findActiveTradeIdsByUserId?(userId: string): Promise<string[]>;
+  /**
+   * JOB-SRS-006 (issue #46) — DISTINCT nguồn cho
+   * `GET /api/v1/job-board/filter-options` (BD13): DISTINCT
+   * `project_id`/`area_id`/`work_type_id`/`required_trade_id` trên ĐÚNG WHERE
+   * availability+scope (shared condition-builder với `searchJobBoard`).
+   * KHÔNG áp filter người dùng (option set tĩnh).
+   */
+  findJobBoardFilterOptions?(filter: JobBoardScopeFilter): Promise<{
+    projectIds: string[];
+    areaIds: string[];
+    workTypeIds: string[];
+    tradeIds: string[];
+  }>;
   create(workOrder: WorkOrderEntity): Promise<void>;
   createWithClient?(client: PoolClient, workOrder: WorkOrderEntity): Promise<void>;
   /**

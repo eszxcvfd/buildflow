@@ -1,0 +1,96 @@
+{
+  "_note": "Throwaway E2E-only demo data (seed/reset per evidence docs). Never production.",
+  "runLabel": "S6R2",
+  "titles": {
+    "A": "Trát tường sảnh chính tầng một",
+    "B": "Sơn lót khu thương mại tầng hai",
+    "C": "Lắp đặt điện sảnh chính đợt muộn",
+    "D": "Trát tường sảnh chính đợt muộn",
+    "E": "Trát tường căn hộ mẫu block A tầng ba",
+    "F": "Ốp lát khu thương mại không yêu cầu thợ"
+  },
+  "workOrderIds": {
+    "A": "b7d60af2-8909-485d-9e5a-acdbfb61c751",
+    "B": "4185f16a-4220-45b0-b127-cafc20f84f47",
+    "C": "bbcbf829-048b-4585-bd6c-28e9cf923c5e",
+    "D": "e294d796-b45f-46b3-ae46-1f271b7d03f6",
+    "E": "3436d342-bba8-4757-993e-92ef9247fcab",
+    "F": "6264246b-bb8c-4c3b-bdb2-af8eb5c51a1a"
+  },
+  "workOrderCodes": {
+    "A": "WO-MTUCU8BNLL89",
+    "B": "WO-MTUCU8CPE9KW",
+    "C": "WO-MTUCU8DNS4VI",
+    "D": "WO-MTUCU8EIIMDH",
+    "E": "WO-MTUCU8F7YANI",
+    "F": "WO-MTUCU8G35M1Z"
+  },
+  "windows": {
+    "earlyFrom": "2026-09-10T05:10:42.667Z",
+    "earlyTo": "2026-09-12T17:10:42.667Z",
+    "lateFrom": "2026-09-18T17:10:42.667Z",
+    "lateTo": "2026-09-22T17:10:42.667Z"
+  },
+  "provisionTradeId": "d0301275-705e-46e8-8c7a-0d5475f70ea7",
+  "auditBefore": "4148",
+  "notifBefore": "5",
+  "baselineTotal": 5,
+  "auditFinal": "4161",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S0",
+      "name": "login PM/worker qua API thật + baseline audit/notification",
+      "ok": true,
+      "note": "PM+worker login OK, audit=4148 notif=5"
+    },
+    {
+      "id": "S1",
+      "name": "seed 6 WO đa dạng + mở board + provision trade (API+psql thật)",
+      "ok": true,
+      "note": "6 WO mở board + F null-trade + trade provisioned; excerpt:\nWO-MTUCU8BNLL89|OPEN|t\nWO-MTUCU8CPE9KW|OPEN|t\nWO-MTUCU8DNS4VI|OPEN|t\nWO-MTUCU8EIIMDH|OPEN|t\nWO-MTUCU8F7YANI|OPEN|t\nWO-MTUCU8G35M1Z|OPEN|t"
+    },
+    {
+      "id": "S2",
+      "name": "F1a–F1e: từng filter đơn đúng tập (API thật)",
+      "ok": true,
+      "note": "F1a–F1e đúng tập; baseline total=5 (E ngoài scope vắng)"
+    },
+    {
+      "id": "S3",
+      "name": "F2 kết hợp + F3 clear + F4 invalid + F5 403/401 + F6 options",
+      "ok": true,
+      "note": "F2={A} F3=baseline(5) F4=4×400 F5=403/401/scope-ok F6=options scope-đúng"
+    },
+    {
+      "id": "S4",
+      "name": "F7 claim mô phỏng: seed assignment cho A → combo filter mất A, total -1",
+      "ok": true,
+      "note": "refresh giữ filter: A biến, total 1→0 (claim mô phỏng ở DB — write là #47)"
+    },
+    {
+      "id": "S5",
+      "name": "F8 pagination trên filtered WHERE: page gộp đủ total, total COUNT đúng",
+      "ok": true,
+      "note": "total=4 ổn định 2 pages, unknown-key ignore"
+    },
+    {
+      "id": "S6",
+      "name": "AC7: N GET có filter → audit/notification delta = 0",
+      "ok": true,
+      "note": "delta audit=0 notif=0 sau 4 GET có filter"
+    },
+    {
+      "id": "S7",
+      "name": "Expo UI: sheet → skill apply → chips → detail→back giữ filter → empty-filtered → clear",
+      "ok": true,
+      "note": "UI sheet/apply/chips/back-giữ-filter/empty-filtered/clear OK, không chữ \"Nhận việc\""
+    },
+    {
+      "id": "S8",
+      "name": "cleanup demo theo id + verify rest=0",
+      "ok": true,
+      "note": "WO rest=0, trade rest=0, seeded còn 3/3, audit rows=4161"
+    }
+  ]
+}

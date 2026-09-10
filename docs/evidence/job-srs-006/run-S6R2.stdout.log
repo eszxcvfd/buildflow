@@ -1,0 +1,18 @@
+PASS S0 login PM/worker qua API thật + baseline audit/notification :: PM+worker login OK, audit=4148 notif=5
+PASS S1 seed 6 WO đa dạng + mở board + provision trade (API+psql thật) :: 6 WO mở board + F null-trade + trade provisioned; excerpt:
+PASS S2 F1a–F1e: từng filter đơn đúng tập (API thật) :: F1a–F1e đúng tập; baseline total=5 (E ngoài scope vắng)
+PASS S3 F2 kết hợp + F3 clear + F4 invalid + F5 403/401 + F6 options :: F2={A} F3=baseline(5) F4=4×400 F5=403/401/scope-ok F6=options scope-đúng
+PASS S4 F7 claim mô phỏng: seed assignment cho A → combo filter mất A, total -1 :: refresh giữ filter: A biến, total 1→0 (claim mô phỏng ở DB — write là #47)
+PASS S5 F8 pagination trên filtered WHERE: page gộp đủ total, total COUNT đúng :: total=4 ổn định 2 pages, unknown-key ignore
+PASS S6 AC7: N GET có filter → audit/notification delta = 0 :: delta audit=0 notif=0 sau 4 GET có filter
+  shot S6-board-S6R2.png — Job Board baseline trên Expo (sau claim-sim S4: A vắng)
+  shot S6-sheet-S6R2.png — FilterSheet mở (sections + toggle + date inputs)
+  shot S6-filtered-S6R2.png — Đã apply skill=mine qua UI (chip + list lọc)
+  shot S6-detail-S6R2.png — Chi tiết WO từ list đã lọc
+  shot S6-back-S6R2.png — Back từ detail: filter giữ (chip còn)
+  shot S6-empty-filtered-S6R2.png — Empty-filtered ≠ empty-board/lỗi
+  shot S6-cleared-S6R2.png — Clear all: về baseline
+PASS S7 Expo UI: sheet → skill apply → chips → detail→back giữ filter → empty-filtered → clear :: UI sheet/apply/chips/back-giữ-filter/empty-filtered/clear OK, không chữ "Nhận việc"
+PASS S8 cleanup demo theo id + verify rest=0 :: WO rest=0, trade rest=0, seeded còn 3/3, audit rows=4161
+
+TỔNG: 9/9 PASS (label=S6R2, cleanup WO rest=0, audit rows=4161)

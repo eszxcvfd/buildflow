@@ -6,6 +6,7 @@ import { CreateWorkOrderUseCase } from './application/use-case/create-work-order
 import { GetWorkOrderUseCase } from './application/use-case/get-work-order.use-case';
 import { SearchWorkOrdersUseCase } from './application/use-case/search-work-orders.use-case';
 import { SearchJobBoardUseCase } from './application/use-case/search-job-board.use-case';
+import { GetJobBoardFilterOptionsUseCase } from './application/use-case/get-job-board-filter-options.use-case';
 import { UpdateWorkOrderUseCase } from './application/use-case/update-work-order.use-case';
 import { CheckWorkOrderPublishUseCase } from './application/use-case/check-work-order-publish.use-case';
 import { OpenWorkOrderJobBoardUseCase } from './application/use-case/open-work-order-job-board.use-case';
@@ -48,6 +49,7 @@ import { IamModule } from '../iam/iam.module';
     GetWorkOrderUseCase,
     SearchWorkOrdersUseCase,
     SearchJobBoardUseCase,
+    GetJobBoardFilterOptionsUseCase,
     UpdateWorkOrderUseCase,
     CheckWorkOrderPublishUseCase,
     OpenWorkOrderJobBoardUseCase,

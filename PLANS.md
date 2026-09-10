@@ -34,6 +34,14 @@ A checked-in plan should state, as applicable:
 
 ## Current plans
 
+## JOB-SRS-006 job-board filters (issue #46)
+
+- **Objective:** worker lọc Job Board theo ngày/dự án/khu vực/loại công việc/kỹ năng (5 chiều AND-compose, không bypass scope) + FilterSheet/chips mobile + evidence E2E real-DB.
+- **Scope:** `src/api` (policy `job-board-filter.policy.ts` + port/adapter + use cases + `JobBoardController` + in-memory specs), `src/mobile` (client + filter-state store + FilterSheet + screen + tests), docs (`ENDPOINTS.md` §20.1, `API.md`, `MOBILE.md`, `NETCODE.md` check-line), evidence `docs/evidence/job-srs-006/` (driver + 2 run ALL-PASS + shots `-S6R*`).
+- **Non-goals:** claim (#47), #48–#50, full-text search (BD17 từ chối có biên), đổi §19/#44 contract.
+- **Owners/lane:** cross-workspace Contract lane per `WORK-ROUTING.md` — `src/api` owns contract, fans out to `src/mobile` consumer in the same change.
+- **Required proof:** api/mobile typecheck + lint + test xanh; docker api/mobile healthy; driver real-DB ≥2 run ALL-PASS 9/9; run logs force-added (`*.log` gitignore exception, xem `JOB-SRS-006-E2E.md` §5).
+- **Status:** reviewer HOLD — đang fix theo ruling Lead (F001 code `JOB_BOARD_DATE_RANGE_INVALID`, F002 `now` top-level, F003–F007/F009/F010 mobile guards, F024–F025 evidence); F008/F011–F019 defer có tracking. Plan: `docs/plans-job-srs-006.md`.
 
 ## DBD V2.1 PostgreSQL initialization
 

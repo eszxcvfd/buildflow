@@ -448,6 +448,27 @@ export interface FetchJobBoardParams {
   /** Server giới hạn 1–100 (mặc định 20). */
   limit?: number;
   offset?: number;
+  /**
+   * JOB-SRS-006 (issue #46) — 6 filter param, tất cả optional, `''` = absent
+   * (không gửi). `areaId`/`workTypeId` lặp được (multi-select chips).
+   * `dateFrom`/`dateTo` ISO-8601 bắt buộc offset (mirror #44).
+   * `skill` enum duy nhất `mine`.
+   */
+  projectId?: string;
+  areaIds?: string[];
+  workTypeIds?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  skill?: 'mine';
+}
+
+export interface JobBoardFilterOptions {
+  /** Clock server (ISO string) — khớp contract §20.1, UI giữ trong type. */
+  now: string;
+  projects: { id: string; name: string }[];
+  areas: { id: string; name: string }[];
+  workTypes: { id: string; name: string }[];
+  trades: { id: string; name: string }[];
 }
 
 function toJobBoardError(status: number, body: unknown, fallback: string): LoginError {
@@ -475,6 +496,13 @@ export async function fetchJobBoard(token: string, params: FetchJobBoardParams =
   const qs = new URLSearchParams();
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset !== undefined) qs.set('offset', String(params.offset));
+  // JOB-SRS-006 (#46): `''` = absent (không gửi); mảng lặp từng phần tử.
+  if (params.projectId) qs.set('projectId', params.projectId);
+  for (const a of params.areaIds ?? []) if (a) qs.append('areaId', a);
+  for (const w of params.workTypeIds ?? []) if (w) qs.append('workTypeId', w);
+  if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+  if (params.dateTo) qs.set('dateTo', params.dateTo);
+  if (params.skill) qs.set('skill', params.skill);
   const query = qs.toString();
   let res: Response;
   try {
@@ -500,6 +528,36 @@ export async function fetchJobBoard(token: string, params: FetchJobBoardParams =
     throw new LoginError('Phản hồi bảng việc không hợp lệ', 500);
   }
   throw toJobBoardError(res.status, body, `Tải bảng việc thất bại (${res.status})`);
+}
+
+/**
+ * JOB-SRS-006 (issue #46) — nguồn picker cho WORKER (WORKER 403 ở
+ * `/trades` và `/work-types`). Cùng scope+availability với list.
+ * Contract: ENDPOINTS.md §20.1.
+ */
+export async function fetchJobBoardFilterOptions(token: string): Promise<JobBoardFilterOptions> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/v1/job-board/filter-options`, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new LoginError('Không thể kết nối máy chủ, vui lòng thử lại', 0);
+  }
+  const body: unknown = await res.json().catch(() => null);
+  if (res.ok) {
+    const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+    // F002 (#46): contract §20.1 trả `{ now, 4 arrays }` — `now` bắt buộc.
+    if (
+      typeof b.now === 'string' &&
+      Array.isArray(b.projects) && Array.isArray(b.areas) && Array.isArray(b.workTypes) && Array.isArray(b.trades)
+    ) {
+      return b as unknown as JobBoardFilterOptions;
+    }
+    throw new LoginError('Phản hồi tùy chọn lọc không hợp lệ', 500);
+  }
+  throw toJobBoardError(res.status, body, `Tải tùy chọn lọc thất bại (${res.status})`);
 }
 
 /**

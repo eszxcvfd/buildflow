@@ -84,6 +84,8 @@ Các metadata kỹ thuật nên chuẩn hóa ở transport adapter:
 
 Không retry mù mutation; không log token, credential, PII hoặc raw request body không cần thiết.
 
+> JOB-SRS-006 (#46) — xác nhận NETCODE no-op: hai GET job-board (list + `filter-options`) giữ nguyên auth JWT + error shape `{ statusCode, message, fieldErrors }` + `no-store`, không đổi transport/auth/versioning.
+
 ## 6. Contract change procedure
 
 1. Owner API mô tả use case và schema trong `API.md`/OpenAPI.

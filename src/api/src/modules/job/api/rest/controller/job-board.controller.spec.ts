@@ -60,8 +60,17 @@ describe('JobBoardController (JOB-SRS-005 #45)', () => {
         tradeRefs: new Map(),
       })),
     };
-    const controller = new JobBoardController(searchJobBoard as never);
-    return { controller, searchJobBoard };
+    const filterOptions = {
+      execute: jest.fn(async () => ({
+        projects: [],
+        areas: [],
+        workTypes: [],
+        trades: [],
+        now: new Date('2026-11-01T08:00:00.000Z'),
+      })),
+    };
+    const controller = new JobBoardController(searchJobBoard as never, filterOptions as never);
+    return { controller, searchJobBoard, filterOptions };
   }
 
   it('forward limit/offset + actor server-derived, envelope default limit 20 offset 0', async () => {

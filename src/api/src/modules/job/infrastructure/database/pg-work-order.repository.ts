@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient } from 'pg';
 import { WorkOrderEntity, WorkOrderStatus } from '../../domain/entity/work-order.entity';
 import { WorkOrderPriority } from '../../domain/service/work-order.policy';
-import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, JobBoardFilter, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
+import { ActiveAreaRef, ActiveTradeRef, ActiveWorkTypeRef, JobBoardFilter, JobBoardScopeFilter, WorkOrderFilter, WorkOrderListRef, WorkOrderRepositoryPort } from '../../domain/repository/work-order-repository.port';
 import { loadConfig } from '../../../../config/configuration';
 
 function getPool(): Pool {
@@ -226,31 +226,82 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
   }
 
   /**
-   * JOB-SRS-005 (issue #45) — list Job Board (BD5): availability predicate
-   * HOÀN TOÀN server-side trong SQL (KHÔNG post-filter — post-filter phá
-   * `total` và page): `status='OPEN' + job_board_open + trong window
-   * (from NULL hoặc <= now; until NULL hoặc strict > now — biên `until==now`
-   * loại, conservative, xem ENDPOINTS §20) + NOT EXISTS assignment
-   * PENDING/ACTIVE + scope (`project_id = ANY(...)` chỉ non-ADMIN).
+   * JOB-SRS-006 (issue #46, BD13) — WHERE availability dùng chung giữa
+   * `searchJobBoard` và `findJobBoardFilterOptions` (cùng scope +
+   * availability predicate, tránh drift). `$1` luôn là `now`.
+   */
+  private jobBoardBaseConditions(filter: JobBoardScopeFilter): {
+    conditions: string[];
+    values: unknown[];
+    nextIdx: number;
+  } {
+    return {
+      conditions: [
+        `w.status = 'OPEN'`,
+        `w.job_board_open = true`,
+        `(w.job_board_open_from IS NULL OR w.job_board_open_from <= $1)`,
+        `(w.job_board_open_until IS NULL OR w.job_board_open_until > $1)`,
+        `NOT EXISTS (SELECT 1 FROM public.assignments a
+                       WHERE a.work_order_id = w.id
+                         AND a.status IN ('PENDING_ACCEPTANCE','ACTIVE'))`,
+      ],
+      values: [filter.now],
+      nextIdx: 2,
+    };
+  }
+
+  /**
+   * JOB-SRS-005 (issue #45) — list Job Board (BD5) + JOB-SRS-006 (#46, BD10/
+   * BD11): availability predicate HOÀN TOÀN server-side trong SQL (KHÔNG
+   * post-filter — post-filter phá `total` và page): `status='OPEN' +
+   * job_board_open + trong window (from NULL hoặc <= now; until NULL hoặc
+   * strict > now — biên `until==now` loại, conservative, xem ENDPOINTS §20) +
+   * NOT EXISTS assignment PENDING/ACTIVE + scope (`project_id = ANY(...)`
+   * chỉ non-ADMIN) + 5 chiều filter AND-compose (#46: `projectId` đơn,
+   * `areaId[]`/`workTypeId[]` lặp, overlap instant trên PLANNED dates,
+   * `required_trade_id = ANY(tradeIds)` cho `skill=mine`).
    * `now` do caller (use case) capture MỘT lần, truyền vào đây.
    * `COUNT` trên CÙNG where cho `total`; page
    * `ORDER BY updated_at DESC, id DESC` (tiebreak `id` deterministic — BD1).
    */
   async searchJobBoard(filter: JobBoardFilter): Promise<{ entities: WorkOrderEntity[]; total: number }> {
-    const conditions: string[] = [
-      `w.status = 'OPEN'`,
-      `w.job_board_open = true`,
-      `(w.job_board_open_from IS NULL OR w.job_board_open_from <= $1)`,
-      `(w.job_board_open_until IS NULL OR w.job_board_open_until > $1)`,
-      `NOT EXISTS (SELECT 1 FROM public.assignments a
-                     WHERE a.work_order_id = w.id
-                       AND a.status IN ('PENDING_ACCEPTANCE','ACTIVE'))`,
-    ];
-    const values: unknown[] = [filter.now];
-    let idx = 2;
-    if (filter.projectIds) {
+    const base = this.jobBoardBaseConditions({ projectIds: filter.projectIds, now: filter.now });
+    const conditions = [...base.conditions];
+    const values: unknown[] = [...base.values];
+    let idx = base.nextIdx;
+    // Scope giữ vị trí đầu (ngay sau availability) — filter không bypass.
+    if (filter.projectId) {
+      conditions.push(`w.project_id = $${idx++}::uuid`);
+      values.push(filter.projectId);
+    } else if (filter.projectIds) {
       conditions.push(`w.project_id = ANY($${idx++}::uuid[])`);
       values.push(filter.projectIds);
+    }
+    if (filter.areaIds) {
+      conditions.push(`w.area_id = ANY($${idx++}::uuid[])`);
+      values.push(filter.areaIds);
+    }
+    if (filter.workTypeIds) {
+      conditions.push(`w.work_type_id = ANY($${idx++}::uuid[])`);
+      values.push(filter.workTypeIds);
+    }
+    // Date filter trên PLANNED dates (overlap instant, timezone-correct —
+    // BD10): row `planned_start_at IS NULL` bị loại khi có date filter
+    // (conservative — không xác nhận được overlap).
+    if (filter.plannedFrom || filter.plannedTo) {
+      conditions.push(`w.planned_start_at IS NOT NULL`);
+      if (filter.plannedTo) {
+        conditions.push(`w.planned_start_at <= $${idx++}`);
+        values.push(filter.plannedTo);
+      }
+      if (filter.plannedFrom) {
+        conditions.push(`COALESCE(w.planned_end_at, w.planned_start_at) >= $${idx++}`);
+        values.push(filter.plannedFrom);
+      }
+    }
+    if (filter.requiredTradeIds) {
+      conditions.push(`w.required_trade_id = ANY($${idx++}::uuid[])`);
+      values.push(filter.requiredTradeIds);
     }
     const where = `WHERE ${conditions.join(' AND ')}`;
     const countR = await this.pool().query(
@@ -272,6 +323,64 @@ export class PgWorkOrderRepository implements WorkOrderRepositoryPort {
       [...values, limit, offset],
     );
     return { entities: dataR.rows.map((row: Row) => mapRow(row)), total };
+  }
+
+  /**
+   * JOB-SRS-006 (issue #46, BD11) — trade active của actor cho `skill=mine`:
+   * điều kiện mirror org `pg-worker.repository.ts:43`
+   * (`resource_type='USER' AND is_active=true`). Không lọc effective-window
+   * (eligibility claim-gate thuộc #48/#49 — bridge BD11).
+   */
+  async findActiveTradeIdsByUserId(userId: string): Promise<string[]> {
+    const r = await this.pool().query(
+      `SELECT trade_id FROM public.resource_trades
+        WHERE resource_type = 'USER' AND user_id = $1 AND is_active = true`,
+      [userId],
+    );
+    return (r.rows as Row[]).map((row) => String(row['trade_id']));
+  }
+
+  /**
+   * JOB-SRS-006 (issue #46, BD13) — DISTINCT nguồn filter-options trên ĐÚNG
+   * WHERE availability+scope (dùng `jobBoardBaseConditions` chung với
+   * `searchJobBoard`). 4 SELECT DISTINCT (bounded bởi scope+availability,
+   * index `ix_work_orders_job_board` có sẵn). `required_trade_id` NULL bỏ qua.
+   */
+  async findJobBoardFilterOptions(filter: JobBoardScopeFilter): Promise<{
+    projectIds: string[];
+    areaIds: string[];
+    workTypeIds: string[];
+    tradeIds: string[];
+  }> {
+    const base = this.jobBoardBaseConditions(filter);
+    const conditions = [...base.conditions];
+    const values: unknown[] = [...base.values];
+    let idx = base.nextIdx;
+    if (filter.projectIds) {
+      conditions.push(`w.project_id = ANY($${idx++}::uuid[])`);
+      values.push(filter.projectIds);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const [projects, areas, workTypes, trades] = await Promise.all([
+      this.pool().query(`SELECT DISTINCT w.project_id AS id FROM public.work_orders w ${where}`, values),
+      this.pool().query(
+        `SELECT DISTINCT w.area_id AS id FROM public.work_orders w ${where} AND w.area_id IS NOT NULL`,
+        values,
+      ),
+      this.pool().query(`SELECT DISTINCT w.work_type_id AS id FROM public.work_orders w ${where}`, values),
+      this.pool().query(
+        `SELECT DISTINCT w.required_trade_id AS id FROM public.work_orders w ${where} AND w.required_trade_id IS NOT NULL`,
+        values,
+      ),
+    ]);
+    const ids = (r: { rows: Row[] }): string[] =>
+      r.rows.map((row) => String(row['id'])).sort();
+    return {
+      projectIds: ids(projects),
+      areaIds: ids(areas),
+      workTypeIds: ids(workTypes),
+      tradeIds: ids(trades),
+    };
   }
 
   private async createOnExecutor(executor: Pool | PoolClient, workOrder: WorkOrderEntity): Promise<void> {

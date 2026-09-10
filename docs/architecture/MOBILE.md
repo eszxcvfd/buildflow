@@ -57,7 +57,7 @@ Màn hình đổi/đặt lại mật khẩu (IAM-SRS-007): `forgot-password`/`re
 
 Màn hình điều kiện nhận việc (ORG-SRS-008, issue #31): route `app/eligibility.tsx` (token gate qua session đã lưu; chưa đăng nhập → gợi ý đăng nhập) render feature `src/features/eligibility/EligibilityScreen.tsx`. Screen gọi typed client `fetchMyEligibility` → `GET /api/v1/eligibility/me`, hiển thị verdict banner (`Đủ điều kiện` / `Chưa đủ điều kiện`) + `checkedAt` + mã đối chiếu (`correlationId`), danh sách condition (`ĐẠT` / `KHÔNG ĐẠT` / `KHÔNG ĐÁNH GIÁ ĐƯỢC` cho `passed` true/false/null) và tư cách thành viên `crews[]` (mã đội · tên · vai trò · hiệu lực). Trạng thái: loading (`ActivityIndicator`), error + `Thử lại`, 404 `RESOURCE_NOT_FOUND` → empty `Tài khoản không có hồ sơ worker`, 401 → gợi ý đăng nhập lại; nút `Kiểm tra lại` re-fetch (stale → force refresh, không blind submit). Entry point: nút `Xem điều kiện nhận việc` trên `ProfileScreen` → `router.push('/eligibility')`. Mobile không suy luận eligibility cục bộ — mọi đánh giá do API trả về.
 
-Màn hình bảng việc (JOB-SRS-005, issue #45): route `app/job-board/index.tsx` (token gate qua session đã lưu, mirror `app/projects/index.tsx`) render feature `src/features/job-board/JobBoardScreen.tsx`; chi tiết `app/job-board/[id].tsx` render `WorkOrderPreviewScreen` mỏng. Screen gọi typed client `fetchJobBoard` → `GET /api/v1/job-board?limit&offset` (contract: [`ENDPOINTS.md §20`](ENDPOINTS.md); envelope `{ data, total, limit, offset }`, `cache: 'no-store'`), card hiển thị code/title/projectName/workTypeName/areaName/requiredTradeName/priority/planned times/window + state badge + CTA `Xem chi tiết` → `/job-board/[id]`; **không render chữ `Nhận việc` trong mọi state** (claim là #47). Preview gọi `fetchWorkOrderPreview` → `GET /api/v1/work-orders/:id` (WORKER được đọc), `state ≠ 'AVAILABLE'` → banner trạng thái, không action. Trạng thái: loading, empty (`Chưa có việc nào đang nhận — kéo xuống để làm mới`), error + `Thử lại`, 401 → đăng nhập lại, 403 defensive-unreachable (server không trả 403 trên path này — membership rỗng → 200 empty; nhánh UI giữ làm #46-forward-compat khi filter `projectId` thêm 403-generic); FlatList + `RefreshControl` pull-to-refresh (reset offset 0) + `onEndReached`/`Tải thêm` pagination (dừng khi loaded === total). Entry point: nút `Bảng việc` trên `ProfileScreen` → `router.push('/job-board')`. Filter theo loại/kỹ năng/khu vực thuộc #46 (deviation BD9).
+Màn hình bảng việc (JOB-SRS-005, issue #45): route `app/job-board/index.tsx` (token gate qua session đã lưu, mirror `app/projects/index.tsx`) render feature `src/features/job-board/JobBoardScreen.tsx`; chi tiết `app/job-board/[id].tsx` render `WorkOrderPreviewScreen` mỏng. Screen gọi typed client `fetchJobBoard` → `GET /api/v1/job-board?limit&offset` (contract: [`ENDPOINTS.md §20`](ENDPOINTS.md); envelope `{ data, total, limit, offset }`, `cache: 'no-store'`), card hiển thị code/title/projectName/workTypeName/areaName/requiredTradeName/priority/planned times/window + state badge + CTA `Xem chi tiết` → `/job-board/[id]`; **không render chữ `Nhận việc` trong mọi state** (claim là #47). Preview gọi `fetchWorkOrderPreview` → `GET /api/v1/work-orders/:id` (WORKER được đọc), `state ≠ 'AVAILABLE'` → banner trạng thái, không action. Trạng thái: loading, empty (`Chưa có việc nào đang nhận — kéo xuống để làm mới`), error + `Thử lại`, 401 → đăng nhập lại, 403 defensive-reachable khi filter `projectId` ngoài scope (server trả 403-generic — BD12, JOB-SRS-006 `#46`); FlatList + `RefreshControl` pull-to-refresh (reset offset 0) + `onEndReached`/`Tải thêm` pagination (dừng khi loaded === total). Entry point: nút `Bảng việc` trên `ProfileScreen` → `router.push('/job-board')`. Filter theo ngày/dự án/khu vực/loại/kỹ năng thuộc #46 (JOB-SRS-006 — backend contract tại [`ENDPOINTS.md §20.1`](ENDPOINTS.md); BD9 DISCHARGED by #46; FilterSheet/chips multi-select + generation dedupe thuộc mobile lane).
 
 ## 3. Dependency rules
 
@@ -138,12 +138,24 @@ Với mobile ít dùng, proof ưu tiên typecheck/lint và một critical-path d
 > contract producer là API — cùng change).
 
 - [x] Route thuộc group nào và deep link là gì?
-- [ ] Feature public interface đã tách khỏi route chưa?
-- [ ] Loading, empty, error, retry, offline và session-expired state đã có chưa?
-- [ ] API model/client là generated/current contract chưa?
-- [ ] Native dependency có thật sự cần không?
+- [x] Feature public interface đã tách khỏi route chưa? (JOB-SRS-006 `#46`: `JobBoardScreen`/`JobBoardFilterSheet`/`job-board-filter-state` nhận `token`/props, không domain logic trong `app/`.)
+- [x] Loading, empty, error, retry, offline và session-expired state đã có chưa? (`#46`: loading/empty/**empty-filtered** (copy riêng + gợi ý xóa filter)/success/validation per-field/error/401/**403 reachable** (BD12)/retry/filter-loading busy-guard; refresh giữ filter, đổi filter reset offset 0.)
+- [x] API model/client là generated/current contract chưa? (`#46`: `FetchJobBoardParams` +6 filter — `areaId`/`workTypeId` lặp, `''`=absent — + `fetchJobBoardFilterOptions` → [`ENDPOINTS.md §20.1`](ENDPOINTS.md).)
+- [x] Native dependency có thật sự cần không? (`#46`: không dependency mới — FilterSheet bottom-sheet bằng RN primitives `Modal`/`Pressable`, không Ark UI.)
 - [ ] Accessibility label/role/state đã được kiểm tra trên iOS và Android chưa?
-- [ ] Proof đã route qua [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md) chưa?
+- [x] Proof đã route qua [`../../WORK-ROUTING.md`](../../WORK-ROUTING.md) chưa? (mobile consumer, contract producer là API — cùng change; evidence [`../evidence/job-srs-006/JOB-SRS-006-E2E.md`](../evidence/job-srs-006/JOB-SRS-006-E2E.md).)
+
+> **Filter Job Board (JOB-SRS-006, issue #46):** `JobBoardFilterSheet` (project
+> single-select + area/workType multi-chips + toggle `skill=mine` + date range ISO kèm
+> offset + reset/apply + client validation mirror server) trên nguồn
+> `GET /api/v1/job-board/filter-options` (response `{ now, projects, areas,
+> workTypes, trades }` — UI chỉ dùng 4 mảng picker, `now` top-level là clock
+> server giữ trong type để khớp contract); active-filter chips (xóa từng chip + xóa tất
+> cả) + count `total` trên `JobBoardScreen`; filter state ở module-level store
+> `job-board-filter-state.ts` (giữ khi back từ detail — Expo Router remount screen;
+> scope phiên app, mất khi restart — KHÔNG AsyncStorage); generation dedupe mọi trigger
+> (discharge follow-up dedupe `:540` — BD16 mobile phần) + busy-guard chống request chồng.
+> Không chữ `Nhận việc` ở mọi state (claim là #47).
 
 ## References
 
