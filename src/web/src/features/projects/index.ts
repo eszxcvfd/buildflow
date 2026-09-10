@@ -1,5 +1,7 @@
 export { ProjectsList } from './components/ProjectsList';
-export { ProjectsHeaderActions } from './components/ProjectsHeaderActions';
+export { ProjectsMetrics } from './components/ProjectsMetrics';
+export { ProjectsFilterBar, PROJECT_STATUS_OPTIONS } from './components/ProjectsFilterBar';
+export { ProjectInspector } from './components/ProjectInspector';
 export { ProjectForm } from './components/ProjectForm';
 export { ProjectCreateDialog } from './components/ProjectCreateDialog';
 export { ProjectEditDialog } from './components/ProjectEditDialog';

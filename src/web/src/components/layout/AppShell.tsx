@@ -6,7 +6,7 @@ import { logoutAndClear } from '@/features/auth';
 import { Dialog } from '@/components/ui/dialog/Dialog';
 import { Menu } from '@/components/ui/menu/Menu';
 import { Tooltip } from '@/components/ui/tooltip/Tooltip';
-import { BrandMark } from './BrandMark';
+import { BellIcon, SearchIcon } from '@/components/ui/icons/Icons';
 import { AUTH_CHANGED_EVENT, getAuth, isTokenExpired, type StoredAuth } from '@/lib/auth/storage';
 // ORG-SRS-005 (issue #28) — nguồn role duy nhất: lib/auth/roles.ts
 // (roles.code thật: ADMIN + PROJECT_MANAGER; không alias project_role).
@@ -176,8 +176,8 @@ const NAV_ICON_PATHS: Record<string, React.ReactNode> = {
 function NavIcon({ href }: { href: string }) {
   return (
     <svg
-      width={18}
-      height={18}
+      width={16}
+      height={16}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -186,42 +186,6 @@ function NavIcon({ href }: { href: string }) {
       className="bf-nav-icon"
     >
       {NAV_ICON_PATHS[href] ?? NAV_ICON_PATHS['/projects']}
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg
-      width={20}
-      height={20}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
     </svg>
   );
 }
@@ -236,7 +200,25 @@ function canViewResources(roles: Array<{ code: string }>): boolean {
 
 function pageTitle(pathname: string): string {
   const hit = TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  return hit ? hit[1] : 'Buildflow';
+  return hit ? hit[1] : 'Vinacons ERP';
+}
+
+/** Breadcrumb nhóm điều hướng chứa route hiện tại (null khi ngoài nav). */
+function breadcrumbGroup(pathname: string): string | null {
+  for (const group of NAV_GROUPS) {
+    if (group.items.some((it) => pathname === it.href || pathname.startsWith(`${it.href}/`))) {
+      return group.title;
+    }
+  }
+  return null;
+}
+
+/** Nhãn vai trò trung thực cho footer sidebar (từ roles.code thật). */
+function roleLabel(roles: Array<{ code: string }>): string {
+  const codes = roles.map((r) => r.code);
+  if (codes.includes('ADMIN')) return 'Quản trị viên';
+  if (codes.includes('PROJECT_MANAGER')) return 'Quản lý dự án';
+  return codes[0] ?? 'Thành viên';
 }
 
 function initials(fullName: string): string {
@@ -319,6 +301,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setPaletteOpen(true);
   }
 
+  // ⌘K / Ctrl+K mở palette điều hướng từ bất kỳ đâu trong shell.
+  React.useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        openPalette();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   function goPalette(href: string) {
     setPaletteOpen(false);
     router.push(href);
@@ -326,7 +320,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const toggleSidebar = React.useCallback(() => {
     // Mobile (≤900px, khớp breakpoint CSS): mở drawer phủ + scrim.
-    // Desktop: thu gọn sidebar 248px → 72px icon-only.
+    // Desktop: thu gọn sidebar 224px → 72px icon-only.
     if (window.matchMedia('(max-width: 900px)').matches) {
       setOpen((v) => !v);
       return;
@@ -362,13 +356,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Projects workspace chọn full-bleed 3 vùng qua data-fullbleed trên
+  // .bf-shell (test được trong jsdom — không dùng :has()).
+  // RULING F007: exact match '/projects' — /projects/:id và /projects/new
+  // giữ layout cũ (không clipped).
+  const isFullBleed = pathname === '/projects';
+  const crumbGroup = breadcrumbGroup(pathname);
+  const crumbTitle = pageTitle(pathname);
+
   return (
-    <div className="bf-shell" data-collapsed={collapsed}>
+    <div className="bf-shell" data-collapsed={collapsed} data-fullbleed={isFullBleed ? 'true' : 'false'}>
       <aside className="bf-sidebar" data-open={open} data-collapsed={collapsed}>
-        <a href="/dashboard" className="bf-brand" aria-label="Buildflow — về tổng quan">
-          <BrandMark />
+        <a href="/dashboard" className="bf-brand" aria-label="Vinacons ERP — về tổng quan">
+          <span className="bf-brand-mark" aria-hidden="true">
+            B
+          </span>
           <span className="bf-brand-name">
-            Build<em>flow</em>
+            VINACONS ERP
+          </span>
+          <span className="bf-brand-version bf-mono" aria-hidden="true">
+            v2.4
           </span>
         </a>
         <nav className="bf-nav" aria-label="Điều hướng chính">
@@ -402,6 +409,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        <div className="bf-nav-user">
+          <span className="bf-avatar bf-avatar-sm" aria-hidden="true">
+            {initials(auth.user.fullName)}
+          </span>
+          <span className="bf-nav-user-text">
+            <span className="bf-nav-user-name">{auth.user.fullName}</span>
+            <span className="bf-nav-user-role">{roleLabel(auth.roles)}</span>
+          </span>
+        </div>
       </aside>
 
       <button className="bf-scrim" aria-label="Đóng menu" data-open={open} onClick={() => setOpen(false)} />
@@ -421,12 +437,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </svg>
               </button>
             </Tooltip>
-            <span className="bf-topbar-title">{pageTitle(pathname)}</span>
+            <nav aria-label="Breadcrumb" className="bf-breadcrumb">
+              {crumbGroup ? (
+                <>
+                  <span className="bf-breadcrumb-parent">{crumbGroup}</span>
+                  <span aria-hidden="true" className="bf-breadcrumb-sep">
+                    /
+                  </span>
+                </>
+              ) : null}
+              <span className="bf-topbar-title">{crumbTitle}</span>
+            </nav>
           </div>
           <div className="bf-topbar-side">
-            <button type="button" className="bf-search-pill" onClick={openPalette} aria-label="Tìm kiếm trang">
-              <SearchIcon />
-              <span>Search…</span>
+            <button type="button" className="bf-search-pill" onClick={openPalette} aria-label="Mở tìm kiếm (⌘K)">
+              <SearchIcon size={14} />
+              <span className="bf-search-pill-text">Tìm tên, mã, trang (⌘K)…</span>
             </button>
             <Menu
               triggerLabel={
@@ -494,7 +520,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <input
                 autoFocus
                 className="bf-input"
-                placeholder="Search…"
+                placeholder="Tìm tên, mã, trang (⌘K)…"
                 aria-label="Từ khóa tìm kiếm trang"
                 value={paletteQuery}
                 onChange={(e) => {

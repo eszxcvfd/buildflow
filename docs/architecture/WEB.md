@@ -154,12 +154,14 @@ Ark UI chịu trách nhiệm behavior/state machine và accessibility primitives
 - Không coi primitive headless là sản phẩm hoàn chỉnh: mỗi component phải có visual states, responsive behavior, reduced-motion behavior và test keyboard/focus.
 - Khi dùng component của Ark UI trong Server Component, đặt nó sau client wrapper cần thiết và kiểm tra boundary của package.
 
-### 6.1 Design tokens "Blueprint & Site" (đã chốt)
+### 6.1 Design tokens "Operational Workspace" (đã chốt — web redesign 2026-09)
 
-- Tokens nằm ở `src/styles/tokens.css` (CSS custom properties `--bf-*`), recipes dùng chung ở `src/app/globals.css` với prefix `.bf-*`. Feature KHÔNG hard-code màu/spacing — phải dùng token hoặc class `.bf-*`.
-- Hướng thị giác: navy bản vẽ `--bf-ink` cho sidebar/tiêu đề; cam an toàn `--bf-accent` chỉ dùng cho hành động và điểm nhấn dữ liệu; màu trạng thái chỉ trong badge (`.bf-badge-*`).
-- Font: Be Vietnam Pro qua `next/font/google` (subset `vietnamese`), 400/500/600/700; số liệu dùng `font-feature-settings: 'tnum'`.
-- Shell: `components/layout/AppShell.tsx` (client) sở hữu guard phiên + sidebar + topbar; route `(app)/*` tự động bọc trong shell qua `(app)/layout.tsx`; route `(auth)/*` dùng khung `.bf-auth`.
+- Tokens nằm ở `src/styles/tokens.css` (CSS custom properties `--bf-*`), recipes dùng chung ở `src/app/globals.css` với prefix `.bf-*`. Feature KHÔNG hard-code màu/spacing — phải dùng token hoặc class `.bf-*`. Mọi tên `--bf-*`/`.bf-*` có sẵn được giữ nguyên (E2E drivers + tests phụ thuộc); chỉ giá trị được remap.
+- Hướng thị giác: nền `#fafafa`, surfaces trắng, viền zinc 1px; primary `#4669FA` cho hành động/điểm nhấn dữ liệu; `emerald`/`amber`/`zinc` mặc định của Tailwind cho trạng thái (ACTIVE → emerald "Đang chạy"); màu trạng thái chỉ trong badge/dot (`.bf-badge-*`), không tô nền hàng loạt.
+- Font: Inter qua `next/font/google` (subset `latin` + `vietnamese`) là font chính; **JetBrains Mono** qua `next/font/google` (400/500/700, var `--font-jetbrains-mono`) cho mã/số liệu qua token `--bf-font-mono` + recipe `.bf-mono` (`font-variant-numeric: tabular-nums`) + `fontFamily.mono` trong `tailwind.config.ts`. Không dùng CDN font.
+- Shell: `components/layout/AppShell.tsx` (client) sở hữu guard phiên + sidebar **224px** + topbar **48px** (breadcrumb nhóm/trang + pill tìm kiếm 256px + keydown ⌘K/Ctrl+K mở palette); route `(app)/*` tự động bọc trong shell qua `(app)/layout.tsx`; route `(auth)/*` dùng khung `.bf-auth`. Brand sidebar "VINACONS ERP v2.4"; footer sidebar hiển thị tên + nhãn vai trò thật (`roles.code`).
+- Full-bleed opt-in: AppShell đặt `data-fullbleed='true'` trên `.bf-shell` khi và chỉ khi pathname === `/projects` (exact — `/projects/:id` và `/projects/new` giữ layout cũ, không clipped); mọi rule workspace (kể cả `.prj-*`) nằm sau `[data-fullbleed='true']` (sidebar/margin-left 224px, collapsed 72px, `.bf-content` tràn viền `calc(100vh-48px)`, hàng bảng 44–48px qua `@layer utilities`, re-assert `≤900px`), có unit test attribute. Inspector 320px ẩn `<1280px`.
+- Icons: module duy nhất `components/ui/icons/Icons.tsx` (stroke-SVG port từ path lucide trong mẫu); không thêm dependency icon runtime; Ark UI vẫn chỉ qua wrapper `components/ui`.
 - Motion: đúng một orchestrated moment khi load (ví dụ progress bar KPI); mọi transition khác ≤ 120ms; `prefers-reduced-motion` được tôn trọng ở global.
 
 ## 7. Data, auth và lỗi

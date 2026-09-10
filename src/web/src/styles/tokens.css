@@ -47,7 +47,7 @@
   /* Nền & bề mặt */
   --bf-ink: #0f172a;          /* gray-900: tiêu đề */
   --bf-ink-soft: #1e293b;     /* gray-800 */
-  --bf-paper: #eef1f9;        /* DashCode body bg #EEF1F9 */
+  --bf-paper: #fafafa;        /* Web redesign: mock main #fafafa */
   --bf-surface: #ffffff;      /* thẻ */
   --bf-surface-2: #f9fafb;    /* gray-50: thẻ phụ / dòng bảng xen kẽ */
 
@@ -92,9 +92,11 @@
   --bf-shadow-pop: 0px 4px 8px rgba(0, 0, 0, 0.08);
 
   /* Kích thước bố cục */
-  --bf-sidebar-w: 248px;
+  --bf-sidebar-w: 224px;
   --bf-shell-max: 1280px;
   --bf-gutter: 24px;
 
   --bf-font: var(--font-inter, var(--font-be-vietnam-pro, 'Be Vietnam Pro')), system-ui, sans-serif;
+  /* Web redesign: mono cho mã/số liệu (next/font JetBrains Mono). */
+  --bf-font-mono: var(--font-jetbrains-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }

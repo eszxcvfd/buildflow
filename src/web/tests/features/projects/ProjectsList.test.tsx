@@ -10,46 +10,65 @@ jest.mock('@/lib/api/projects', () => ({
   __esModule: true,
   listProjects: jest.fn(),
   getProject: jest.fn(),
+  listProjectAreas: jest.fn(),
 }));
 
-import { listProjects } from '@/lib/api/projects';
+import { listProjectAreas } from '@/lib/api/projects';
 
-const listMock = listProjects as jest.Mock;
+const areasMock = listProjectAreas as jest.Mock;
+
+function row(overrides = {}) {
+  return {
+    id: 'p1', code: 'PRA', name: 'Du an A', status: 'ACTIVE', managerId: 'm1',
+    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function renderList(props = {}) {
+  return render(
+    <ProjectsList
+      rows={[row()]}
+      loading={false}
+      error={null}
+      onRetry={jest.fn()}
+      hasFilter={false}
+      selectedId={null}
+      onSelect={jest.fn()}
+      {...props}
+    />,
+  );
+}
 
 describe('ProjectsList (IAM-SRS-006)', () => {
   beforeEach(() => {
-    listMock.mockReset();
+    areasMock.mockReset();
+    areasMock.mockRejectedValue({ status: 500, message: 'no areas' });
   });
 
   afterEach(cleanup);
 
-  it('renders member projects in a table with status badge', async () => {
-    listMock.mockResolvedValueOnce([
-      { id: 'p1', code: 'PRA', name: 'Du an A', status: 'ACTIVE', managerId: 'm1', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
-    ]);
-    render(<ProjectsList />);
+  it('renders member projects in a table with vietnamese status label', async () => {
+    renderList();
     expect(await screen.findByText(/Du an A/)).toBeTruthy();
     expect(screen.getByRole('table')).toBeTruthy();
-    // 'ACTIVE' xuất hiện cả ở option lọc trạng thái (slice #32) lẫn badge dòng.
-    expect(screen.getAllByText('ACTIVE').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Đang chạy')).toBeTruthy();
     expect(screen.getByText(/PRA/)).toBeTruthy();
   });
 
   it('shows empty state when no member projects', async () => {
-    listMock.mockResolvedValueOnce([]);
-    render(<ProjectsList />);
+    renderList({ rows: [] });
     expect(await screen.findByText(/chưa là thành viên dự án nào/)).toBeTruthy();
   });
 
   it('shows 401 login link on session expiry', async () => {
-    listMock.mockRejectedValueOnce({ status: 401, message: 'Phiên hết hạn' });
-    render(<ProjectsList />);
+    renderList({ rows: [], error: { status: 401, message: 'Phiên hết hạn' } });
     expect(await screen.findByText('Phiên hết hạn, vui lòng đăng nhập lại (401)')).toBeTruthy();
   });
 
   it('shows 403 error with retry', async () => {
-    listMock.mockRejectedValueOnce({ status: 403, message: 'Không có quyền truy cập dự án này' });
-    render(<ProjectsList />);
+    const onRetry = jest.fn();
+    renderList({ rows: [], error: { status: 403, message: 'Không có quyền truy cập dự án này' }, onRetry });
     expect(await screen.findByText('Không có quyền truy cập dự án này')).toBeTruthy();
     expect(screen.getByRole('button', { name: /thử lại/i })).toBeTruthy();
   });

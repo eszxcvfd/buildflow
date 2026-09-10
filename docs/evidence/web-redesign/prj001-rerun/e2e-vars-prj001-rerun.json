@@ -1,0 +1,78 @@
+{
+  "_note": "Throwaway E2E-only demo credentials (seed/reset per evidence docs). Never production.",
+  "admin": "hoang.anh@vinacons.vn",
+  "pm": "quoc.tran@vinacons.vn",
+  "worker": "thang.nguyen@vinacons.vn",
+  "codes": {
+    "A": "VDA1-A",
+    "PM": "VDA1-PM",
+    "D": "VDA1-D",
+    "D2": "VDA1-D2",
+    "C": "VDA1-C"
+  },
+  "projectIds": {
+    "A": "dc431f15-1239-4d25-aa6b-9fd25bc03bde",
+    "PM": "ca0a9842-39ee-4fae-8bb4-5f07030dcf8a"
+  },
+  "auditBaseline": "4510",
+  "auditFinal": "4548",
+  "rest": "0",
+  "results": [
+    {
+      "id": "S1",
+      "ok": true,
+      "note": "detail đủ code/tên/Nháp/manager; psql đúng incl manager_id/created_by; audit PRJ_PROJECT_CREATED actor admin"
+    },
+    {
+      "id": "S2",
+      "ok": true,
+      "note": "PM tạo VDA1-PM (audit actor pm); worker pool 403→1 option→client chặn, 0 POST; API worker 403, anon 401"
+    },
+    {
+      "id": "S3",
+      "ok": true,
+      "note": "409 'đã tồn tại' tại field code; form giữ nguyên code/name/address; count lower(code)=1"
+    },
+    {
+      "id": "S4",
+      "ok": true,
+      "note": "client đủ 4 required + end<start; server 400 name (array-shape) + plannedEndDate; count VDA1-V=0"
+    },
+    {
+      "id": "S5",
+      "ok": false,
+      "note": "PM PATCH status=403 {\"message\":\"Không có quyền truy cập dự án này\",\"error\":\"Forbidden\",\"statusCode\":403}"
+    },
+    {
+      "id": "S6",
+      "ok": true,
+      "note": "400 fieldErrors.status; psql status=DRAFT"
+    },
+    {
+      "id": "S7",
+      "ok": true,
+      "note": "create + PATCH manager INACTIVE → 400 managerId; worker2 đã restore ACTIVE; count VDA1-IN=0"
+    },
+    {
+      "id": "S8",
+      "ok": false,
+      "note": "worker PATCH status=200 (mong 403); PATCH=200; name sau PATCH='Hack'; GET list=200 rows=2 thấy VDA1-A=true; GET detail=200; UI worker: có rows"
+    },
+    {
+      "id": "S9",
+      "ok": true,
+      "note": "UI disable khi bay {\"disabled\":true,\"busy\":\"true\",\"text\":\"Đang xử lý…\"}; concurrent 201+409 PROJECT_CODE_DUPLICATE; counts D=1 D2=1"
+    },
+    {
+      "id": "S10",
+      "name": "List: search + filter status + phân trang + row link; worker scoped",
+      "ok": false,
+      "note": "page.waitForFunction: Timeout 30000ms exceeded."
+    },
+    {
+      "id": "S11",
+      "ok": true,
+      "note": "audit CREATED corr=77adb4ea-ce8d-4be5-8e7f-ed41f2a11430 UPDATED corr=5a4caa62-1a70-41cf-8585-65f16f4d8999; echo header POST=null PATCH=null; corr xấu 400, không row"
+    }
+  ]
+}

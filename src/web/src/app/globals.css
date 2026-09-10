@@ -71,13 +71,21 @@
   }
 }
 
+/* ---------- Mono recipe (web redesign): mã/số liệu tabular-nums ---------- */
+@layer components {
+  .bf-mono {
+    font-family: var(--bf-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
 /* ---------- App shell: DashCode fixed sidebar + sticky topbar ---------- */
 @layer components {
   .bf-shell {
     min-height: 100vh;
   }
 
-  /* DashCode sidebar: fixed 248px, white surface, base shadow. */
+  /* Sidebar: fixed var(--bf-sidebar-w) (224px sau redesign), white surface, base shadow. */
   .bf-sidebar {
     width: var(--bf-sidebar-w);
     background: var(--bf-surface);
@@ -96,39 +104,63 @@
   .bf-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 18px 20px;
+    gap: 8px;
+    padding: 0 12px;
     border-bottom: 1px solid var(--bf-line);
     text-decoration: none;
-    min-height: 60px;
+    min-height: 48px;
+    height: 48px;
+  }
+
+  /* Web redesign — brand VINACONS ERP theo mẫu (ô B + tên + pill version). */
+  .bf-brand-mark {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 6px;
+    background: #09090b;
+    color: #fff;
+    font-family: var(--bf-font-mono);
+    font-weight: 700;
+    font-size: 12px;
+    display: inline-grid;
+    place-items: center;
   }
 
   .bf-brand-name {
-    font-size: 17px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.01em;
-    color: var(--bf-ink);
+    letter-spacing: -0.01em;
+    color: #09090b;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .bf-brand-name em {
-    font-style: normal;
-    color: var(--bf-accent);
+  .bf-brand-version {
+    font-size: 10px;
+    color: #a1a1aa;
+    background: #f4f4f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
   }
 
   .bf-nav {
     flex: 1;
     overflow-y: auto;
-    padding: 14px 12px 20px;
+    padding: 8px;
   }
 
-  /* DashCode menulabel recipe: 12px/600 uppercase #1E293B, margin 16px top. */
+  /* Web redesign — group label 10px zinc-400 uppercase theo mẫu. */
   .bf-nav-group {
-    margin: 16px 8px 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--bf-ink-soft);
-    letter-spacing: 0.04em;
+    margin: 16px 8px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--bf-faint);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     white-space: nowrap;
     overflow: hidden;
@@ -138,32 +170,32 @@
     margin-top: 4px;
   }
 
-  /* DashCode menu-link recipe: 14px/500 #475569, padding 12px 10px,
-     radius 4px, icon gap 12px. */
+  /* Web redesign — nav-link data-dense 12px theo mẫu (giữ tên class/DOM). */
   .bf-nav a {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     margin: 2px 0;
-    padding: 12px 10px;
-    border-radius: 4px;
-    color: var(--bf-muted);
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: #52525b;
     text-decoration: none;
     font-weight: 500;
-    font-size: 14px;
+    font-size: 12px;
     transition: background 120ms ease;
     white-space: nowrap;
   }
 
   .bf-nav a:hover {
-    background: var(--bf-surface-2);
-    color: var(--bf-ink);
+    background: #f4f4f5;
+    color: #09090b;
   }
 
-  /* DashCode active leaf: slate-800 bg, white text. */
+  /* Web redesign — active leaf: zinc-100 + zinc-900 semibold theo mẫu. */
   .bf-nav a[aria-current='page'] {
-    background: var(--bf-ink-soft);
-    color: #fff;
+    background: #f4f4f5;
+    color: #09090b;
+    font-weight: 600;
   }
 
   /* DashCode menu-icon: 18px. */
@@ -206,13 +238,15 @@
   }
 
   .bf-sidebar[data-collapsed='true'] .bf-brand {
-    padding: 18px 0;
+    padding: 0;
     justify-content: center;
   }
 
   .bf-sidebar[data-collapsed='true'] .bf-brand-name,
+  .bf-sidebar[data-collapsed='true'] .bf-brand-version,
   .bf-sidebar[data-collapsed='true'] .bf-nav-group,
   .bf-sidebar[data-collapsed='true'] .bf-nav-label,
+  .bf-sidebar[data-collapsed='true'] .bf-nav-user-text,
   .bf-sidebar[data-collapsed='true'] .bf-nav-user-id {
     display: none;
   }
@@ -239,9 +273,9 @@
     margin-left: 72px;
   }
 
-  /* DashCode header: 80px white bar, base shadow, px-6. */
+  /* Web redesign — topbar 48px theo mẫu (giữ sticky + class names). */
   .bf-topbar {
-    height: 80px;
+    height: 48px;
     background: var(--bf-surface);
     border-bottom: 1px solid var(--bf-line);
     box-shadow: var(--bf-shadow-card);
@@ -249,35 +283,60 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 0 24px;
+    padding: 0 16px;
     position: sticky;
     top: 0;
     z-index: 20;
   }
 
-  /* DashCode topbar search pill: bordered pill, loupe icon, slate-400 text.
-     Rộng cố định ~240px, cao 38px thẳng hàng với các controls khác. */
+  /* Web redesign — breadcrumb text-xs: nhóm cha zinc-400 + trang semibold. */
+  .bf-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .bf-breadcrumb-parent {
+    color: #a1a1aa;
+  }
+
+  .bf-breadcrumb-sep {
+    color: #d4d4d8;
+  }
+
+  /* Web redesign — search pill 256px text-xs theo mẫu (giữ vai trò navigator). */
   .bf-search-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    width: 240px;
-    max-width: 240px;
+    width: 256px;
+    max-width: 256px;
     min-width: 0;
-    height: 38px;
-    border: 1px solid var(--bf-line-strong);
-    border-radius: var(--bf-r-pill);
-    background: var(--bf-surface);
+    height: 30px;
+    border: 1px solid var(--bf-line);
+    border-radius: var(--bf-r-control);
+    background: #fafafa;
     color: var(--bf-faint);
-    font-size: 13.5px;
-    padding: 8px 14px;
+    font-size: 12px;
+    padding: 4px 10px;
     cursor: pointer;
     white-space: nowrap;
   }
 
   .bf-search-pill:hover {
-    border-color: var(--bf-ink);
+    border-color: var(--bf-line-strong);
+    background: var(--bf-surface);
     color: var(--bf-muted);
+  }
+
+  .bf-search-pill-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* DashCode bell icon button + red dot badge.
@@ -359,7 +418,7 @@
   }
 
   .bf-topbar-title {
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--bf-ink);
     white-space: nowrap;
@@ -476,11 +535,13 @@
     }
 
     .bf-sidebar[data-collapsed='true'] .bf-brand {
-      padding: 18px 20px;
+      padding: 0 12px;
       justify-content: flex-start;
     }
 
     .bf-sidebar[data-collapsed='true'] .bf-brand-name,
+    .bf-sidebar[data-collapsed='true'] .bf-brand-version,
+    .bf-sidebar[data-collapsed='true'] .bf-nav-user-text,
     .bf-sidebar[data-collapsed='true'] .bf-nav-group,
     .bf-sidebar[data-collapsed='true'] .bf-nav-label,
     .bf-sidebar[data-collapsed='true'] .bf-nav-user-id {
@@ -1335,11 +1396,107 @@
 
 }
 
+/* ==========================================================================
+   Projects workspace (opt-in via data-fullbleed).
+   AppShell đặt `data-fullbleed='true'` trên .bf-shell khi và chỉ khi
+   pathname === '/projects' (exact — /projects/:id và /projects/new giữ
+   layout cũ, không clipped; F007) — KHÔNG dùng :has() (xung đột
+   margin-left coupling, specificity với data-collapsed và mobile padding;
+   không test được jsdom).
+   Mọi rule workspace (kể cả .prj-*) nằm sau [data-fullbleed='true'] nên
+   trang khác không ảnh hưởng (F006).
+   ========================================================================== */
+@layer components {
+  .bf-shell[data-fullbleed='true'] .bf-sidebar:not([data-collapsed='true']) {
+    width: 224px;
+  }
+
+  .bf-shell[data-fullbleed='true'] .bf-main {
+    margin-left: 224px;
+  }
+
+  .bf-shell[data-fullbleed='true'][data-collapsed='true'] .bf-main {
+    margin-left: 72px;
+  }
+
+  .bf-shell[data-fullbleed='true'] .bf-main > .bf-content {
+    max-width: none;
+    padding: 0;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+  }
+
+  /* Projects workspace 2 cột: bảng scroll trái + inspector 320px phải. */
+  .bf-shell[data-fullbleed='true'] .prj-workspace {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    min-height: calc(100vh - 48px);
+  }
+  .bf-shell[data-fullbleed='true'] .prj-main {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: #fafafa;
+  }
+
+  .bf-shell[data-fullbleed='true'] .prj-inspector {
+    height: calc(100vh - 48px);
+  }
+
+  /* AC4: inspector ẩn dưới 1280px — bảng bung 100%. */
+  @media (max-width: 1279px) {
+    .bf-shell[data-fullbleed='true'] .prj-inspector {
+      display: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .bf-shell[data-fullbleed='true'] .bf-main {
+      margin-left: 0;
+    }
+
+    .bf-shell[data-fullbleed='true'] .bf-main > .bf-content {
+      max-width: var(--bf-shell-max);
+      padding: 20px 16px 40px;
+      height: auto;
+      overflow: visible;
+    }
+
+    .bf-shell[data-fullbleed='true'] .prj-workspace {
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .bf-shell[data-fullbleed='true'] .prj-main {
+      overflow: visible;
+    }
+  }
+}
+
 /* Utilities-layer overrides (thắng w-full của Menu trigger trong topbar). */
 @layer utilities {
   .bf-profile-menu > button {
     width: auto;
     max-width: 100%;
+  }
+
+  /* F008: hàng bảng projects 44–48px — đặt ở utilities để thắng mọi
+     px/py utilities rải trong cells (utilities > components), đồng thời
+     thắng padding DashCode 16/24px của .bf-table (specificity cao hơn,
+     scoped sau [data-fullbleed] — trang khác giữ nguyên). Cells trong
+     ProjectsList.tsx KHÔNG dùng px/py Tailwind để padding chỉ có một nguồn. */
+  .bf-shell[data-fullbleed='true'] .prj-main .bf-table th {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .bf-shell[data-fullbleed='true'] .prj-main .bf-table td {
+    padding: 6px 8px;
   }
 }
 
@@ -1397,6 +1554,12 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+.bf-nav-user-text {
+  flex: 1;
+  min-width: 0;
+  display: block;
 }
 
 .bf-nav-user-name {
